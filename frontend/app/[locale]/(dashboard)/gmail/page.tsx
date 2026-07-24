@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { markTaskDone } from '@/lib/api/guide';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import {
@@ -49,15 +49,6 @@ function GmailPageInner() {
   const isConnected = conn.data?.status === 'connected';
   const needsReauth = conn.data?.status === 'reauthorization_required';
 
-  // Auto-detect: mark guide task done when Google Workspace connected
-  const prevConnected = React.useRef(isConnected);
-  useEffect(() => {
-    if (isConnected && !prevConnected.current) {
-      markTaskDone('google_workspace_connected').catch(() => {});
-      qc.invalidateQueries({ queryKey: ['guide-progress'] });
-    }
-    prevConnected.current = isConnected;
-  }, [isConnected, qc]);
 
   // --- calendars ---
   const calendars = useQuery({
@@ -122,7 +113,7 @@ function GmailPageInner() {
   // --- connection actions ---
   const connectMut = useMutation({
     mutationFn: () => (needsReauth ? gmailApi.reconnectConnection() : gmailApi.getAuthorizeUrl()),
-    onSuccess: (res) => { if (res.redirect_url) window.location.href = res.redirect_url; else { qc.invalidateQueries({ queryKey: ['gmail-connection'] }); qc.invalidateQueries({ queryKey: ['guide-progress'] }); markTaskDone('google_workspace_connected').catch(() => {}); } },
+    onSuccess: (res) => { if (res.redirect_url) window.location.href = res.redirect_url; else { qc.invalidateQueries({ queryKey: ['gmail-connection'] }); } },
     onError: (e) => push({ kind: 'error', text: t('connectFail', { error: apiErrorText(e) }) }),
   });
   const disconnectMut = useMutation({

@@ -4,19 +4,41 @@ import React from 'react';
 import {
   LayoutDashboard, Inbox, UserCheck, Briefcase, Calendar,
   CheckSquare, Users, Clock, FileText, FileSpreadsheet,
+  HelpCircle,
   Mail, Settings, FileSearch, BarChart3, BookOpen
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/navigation';
+import { useRouter, usePathname } from '@/i18n/navigation';
 import AppShell from '@/components/app-shell';
-import GuideWidget from '@/components/guide-widget';
+    
 import type { NavGroup } from '@/components/app-shell';
 import { useAuthGuard } from '@/lib/auth/session';
+import Walktour from '@/components/walktour';
+import { useIsFetching } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   useAuthGuard({ requireAuth: true, requireAdmin: true });
   const router = useRouter();
   const t = useTranslations();
+  const pathname = usePathname();
+  const isFetching = useIsFetching();
+  const [autoStart, setAutoStart] = useState(false);
+
+  // Auto-start walktour on /dashboard after data loaded, not seen before
+  useEffect(() => {
+    if (autoStart) return;
+    if (pathname !== "/dashboard") return;
+    if (isFetching > 0) return;
+    const seen = localStorage.getItem("vroom_walktour_seen");
+    if (seen) return;
+
+    const timer = setTimeout(() => {
+      setAutoStart(true);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [pathname, isFetching, autoStart]);
 
   const navGroups: NavGroup[] = [
     {
@@ -66,17 +88,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       assistantHref="/assistant"
       userDisplayNameFallback="HR Admin"
       topBarExtra={
-        <button
-          onClick={() => router.push('/settings')}
-          className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all"
-          title={t('system.settings')}
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        <>
+          <button
+            onClick={() => {
+              localStorage.removeItem("vroom_walktour_seen");
+              window.__startWalktour?.();
+            }}
+            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all"
+            title="Hướng dẫn"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => router.push('/settings')}
+            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all"
+            title={t('system.settings')}
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </>
       }
     >
       <div>
-        <GuideWidget />
+        <Walktour autoStart={autoStart} />
         {children}
       </div>
     </AppShell>

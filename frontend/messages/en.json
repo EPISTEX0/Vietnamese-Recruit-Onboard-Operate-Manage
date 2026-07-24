@@ -1309,19 +1309,25 @@
     "outbound_email_failed": "Failed to Send Email",
     "outbound_email_retry": "Retry Email"
   },
-  "guide": {
-    "title": "Quick-Start Guide",
-    "pageTitle": "System Setup Guide",
-    "pageDesc": "Complete these steps to get Vroom HR ready.",
-    "progress": "{done}/{total} steps",
-    "dismiss": "Dismiss guide",
-    "dismissAndGo": "Dismiss & go to Dashboard",
-    "goToDashboard": "Go to Dashboard",
-    "viewAll": "View all",
-    "go": "Go",
-    "goTo": "Go to {label}",
-    "markDone": "Mark done",
-    "completed": "Completed",
-    "close": "Close"
+  "walktour": {
+    "step1Title": "Welcome to Vroom HR",
+    "step1Desc": "Welcome to Vroom HR — a comprehensive HR management system for Vietnamese businesses.",
+    "step2Title": "Dashboard",
+    "step2Desc": "Dashboard overview: recruitment metrics, system health, and recent activity logs.",
+    "step3Title": "Recruitment",
+    "step3Desc": "Recruitment: auto-receive candidate emails, manage profiles, Job Openings, interview schedules, and metrics reports.",
+    "step4Title": "Employees",
+    "step4Desc": "Employees: onboarding new hires, employee list, and processing employee requests.",
+    "step5Title": "Attendance & Payroll",
+    "step5Desc": "Attendance & Payroll: track working hours, manage attendance and generate payslips.",
+    "step6Title": "System",
+    "step6Desc": "System: internal Knowledge Base for employees, Gmail integration for recruitment, and organization settings.",
+    "step7Title": "AI Assistant",
+    "step7Desc": "AI Assistant: smart Q&A — employees can ask about policies; HR can quickly look up data.",
+    "skip": "Skip",
+    "next": "Next",
+    "prev": "Back",
+    "finish": "Finish",
+    "progress": "{current}/{total}"
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef } from 'react';
-import { markTaskDone } from '@/lib/api/guide';
+
 import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -545,8 +545,6 @@ function UploadModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kb-documents', kbType] });
-      queryClient.invalidateQueries({ queryKey: ['guide-progress'] });
-      markTaskDone('first_kb_document').catch(() => {});
       setFile(null);
       setDisplayName('');
       setCategory('general');

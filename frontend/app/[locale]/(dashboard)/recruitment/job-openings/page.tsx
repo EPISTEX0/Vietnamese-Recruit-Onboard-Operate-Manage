@@ -11,7 +11,7 @@ import {
 } from '@/lib/api/recruitment';
 import { listPositions } from '@/lib/api/positions';
 import type { Position } from '@/lib/api/types';
-import { markTaskDone } from '@/lib/api/guide';
+
 import { useAuthGuard } from '@/lib/auth/session';
 import { ErrorBanner, Loading, EmptyState, StatusPill, JOB_STATUS_META } from '@/components/shared-ui';
 
@@ -49,7 +49,7 @@ export default function JobOpeningsPage() {
 
   const createM = useMutation({
     mutationFn: (d: JobOpeningCreateInput) => createJobOpening(d),
-    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['guide-progress'] }); markTaskDone('first_job_opening').catch(() => {}); setCreateOpen(false); setActionError(null); },
+    onSuccess: () => { invalidate(); setCreateOpen(false); setActionError(null); },
     onError: (e: unknown) => setActionError(e),
   });
   const openM = useMutation({ mutationFn: openJobOpening, onSuccess: () => { invalidate(); setActionError(''); }, onError: (e: unknown) => setActionError(e) });

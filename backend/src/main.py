@@ -43,7 +43,7 @@ from src.modules.identity.api.admin_router import admin_router  # noqa: E402
 from src.modules.identity.api.error_handler import (  # noqa: E402
     register_auth_error_handlers,
 )
-from src.modules.identity.api.guide_router import guide_router  # noqa: E402
+
 from src.modules.identity.api.router import router as auth_router  # noqa: E402
 from src.modules.identity.container import get_settings  # noqa: E402
 from src.modules.knowledge_base.api.router import router as kb_router  # noqa: E402
@@ -189,7 +189,7 @@ app.include_router(employee_assistant_router)
 app.include_router(employee_request_router)
 app.include_router(admin_employee_request_router)
 app.include_router(employee_payslip_router)
-app.include_router(guide_router)
+
 app.include_router(admin_payslip_router)
 app.include_router(kb_router)
 
