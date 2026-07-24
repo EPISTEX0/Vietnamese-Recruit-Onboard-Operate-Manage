@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   // `.next` was reused or built concurrently; vroom-hr is now a normal
   // integration frontend served by `next dev`/`next start`, not a Cloud Run
   // bundle. Re-enable for production single-file deployment if needed.
-  transpilePackages: ['motion'],
+  transpilePackages: ['motion', 'shepherd.js'],
   webpack: (config, {dev}) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modify—file watching is disabled to prevent flickering during agent edits.
