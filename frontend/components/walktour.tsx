@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useEffect, useRef, useCallback } from "react";
-import Shepherd, { Tour, StepOptions } from "shepherd.js";
+import Shepherd from "shepherd.js";
+import type { StepOptions, Tour as ShepherdTour } from "shepherd.js";
 import "shepherd.js/dist/css/shepherd.css";
 import { WALKTOUR_STEPS } from "./walktour-steps";
+
+const Tour = Shepherd.Tour;
 
 declare global {
   interface Window {
     __startWalktour?: () => void;
-    _walktour?: Tour;
+    _walktour?: ShepherdTour;
   }
 }
-
 
 const LS_KEY = "vroom_walktour_seen";
 
@@ -20,7 +22,7 @@ interface WalktourProps {
 }
 
 export default function Walktour({ autoStart = false }: WalktourProps) {
-  const tourRef = useRef<Tour | null>(null);
+  const tourRef = useRef<ShepherdTour | null>(null);
 
   const startTour = useCallback(() => {
     if (tourRef.current) {

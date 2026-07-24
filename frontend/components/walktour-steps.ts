@@ -1,4 +1,4 @@
-import { StepOptions } from "shepherd.js";
+import type { StepOptions } from "shepherd.js";
 
 export const WALKTOUR_STEPS: StepOptions[] = [
   {
