@@ -414,7 +414,7 @@ export default function SetupPage() {
 
             <button
               id="setup-open-dashboard-btn"
-              onClick={() => router.replace('/dashboard')}
+              onClick={() => window.location.href = '/dashboard'}
               className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold rounded-xl hover:from-indigo-500 hover:to-indigo-400 shadow-lg shadow-indigo-200 transition-all"
             >
               Mở Trang quản trị (Dashboard)
