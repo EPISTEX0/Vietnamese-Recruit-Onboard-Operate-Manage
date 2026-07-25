@@ -208,7 +208,7 @@ export default function AppShell({
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="walktour-brand w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black tracking-tighter text-sm shadow-md shadow-indigo-100">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black tracking-tighter text-sm shadow-md shadow-indigo-100">
             VR
           </div>
           <span className="font-semibold text-sm text-slate-800">{t('brand')}</span>
@@ -260,26 +260,19 @@ export default function AppShell({
           {groups.map((group, gi) => (
             <div key={gi}>
               {group.label && (
-                <div className={`text-[9px] font-mono font-bold text-slate-400 px-3 uppercase tracking-wider mb-1 mt-2 first:mt-0 ${gi === 0 ? "walktour-nav-recruitment" : gi === 1 ? "walktour-nav-employees" : gi === 2 ? "walktour-nav-attendance" : gi === 3 ? "walktour-nav-system" : ""}`}>
+                <div className="text-[9px] font-mono font-bold text-slate-400 px-3 uppercase tracking-wider mb-1 mt-2 first:mt-0">
                       {group.label}
                     </div>
               )}
               {group.items.map((item) => {
                 const active = isActive(item.href);
-                const walktourClass =
-                  item.href === "/dashboard" ? "walktour-nav-dashboard" :
-                  item.href === "/recruitment/inbox" ? "walktour-nav-recruitment" :
-                  item.href === "/onboarding" ? "walktour-nav-employees" :
-                  item.href === "/attendance" ? "walktour-nav-attendance" :
-                  item.href === "/knowledge-base" ? "walktour-nav-system" :
-                  "";
 
                 return (
                   <button
                     key={item.href}
                     onClick={() => handleNavClick(item.href)}
                     onMouseEnter={() => handleNavHover(item.href)}
-                    className={`relative w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ease-out select-none ${walktourClass} ${
+                    className={`relative w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ease-out select-none ${
                               active
                                 ? 'bg-indigo-50 text-indigo-600 font-semibold shadow-sm shadow-indigo-50/10 scale-[1.02]'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
@@ -298,7 +291,7 @@ export default function AppShell({
             <button
                   onMouseEnter={() => handleNavHover(assistantHref)}
                   onClick={() => handleNavClick(assistantHref)}
-              className="walktour-assistant w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-100 transition-all"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-100 transition-all"
             >
               <Sparkles className="w-4 h-4" />
               {t('assistant')}

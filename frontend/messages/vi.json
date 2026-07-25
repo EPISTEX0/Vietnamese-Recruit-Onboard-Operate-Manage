@@ -1322,26 +1322,5 @@
     "outbound_email_sent": "Đã gửi email",
     "outbound_email_failed": "Gửi email thất bại",
     "outbound_email_retry": "Thử lại gửi email"
-  },
-  "walktour": {
-    "step1Title": "Chào mừng đến với Vroom HR",
-    "step1Desc": "Chào mừng bạn đến với Vroom HR — hệ thống quản trị nhân sự toàn diện dành cho doanh nghiệp Việt Nam.",
-    "step2Title": "Dashboard",
-    "step2Desc": "Dashboard tổng quan: xem metrics tuyển dụng, tình trạng hệ thống, và nhật ký hoạt động gần đây.",
-    "step3Title": "Tuyển dụng",
-    "step3Desc": "Tuyển dụng: Inbox nhận email ứng viên tự động, quản lý hồ sơ, Job Openings, lịch phỏng vấn và báo cáo metrics.",
-    "step4Title": "Nhân sự",
-    "step4Desc": "Nhân sự: Onboarding nhân viên mới, danh sách nhân viên, và xử lý yêu cầu từ nhân viên.",
-    "step5Title": "Chấm công & Bảng lương",
-    "step5Desc": "Chấm công & Bảng lương: theo dõi giờ làm, quản lý chấm công và tạo phiếu lương cho nhân viên.",
-    "step6Title": "Hệ thống",
-    "step6Desc": "Hệ thống: Knowledge Base nội bộ cho nhân viên, kết nối Gmail tuyển dụng, và cài đặt tổ chức.",
-    "step7Title": "Trợ lý AI",
-    "step7Desc": "Trợ lý AI: hỏi đáp thông minh — nhân viên có thể hỏi về nội quy, chính sách; HR có thể tra cứu dữ liệu nhanh.",
-    "skip": "Bỏ qua",
-    "next": "Tiếp",
-    "prev": "Trước",
-    "finish": "Kết thúc",
-    "progress": "{current}/{total}"
   }
 }

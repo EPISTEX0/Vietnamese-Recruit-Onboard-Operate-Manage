@@ -4,7 +4,6 @@ import React from 'react';
 import {
   LayoutDashboard, Inbox, UserCheck, Briefcase, Calendar,
   CheckSquare, Users, Clock, FileText, FileSpreadsheet,
-  HelpCircle,
   Mail, Settings, FileSearch, BarChart3, BookOpen
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -13,24 +12,12 @@ import AppShell from '@/components/app-shell';
     
 import type { NavGroup } from '@/components/app-shell';
 import { useAuthGuard } from '@/lib/auth/session';
-import Walktour from '@/components/walktour';
-import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   useAuthGuard({ requireAuth: true, requireAdmin: true });
   const router = useRouter();
   const t = useTranslations();
   const pathname = usePathname();
-  const [autoStart, setAutoStart] = useState(false);
-  // Auto-start walktour once on dashboard mount, if not seen before
-  useEffect(() => {
-    if (pathname !== "/dashboard") return;
-    const seen = localStorage.getItem("vroom_walktour_seen");
-    if (seen) return;
-    // Short delay to let React finish rendering
-    const timer = setTimeout(() => setAutoStart(true), 500);
-    return () => clearTimeout(timer);
-  }, []); // Empty deps — only on mount
 
   const navGroups: NavGroup[] = [
     {
@@ -82,16 +69,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       topBarExtra={
         <>
           <button
-            onClick={() => {
-              localStorage.removeItem("vroom_walktour_seen");
-              window.__startWalktour?.();
-            }}
-            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all"
-            title="Hướng dẫn"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-          <button
             onClick={() => router.push('/settings')}
             className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all"
             title={t('system.settings')}
@@ -102,7 +79,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     >
       <div>
-        <Walktour autoStart={autoStart} />
         {children}
       </div>
     </AppShell>
