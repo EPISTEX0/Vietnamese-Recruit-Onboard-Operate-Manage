@@ -23,10 +23,12 @@ interface WalktourProps {
 
 export default function Walktour({ autoStart = false }: WalktourProps) {
   const tourRef = useRef<ShepherdTour | null>(null);
+  const startedRef = useRef(false);
 
   const startTour = useCallback(() => {
     if (tourRef.current) {
       tourRef.current.start();
+      startedRef.current = true;
     }
   }, []);
 
@@ -52,14 +54,14 @@ export default function Walktour({ autoStart = false }: WalktourProps) {
       } as StepOptions);
     });
 
-    // On complete: set localStorage flag
+    // On complete/cancel: only set localStorage if tour actually started
     tour.on("complete", () => {
-      if (typeof window !== "undefined") {
+      if (startedRef.current && typeof window !== "undefined") {
         localStorage.setItem(LS_KEY, "true");
       }
     });
     tour.on("cancel", () => {
-      if (typeof window !== "undefined") {
+      if (startedRef.current && typeof window !== "undefined") {
         localStorage.setItem(LS_KEY, "true");
       }
     });
@@ -71,11 +73,14 @@ export default function Walktour({ autoStart = false }: WalktourProps) {
 
     tourRef.current = tour;
 
+    if (autoStart) {
+      tour.start();
+      startedRef.current = true;
+    }
+
     return () => {
-      if (tourRef.current) {
-        tourRef.current.complete();
-        tourRef.current = null;
-      }
+      // Don't fire complete/cancel events — just destroy
+      tourRef.current = null;
       if (typeof window !== "undefined") {
         delete (window as any)._walktour;
       }
