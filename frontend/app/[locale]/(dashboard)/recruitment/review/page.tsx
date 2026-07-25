@@ -85,7 +85,7 @@ export default function ReviewPage() {
             ))}
           </div>
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>{t('pageInfo', { page, total: data?.total ?? 0 })}</span>
+            <span>{t('pageInfo', { page, total: data?.total ?? 0, count: data?.total ?? 0 })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-2 py-1 bg-white border border-slate-200 rounded disabled:opacity-40">{t('prev')}</button>
               <button onClick={() => setPage((p) => p + 1)} disabled={items.length < 12} className="px-2 py-1 bg-white border border-slate-200 rounded disabled:opacity-40">{t('next')}</button>

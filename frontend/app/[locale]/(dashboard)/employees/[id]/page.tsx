@@ -363,7 +363,7 @@ export default function EmployeeDetailPage() {
         <Modal open={deleteConfirm} onClose={() => setDeleteConfirm(false)} title={t('deleteTitle')}>
           <div className="space-y-3">
             <p className="text-sm text-slate-600">
-              {t('deleteConfirm', { name: employee.full_name, code: employee.employee_code })}
+              {t.rich('deleteConfirm', { name: employee.full_name, code: employee.employee_code, strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
             <p className="text-xs text-rose-600">
               {t('deleteWarning')}
