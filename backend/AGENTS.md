@@ -295,51 +295,6 @@ async def handle_employee_not_found(request: Request, exc: EmployeeNotFoundError
 
 ---
 
-## Seed Data
-
-Có 3 seed scripts trong `backend/scripts/`:
-
-### 1. `seed_leave.py`
-
-- Tạo các loại nghỉ phép mặc định:
-  - Annual leave (Nghỉ phép năm): 12 days/year
-  - Sick leave (Nghỉ ốm): unlimited
-  - Unpaid leave (Nghỉ không lương): unlimited
-
-### 2. `seed_attendance.py`
-
-- Tạo work schedules mặc định:
-  - Standard: 08:30-17:30, Mon-Fri
-  - Shift A: 06:00-14:00
-  - Shift B: 14:00-22:00
-
-### 3. `seed_payroll.py`
-
-- Tạo salary configs mặc định:
-  - Personal deduction: 11,000,000 VND/month
-  - Dependent deduction: 4,400,000 VND/person/month
-  - Insurance rates (employee): BHXH 8% + BHYT 1.5% + BHTN 1%
-
-### First-Time Setup (Super Admin)
-
-```bash
-# Super admin được tạo từ config AUTH_SUPER_ADMIN_EMAIL
-# Khi chạy app lần đầu, user đầu tiên trong whitelist sẽ được tạo
-
-# Thêm email vào whitelist:
-# 1. Qua database: INSERT INTO whitelist_entries (email, role) VALUES ('admin@company.com', 'admin');
-# 2. Hoặc config AUTH_WHITELIST_EMAILS trong .env
-```
-
-### Chạy Seed Scripts
-
-```bash
-cd backend
-python scripts/seed_leave.py
-python scripts/seed_attendance.py
-python scripts/seed_payroll.py
-```
-
 ## Module Structure (MANDATORY)
 
 Every module in `src/modules/` MUST follow:

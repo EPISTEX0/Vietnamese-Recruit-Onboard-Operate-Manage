@@ -1,0 +1,6 @@
+[tools]
+python = "3.11"
+
+[env]
+# Python 3.11 for the Vroom HR project
+PYTHON_VERSION = "3.11"

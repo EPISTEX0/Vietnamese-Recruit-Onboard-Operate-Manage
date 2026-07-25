@@ -31,7 +31,6 @@ Services chạy qua `docker compose up -d`:
 
 | Email | Vai trò | Mật khẩu | Ghi chú |
 |---|---|---|---|
-| `hr.qa@vroom.example.com` | admin (E2E) | `VroomQA!148#2026` | Admin E2E, seeded từ seed_all.py + override script |
 | `admin@vroomhr.com` | admin | `VroomAdmin!2026` | Admin dev, dùng để test UI local |
 | `employee@vroomhr.com` | user | _(chưa đặt)_ | Nhân viên test |
 
@@ -44,6 +43,20 @@ print(hash_password('NEW_PASSWORD'))
 # Copy hash và chạy:
 docker exec vroom-postgres psql -U postgres -d vroom_hr \
   -c "UPDATE users SET password_hash = 'PASTE_HASH' WHERE email = 'USER_EMAIL';"
+```
+
+### Reset database
+
+Xoá toàn bộ dữ liệu và chạy lại migrations từ đầu:
+
+```bash
+docker exec vroom-postgres psql -U postgres \
+  -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'vroom_hr' AND pid <> pg_backend_pid();"
+
+docker exec vroom-postgres psql -U postgres -c "DROP DATABASE vroom_hr;"
+docker exec vroom-postgres psql -U postgres -c "CREATE DATABASE vroom_hr;"
+
+cd backend && uv run alembic upgrade head
 ```
 
 ### Test cases

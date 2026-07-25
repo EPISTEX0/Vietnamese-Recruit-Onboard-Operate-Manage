@@ -20,7 +20,6 @@ env/
 .env
 .env.*
 !.env.example
-
 # ---- Node / Next.js ----
 node_modules/
 .next/
@@ -51,17 +50,6 @@ Thumbs.db
 
 # ---- Local code intelligence ----
 .codegraph/
-
-
-# Playwright
-frontend/test-results/
-frontend/playwright-report/
-
-# Playwright MCP artifacts
-.playwright-mcp/
-
-# E2E auth storage (created fresh by CI)
-
 # ---- Pi coding agent ----
 .pi/
 
