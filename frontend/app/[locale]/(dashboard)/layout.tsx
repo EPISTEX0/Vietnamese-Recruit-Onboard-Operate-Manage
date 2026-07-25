@@ -14,32 +14,23 @@ import AppShell from '@/components/app-shell';
 import type { NavGroup } from '@/components/app-shell';
 import { useAuthGuard } from '@/lib/auth/session';
 import Walktour from '@/components/walktour';
-import { useIsFetching } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   useAuthGuard({ requireAuth: true, requireAdmin: true });
   const router = useRouter();
   const t = useTranslations();
   const pathname = usePathname();
-  const isFetching = useIsFetching();
   const [autoStart, setAutoStart] = useState(false);
-  const hasScheduledRef = useRef(false);
+  // Auto-start walktour once on dashboard mount, if not seen before
   useEffect(() => {
-    if (autoStart) return;
     if (pathname !== "/dashboard") return;
-    if (isFetching > 0) return;
     const seen = localStorage.getItem("vroom_walktour_seen");
     if (seen) return;
-    if (hasScheduledRef.current) return; // Only schedule once
-
-    hasScheduledRef.current = true;
-    const timer = setTimeout(() => {
-      setAutoStart(true);
-    }, 800);
-
+    // Short delay to let React finish rendering
+    const timer = setTimeout(() => setAutoStart(true), 500);
     return () => clearTimeout(timer);
-  }, [pathname, isFetching, autoStart]);
+  }, []); // Empty deps — only on mount
 
   const navGroups: NavGroup[] = [
     {
