@@ -10,6 +10,7 @@ held in frontend memory; backend processes each turn statelessly.
 from __future__ import annotations
 
 import json
+import logging
 import typing
 import uuid
 from datetime import UTC, datetime
@@ -54,6 +55,9 @@ from src.modules.identity.domain.entities import AuditActionType, User
 AdminUserDep = Annotated[User, Depends(require_admin)]
 AssistantServiceDep = Annotated[AssistantService, Depends(get_assistant_service)]
 AuditServiceDep = Annotated[AuditService, Depends(get_audit_service)]
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Router
