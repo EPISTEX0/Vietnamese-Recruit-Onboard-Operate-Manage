@@ -334,3 +334,16 @@ class AuditLog(SQLModel, table=True):
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
+
+
+class PasswordResetToken(SQLModel, table=True):
+    """Represents a password reset token for a user."""
+    __tablename__ = "password_reset_tokens"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
+    token_hash: str = Field(nullable=False, unique=True, index=True)
+    expires_at: datetime = Field(nullable=False)
+    used_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
+    created_by_ip: str | None = Field(default=None)

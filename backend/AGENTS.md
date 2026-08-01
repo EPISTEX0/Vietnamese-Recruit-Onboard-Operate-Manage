@@ -209,6 +209,7 @@ async def handle_employee_not_found(request: Request, exc: EmployeeNotFoundError
 | `AUTH_ACCESS_DENIED`      | 403  | Access denied. Contact administrator.  |
 | `AUTH_INSUFFICIENT_SCOPE` | 400  | Please grant all requested permissions |
 | `AUTH_INVALID_TOKEN`      | 401  | Invalid or expired token               |
+| `AUTH_INVALID_RESET_TOKEN` | 400  | Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn |
 | `AUTH_RATE_LIMITED`       | 429  | Too many login attempts                |
 
 ### Employee Module

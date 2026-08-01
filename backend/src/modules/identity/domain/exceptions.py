@@ -127,6 +127,19 @@ class InvalidTokenError(AuthError):
     message = "Phiên đăng nhập không hợp lệ hoặc đã hết hạn"
 
 
+class InvalidResetTokenError(AuthError):
+    """Password reset token is missing, invalid, used, or expired.
+
+    Raised when a password reset attempt uses a token that does not
+    exist, has already been used, or has expired. The message is kept
+    generic so the endpoint cannot be used to probe token validity.
+    """
+
+    status_code = 400
+    error_code = "AUTH_INVALID_RESET_TOKEN"
+    message = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"
+
+
 class RateLimitExceededError(AuthError):
     """Too many login attempts from a single IP.
 

@@ -21,6 +21,7 @@ from src.modules.identity.application.auth_service import AuthService
 from src.modules.identity.application.domain_gate_service import DomainGateService
 from src.modules.identity.application.oauth_config_manager import OAuthConfigManager
 from src.modules.identity.application.oauth_service import OAuthService
+from src.modules.identity.application.password_reset_service import PasswordResetService
 from src.modules.identity.application.role_service import RoleService
 from src.modules.identity.application.token_service import TokenService
 from src.modules.identity.application.whitelist_manager import WhitelistManager
@@ -32,6 +33,9 @@ from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 from src.modules.identity.infrastructure.jwt_utils import JWTUtils
 from src.modules.identity.infrastructure.oauth_config_repository import OAuthConfigRepository
 from src.modules.identity.infrastructure.oauth_grant_repository import OAuthGrantRepository
+from src.modules.identity.infrastructure.password_reset_token_repository import (
+    PasswordResetTokenRepository,
+)
 from src.modules.identity.infrastructure.rate_limiter import RateLimiter
 from src.modules.identity.infrastructure.refresh_token_repository import RefreshTokenRepository
 from src.modules.identity.infrastructure.user_repository import UserRepository
@@ -242,6 +246,53 @@ async def get_auth_service(
         user_repository=user_repo,
         refresh_token_repository=refresh_token_repo,
         organization_repository=OrganizationSettingsRepository(session),
+        session=session,
+    )
+
+
+async def get_password_reset_token_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> PasswordResetTokenRepository:
+    """Provide a PasswordResetTokenRepository instance.
+
+    Args:
+        session: The async database session from DI.
+
+    Returns:
+        A PasswordResetTokenRepository bound to the current session.
+    """
+    return PasswordResetTokenRepository(session)
+
+
+async def get_password_reset_service(
+    user_repo: UserRepository = Depends(get_user_repository),
+    token_repo: PasswordResetTokenRepository = Depends(get_password_reset_token_repository),
+    refresh_token_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
+    session: AsyncSession = Depends(get_db_session),
+) -> PasswordResetService:
+    """Provide a PasswordResetService instance.
+
+    Lazily imports the Gmail SendService provider to avoid a circular
+    import between the identity and gmail DI containers.
+
+    Args:
+        user_repo: The user repository from DI.
+        token_repo: The password reset token repository from DI.
+        refresh_token_repo: The refresh token repository from DI.
+        session: The async database session from DI.
+
+    Returns:
+        A PasswordResetService configured with all dependencies.
+    """
+    from src.modules.gmail.container import get_send_service
+
+    send_service = await get_send_service()
+    return PasswordResetService(
+        settings=get_settings(),
+        user_repository=user_repo,
+        password_reset_token_repository=token_repo,
+        refresh_token_repository=refresh_token_repo,
+        send_service=send_service,
         session=session,
     )
 

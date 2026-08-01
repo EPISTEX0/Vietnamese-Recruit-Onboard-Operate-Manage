@@ -6,6 +6,7 @@ password change, token refresh, logout, and user profile retrieval.
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -16,15 +17,21 @@ from sqlmodel import select
 
 from src.modules.employee.domain.entities import Employee
 from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.dependencies import PasswordResetServiceDep
 from src.modules.identity.api.schemas import (
     AuthLoginRequest,
     AuthSessionResponse,
     ChangePasswordRequest,
     FirstRunSetupRequest,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     GoogleWorkspaceCallbackRequest,
     GoogleWorkspaceConnectionResponse,
     GrantStatusResponse,
     OAuthConfigUpdateRequest,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+    ResetTokenInfoResponse,
     SetupStatusResponse,
     UserResponse,
 )
@@ -43,6 +50,7 @@ from src.modules.identity.container import (
     get_jwt_utils,
     get_oauth_config_manager,
     get_oauth_service,
+    get_password_reset_service,
     get_rate_limiter,
     get_settings,
     get_token_service,
@@ -52,9 +60,16 @@ from src.modules.identity.domain.exceptions import (
     InvalidTokenError,
     RateLimitExceededError,
 )
-from src.modules.identity.infrastructure.rate_limiter import RateLimiter
+from src.modules.identity.infrastructure.config import AuthSettings
+from src.modules.identity.infrastructure.rate_limiter import (
+    RateLimitRule,
+    RateLimiter,
+    email_identifier,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+logger = logging.getLogger(__name__)
 
 # Cookie configuration constants.
 # Access token JWT expiry is controlled by TokenService (default 15 min).
@@ -65,6 +80,16 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 _REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60  # 7 days
 _PASSWORD_CHANGE_MAX_AGE = 15 * 60  # 15 minutes
 
+# Generic, always-identical forgot/reset password response messages.
+# The forgot-password message must not reveal whether an email is
+# registered or whether the email send succeeded (anti-enumeration,
+# ADR 0010).
+_FORGOT_PASSWORD_GENERIC_MESSAGE = (
+    "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn "
+    "khôi phục mật khẩu vào hòm thư của bạn."
+)
+_PASSWORD_RESET_SUCCESS_MESSAGE = "Mật khẩu đã được đặt lại thành công."
+
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
 # ---------------------------------------------------------------------------
@@ -73,6 +98,7 @@ AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 TokenServiceDep = Annotated[TokenService, Depends(get_token_service)]
 OAuthServiceDep = Annotated[OAuthService, Depends(get_oauth_service)]
 RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+AuthSettingsDep = Annotated[AuthSettings, Depends(get_settings)]
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 AdminOnlyDep = Annotated[User, Depends(require_admin)]
 OAuthConfigManagerDep = Annotated[OAuthConfigManager, Depends(get_oauth_config_manager)]
@@ -405,6 +431,91 @@ async def local_login(
         must_change_password=result.must_change_password,
     )
     return response
+
+
+# ---------------------------------------------------------------------------
+# Forgot / reset password flow (issue 298)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    password_reset_service: PasswordResetServiceDep,
+    rate_limiter: RateLimiterDep,
+    settings: AuthSettingsDep,
+) -> ForgotPasswordResponse:
+    """Send a password reset email if the account exists.
+
+    Applies dual rate limiting BEFORE doing any work: first per client IP
+    (3 requests / 15 min), then per email address (2 requests / 15 min).
+    On either violation a 429 is returned.
+
+    The response is always the same generic 200 message — whether the
+    email exists, the account is inactive/passwordless, or the email send
+    failed — so callers cannot enumerate registered addresses
+    (anti-enumeration, ADR 0010).
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    ip_allowed = await rate_limiter.check_rate_limit_for(
+        key_prefix="forgot_password:ip",
+        identifier=client_ip,
+        rule=RateLimitRule(
+            max_requests=settings.rate_limit_forgot_password_ip_max,
+            window_seconds=settings.rate_limit_forgot_password_ip_window_seconds,
+        ),
+    )
+    if not ip_allowed:
+        raise RateLimitExceededError()
+
+    email_allowed = await rate_limiter.check_rate_limit_for(
+        key_prefix="forgot_password:email",
+        identifier=email_identifier(body.email),
+        rule=RateLimitRule(
+            max_requests=settings.rate_limit_forgot_password_email_max,
+            window_seconds=settings.rate_limit_forgot_password_email_window_seconds,
+        ),
+    )
+    if not email_allowed:
+        raise RateLimitExceededError()
+
+    sent = await password_reset_service.create_reset_token(body.email, client_ip)
+    if not sent:
+        # No account matched, or email delivery failed — the caller must
+        # not be able to tell which (anti-enumeration). The send failure
+        # was already logged by the service with the user id.
+        logger.info("Password reset email not sent for requested account")
+    return ForgotPasswordResponse(message=_FORGOT_PASSWORD_GENERIC_MESSAGE)
+
+
+@router.get("/reset-password-token-info", response_model=ResetTokenInfoResponse)
+async def reset_password_token_info(
+    token: str,
+    password_reset_service: PasswordResetServiceDep,
+) -> ResetTokenInfoResponse:
+    """Report whether a reset token is still redeemable.
+
+    Safe to expose: it only reveals the validity of a token the caller
+    already possesses.
+    """
+    valid = await password_reset_service.validate_token(token)
+    return ResetTokenInfoResponse(valid=valid)
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    body: ResetPasswordRequest,
+    password_reset_service: PasswordResetServiceDep,
+) -> ResetPasswordResponse:
+    """Set a new password using a valid reset token.
+
+    Raises InvalidResetTokenError (HTTP 400) when the token is unknown,
+    already used, or expired.
+    """
+    await password_reset_service.reset_password(body.token, body.new_password)
+    return ResetPasswordResponse(message=_PASSWORD_RESET_SUCCESS_MESSAGE)
 
 
 @router.post("/change-password", response_model=AuthSessionResponse)

@@ -64,7 +64,8 @@
     "error": "Đăng nhập thất bại. Vui lòng thử lại.",
     "checkInfo": "Vui lòng kiểm tra lại thông tin",
     "placeholderEmail": "hr@tencongty.com",
-    "placeholderPassword": "Nhập mật khẩu..."
+    "placeholderPassword": "Nhập mật khẩu...",
+    "forgotPassword": "Quên mật khẩu?"
   },
   "appShell": {
     "brand": "Vroom HR",
@@ -1022,6 +1023,38 @@
     "currentPasswordPlaceholder": "Nhập mật khẩu hiện tại",
     "newPasswordPlaceholder": "Nhập mật khẩu mới",
     "confirmPasswordPlaceholder": "Xác nhận mật khẩu mới"
+  },
+  "forgotPassword": {
+    "title": "Quên mật khẩu",
+    "subtitle": "Nhập email đăng nhập của bạn, chúng tôi sẽ gửi hướng dẫn khôi phục mật khẩu qua email.",
+    "email": "Email",
+    "placeholderEmail": "hr@tencongty.com",
+    "submit": "Gửi hướng dẫn",
+    "sending": "Đang gửi...",
+    "successTitle": "Đã gửi hướng dẫn!",
+    "success": "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn khôi phục mật khẩu vào hòm thư của bạn.",
+    "backToLogin": "Quay lại đăng nhập",
+    "error": "Đã xảy ra lỗi. Vui lòng thử lại."
+  },
+  "resetPassword": {
+    "title": "Đặt lại mật khẩu",
+    "subtitle": "Nhập mật khẩu mới cho tài khoản của bạn.",
+    "newPassword": "Mật khẩu mới",
+    "confirmPassword": "Xác nhận mật khẩu mới",
+    "newPasswordPlaceholder": "Nhập mật khẩu mới (tối thiểu 12 ký tự)",
+    "confirmPasswordPlaceholder": "Xác nhận mật khẩu mới",
+    "submit": "Đặt lại mật khẩu",
+    "submitting": "Đang xử lý...",
+    "success": "Đặt lại mật khẩu thành công!",
+    "successHint": "Bạn có thể đăng nhập bằng mật khẩu mới.",
+    "loginNow": "Đăng nhập ngay",
+    "validating": "Đang kiểm tra liên kết...",
+    "invalidTitle": "Liên kết không hợp lệ hoặc đã hết hạn",
+    "invalidMessage": "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.",
+    "requestNewLink": "Yêu cầu liên kết mới",
+    "backToLogin": "Quay lại đăng nhập",
+    "missingToken": "Thiếu token đặt lại mật khẩu.",
+    "error": "Đã xảy ra lỗi. Vui lòng thử lại."
   },
   "setup": {
     "title": "Thiết lập hệ thống",

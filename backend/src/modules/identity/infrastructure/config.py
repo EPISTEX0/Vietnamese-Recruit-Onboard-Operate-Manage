@@ -27,6 +27,10 @@ class AuthSettings(BaseSettings):
         oauth_token_encryption_key: Base64-encoded 32-byte AES-256-GCM key.
         rate_limit_login_max: Maximum login attempts per window.
         rate_limit_login_window_seconds: Rate limit sliding window in seconds.
+        rate_limit_forgot_password_ip_max: Max forgot-password requests per IP.
+        rate_limit_forgot_password_ip_window_seconds: Forgot-password IP window.
+        rate_limit_forgot_password_email_max: Max forgot-password requests per email.
+        rate_limit_forgot_password_email_window_seconds: Forgot-password email window.
         super_admin_email: Email promoted to admin at startup.
     """
 
@@ -55,6 +59,10 @@ class AuthSettings(BaseSettings):
     # Rate limiting
     rate_limit_login_max: int = Field(default=5, gt=0)
     rate_limit_login_window_seconds: int = Field(default=60, gt=0)
+    rate_limit_forgot_password_ip_max: int = Field(default=3, gt=0)
+    rate_limit_forgot_password_ip_window_seconds: int = Field(default=900, gt=0)
+    rate_limit_forgot_password_email_max: int = Field(default=2, gt=0)
+    rate_limit_forgot_password_email_window_seconds: int = Field(default=900, gt=0)
 
     # Super Admin
     super_admin_email: str | None = None

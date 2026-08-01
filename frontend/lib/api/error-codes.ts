@@ -33,6 +33,7 @@
       AUTH_ACCESS_DENIED: "Truy cập bị từ chối. Vui lòng liên hệ quản trị viên.",
       AUTH_INSUFFICIENT_SCOPE: "Vui lòng cấp tất cả quyền được yêu cầu.",
       AUTH_INVALID_TOKEN: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.",
+      AUTH_INVALID_RESET_TOKEN: "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn",
       AUTH_RATE_LIMITED: "Quá nhiều lần đăng nhập, vui lòng thử lại sau.",
       AUTH_SETUP_ALREADY_COMPLETED: "Hệ thống đã được thiết lập trước đó.",
       AUTH_SETUP_REQUIRED: "Hệ thống chưa được thiết lập. Vui lòng chạy trình hướng dẫn cài đặt.",
@@ -145,6 +146,23 @@
 
     export function getErrorMessage(code: string): string {
       return ERROR_CODE_MESSAGES[code] || code;
+    }
+
+    /**
+     * Resolve a user-facing message from any thrown error, falling back to
+     * the raw error message then the given fallback string.
+     *
+     * Accepts AuthApiError (which carries `code`) and the generic ApiError
+     * (which carries `errorCode`) via duck typing, so pages can render a
+     * single catch block instead of duplicating the code lookup chain.
+     */
+    export function errorMessage(err: unknown, fallback: string): string {
+      if (err instanceof Error) {
+        const maybe = err as Error & { code?: string; errorCode?: string };
+        const code = maybe.code ?? maybe.errorCode;
+        return getErrorMessage(code ?? "") || err.message || fallback;
+      }
+      return fallback;
     }
 
 

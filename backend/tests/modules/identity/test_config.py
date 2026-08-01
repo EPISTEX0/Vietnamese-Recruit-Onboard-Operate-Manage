@@ -40,6 +40,10 @@ class TestAuthSettingsDefaults:
         assert settings.refresh_token_expire_days == 7
         assert settings.rate_limit_login_max == 5
         assert settings.rate_limit_login_window_seconds == 60
+        assert settings.rate_limit_forgot_password_ip_max == 3
+        assert settings.rate_limit_forgot_password_ip_window_seconds == 900
+        assert settings.rate_limit_forgot_password_email_max == 2
+        assert settings.rate_limit_forgot_password_email_window_seconds == 900
         assert settings.frontend_url == "http://localhost:3000"
 
 
@@ -54,6 +58,23 @@ class TestAuthSettingsEnvPrefix:
         settings = AuthSettings()
 
         assert settings.frontend_url == "http://custom:4000"
+
+    def test_forgot_password_limits_mapped_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        for key, value in _REQUIRED_ENV.items():
+            monkeypatch.setenv(key, value)
+        monkeypatch.setenv("AUTH_RATE_LIMIT_FORGOT_PASSWORD_IP_MAX", "7")
+        monkeypatch.setenv("AUTH_RATE_LIMIT_FORGOT_PASSWORD_IP_WINDOW_SECONDS", "600")
+        monkeypatch.setenv("AUTH_RATE_LIMIT_FORGOT_PASSWORD_EMAIL_MAX", "4")
+        monkeypatch.setenv("AUTH_RATE_LIMIT_FORGOT_PASSWORD_EMAIL_WINDOW_SECONDS", "1200")
+
+        settings = AuthSettings()
+
+        assert settings.rate_limit_forgot_password_ip_max == 7
+        assert settings.rate_limit_forgot_password_ip_window_seconds == 600
+        assert settings.rate_limit_forgot_password_email_max == 4
+        assert settings.rate_limit_forgot_password_email_window_seconds == 1200
 
 
 class TestAuthSettingsValidation:
@@ -108,6 +129,23 @@ class TestAuthSettingsValidation:
 
         with pytest.raises(ValidationError):
             AuthSettings()
+
+    def test_forgot_password_rate_limits_must_be_positive(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        for key, value in _REQUIRED_ENV.items():
+            monkeypatch.setenv(key, value)
+
+        for env_key in (
+            "AUTH_RATE_LIMIT_FORGOT_PASSWORD_IP_MAX",
+            "AUTH_RATE_LIMIT_FORGOT_PASSWORD_IP_WINDOW_SECONDS",
+            "AUTH_RATE_LIMIT_FORGOT_PASSWORD_EMAIL_MAX",
+            "AUTH_RATE_LIMIT_FORGOT_PASSWORD_EMAIL_WINDOW_SECONDS",
+        ):
+            monkeypatch.setenv(env_key, "0")
+            with pytest.raises(ValidationError):
+                AuthSettings()
+            monkeypatch.delenv(env_key, raising=False)
 
     def test_missing_required_field_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Only set some required fields, omit google_client_id

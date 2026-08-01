@@ -4,12 +4,22 @@ Provides dependency injection functions for extracting and validating
 the current authenticated user from incoming requests.
 """
 
-from fastapi import Request
+from typing import Annotated
 
+from fastapi import Depends, Request
+
+from src.modules.identity.application.password_reset_service import PasswordResetService
 from src.modules.identity.application.token_service import TokenService
+from src.modules.identity.container import get_password_reset_service
 from src.modules.identity.domain.entities import User
 from src.modules.identity.domain.exceptions import InvalidTokenError
 from src.modules.identity.infrastructure.user_repository import UserRepository
+
+# Type alias mirroring the AuthServiceDep pattern used by the auth router:
+# an Annotated type binding PasswordResetService to its DI provider.
+PasswordResetServiceDep = Annotated[
+    PasswordResetService, Depends(get_password_reset_service)
+]
 
 
 async def get_current_user(

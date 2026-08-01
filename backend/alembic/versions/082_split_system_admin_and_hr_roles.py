@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '082_split_system_admin_and_hr_roles'
-down_revision: Union[str, None] = '081_add_guide_progress_to_organization_settings'
+revision: str = '082'
+down_revision: Union[str, None] = '081'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

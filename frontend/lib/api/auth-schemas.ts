@@ -88,3 +88,39 @@ export const changePasswordSchema = z
   );
 
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
+
+// ---------------------------------------------------------------------------
+// Forgot-Password Schema
+// ---------------------------------------------------------------------------
+
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Vui lòng nhập email")
+    .email("Email không đúng định dạng"),
+});
+
+export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+
+// ---------------------------------------------------------------------------
+// Reset-Password Schema
+// ---------------------------------------------------------------------------
+
+export const resetPasswordSchema = z
+  .object({
+    new_password: z
+      .string()
+      .min(12, "Mật khẩu mới phải từ 12 ký tự trở lên"),
+    confirm_password: z
+      .string()
+      .min(1, "Vui lòng xác nhận mật khẩu mới"),
+  })
+  .refine(
+    (data) => data.new_password === data.confirm_password,
+    {
+      message: "Xác nhận mật khẩu mới không trùng khớp",
+      path: ["confirm_password"],
+    },
+  );
+
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;

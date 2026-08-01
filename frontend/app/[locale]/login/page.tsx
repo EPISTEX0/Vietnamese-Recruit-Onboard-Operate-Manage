@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from '@/i18n/navigation';
+import { useRouter, Link } from '@/i18n/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -178,6 +178,15 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="mt-5 text-center">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-slate-500 hover:text-indigo-600 transition-colors"
+          >
+            {t('login.forgotPassword')}
+          </Link>
+        </div>
       </div>
     </div>
   );

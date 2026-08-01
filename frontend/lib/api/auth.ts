@@ -131,3 +131,53 @@ export async function changePassword(
     body: JSON.stringify({ current_password, new_password }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Forgot / Reset password flow (issue 299)
+// ---------------------------------------------------------------------------
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetTokenInfoResponse {
+  valid: boolean;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
+/**
+ * Request a password reset email. BE always returns the same generic 200
+ * message (anti-enumeration) — whether the account exists or not. Can throw
+ * AuthApiError with code AUTH_RATE_LIMITED (HTTP 429) when rate-limited.
+ */
+export async function forgotPassword(
+  email: string,
+): Promise<ForgotPasswordResponse> {
+  return request<ForgotPasswordResponse>("/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+/** Check whether a reset token is still redeemable. */
+export async function getResetTokenInfo(
+  token: string,
+): Promise<ResetTokenInfoResponse> {
+  return request<ResetTokenInfoResponse>(
+    `/reset-password-token-info?token=${encodeURIComponent(token)}`,
+  );
+}
+
+/** Set a new password using a valid reset token. */
+export async function resetPassword(
+  token: string,
+  new_password: string,
+): Promise<ResetPasswordResponse> {
+  return request<ResetPasswordResponse>("/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password }),
+  });
+}

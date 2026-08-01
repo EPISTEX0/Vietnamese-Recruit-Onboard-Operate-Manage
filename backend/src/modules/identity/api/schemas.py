@@ -87,6 +87,27 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=12, max_length=255)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+
+
+class ResetTokenInfoResponse(BaseModel):
+    valid: bool
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=12, max_length=255)
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str
+
+
 class AuthSessionResponse(BaseModel):
     user: UserResponse
     must_change_password: bool

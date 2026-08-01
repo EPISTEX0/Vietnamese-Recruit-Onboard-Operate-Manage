@@ -64,7 +64,8 @@
     "error": "Login failed. Please try again.",
     "checkInfo": "Please check your information",
     "placeholderEmail": "hr@yourcompany.com",
-    "placeholderPassword": "Enter password..."
+    "placeholderPassword": "Enter password...",
+    "forgotPassword": "Forgot password?"
   },
   "appShell": {
     "brand": "Vroom HR",
@@ -1008,6 +1009,38 @@
     "currentPasswordPlaceholder": "Enter current password",
     "newPasswordPlaceholder": "Enter new password",
     "confirmPasswordPlaceholder": "Confirm new password"
+  },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "subtitle": "Enter your login email and we will send you password recovery instructions.",
+    "email": "Email",
+    "placeholderEmail": "hr@yourcompany.com",
+    "submit": "Send Instructions",
+    "sending": "Sending...",
+    "successTitle": "Instructions sent!",
+    "success": "If the email exists in our system, we have sent password recovery instructions to your inbox.",
+    "backToLogin": "Back to login",
+    "error": "Something went wrong. Please try again."
+  },
+  "resetPassword": {
+    "title": "Reset Password",
+    "subtitle": "Enter a new password for your account.",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "newPasswordPlaceholder": "Enter new password (at least 12 characters)",
+    "confirmPasswordPlaceholder": "Confirm new password",
+    "submit": "Reset Password",
+    "submitting": "Processing...",
+    "success": "Password reset successfully!",
+    "successHint": "You can now log in with your new password.",
+    "loginNow": "Log in now",
+    "validating": "Checking your link...",
+    "invalidTitle": "Invalid or expired link",
+    "invalidMessage": "This password reset link is invalid or has expired. Please request a new link.",
+    "requestNewLink": "Request a new link",
+    "backToLogin": "Back to login",
+    "missingToken": "Missing password reset token.",
+    "error": "Something went wrong. Please try again."
   },
   "setup": {
     "title": "System Setup",
