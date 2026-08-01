@@ -1,21 +1,57 @@
+
+networks:
+  vroom-public-net:
+    driver: bridge
+  vroom-internal-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  minio_data:
+  embedding-model-cache:
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   postgres:
     image: pgvector/pgvector:pg15
     container_name: vroom-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vroom_hr
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-vroom_hr}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vroom-internal-net
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=16MB
+      -c effective_cache_size=1536MB
+      -c max_connections=100
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    logging: *default-logging
 
   vroom-embedding:
     build:
@@ -24,120 +60,189 @@ services:
     container_name: vroom-embedding
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${EMBEDDING_PORT:-8080}:8080"
     volumes:
       - embedding-model-cache:/app/model_cache
+    networks:
+      - vroom-internal-net
+      - vroom-public-net
     dns:
       - 8.8.8.8
       - 8.8.4.4
     environment:
-      EMBEDDING_MODEL_NAME: AITeamVN/Vietnamese_Embedding_v2
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-AITeamVN/Vietnamese_Embedding_v2}
       MODEL_CACHE_DIR: /app/model_cache
       HF_TOKEN: ${HF_TOKEN:-}
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3072M
+        reservations:
+          memory: 1024M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 60
-      start_period: 600s
+      retries: 20
+      start_period: 120s
+    logging: *default-logging
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: vroom-redis
     restart: unless-stopped
+    command: redis-server --requirepass "${REDIS_PASSWORD:-VroomRedisPass2026!}" --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    networks:
+      - vroom-internal-net
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 64M
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-VroomRedisPass2026!}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.local
-    container_name: vroom-backend
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8000:8000"
-    env_file:
-      - ./backend/.env
-    environment:
-      AUTH_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-      AUTH_REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-      EMPLOYEE_MINIO_ENDPOINT: minio:9000
-      RECRUITMENT_MINIO_ENDPOINT: minio:9000
-      EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
-      KB_REDIS_URL: redis://redis:6379/0
-      KB_MINIO_ENDPOINT: minio:9000
-      KB_MINIO_BUCKET: knowledge-base
-      KB_EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
-      KB_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    volumes:
-      - ./backend/config:/app/config
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      vroom-embedding:
-        condition: service_healthy
+    logging: *default-logging
 
   minio:
     image: minio/minio:latest
     container_name: vroom-minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-vroomminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-VroomMinioPass2026!}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
+    networks:
+      - vroom-internal-net
     command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./
+      dockerfile: backend/Dockerfile
+    container_name: vroom-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      AUTH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      AUTH_REDIS_URL: redis://:${REDIS_PASSWORD:-VroomRedisPass2026!}@redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      EMPLOYEE_MINIO_ENDPOINT: minio:9000
+      RECRUITMENT_MINIO_ENDPOINT: minio:9000
+      EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
+      KB_REDIS_URL: redis://:${REDIS_PASSWORD:-VroomRedisPass2026!}@redis:6379/0
+      KB_MINIO_ENDPOINT: minio:9000
+      KB_MINIO_BUCKET: knowledge-base
+      KB_EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
+      KB_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    volumes:
+      - ./backend/config:/app/backend/config
+    networks:
+      - vroom-public-net
+      - vroom-internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/docs', timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      minio:
+        condition: service_healthy
+        restart: true
+      vroom-embedding:
+        condition: service_started
+    logging: *default-logging
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.local
+      context: ./
+      dockerfile: frontend/Dockerfile
     container_name: vroom-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${VROOM_PORT:-3000}:3000"
     environment:
       CI: 'true'
       CONFIRM_MODULES_PURGE: 'false'
       INTERNAL_API_URL: http://backend:8000
-
+    networks:
+      - vroom-public-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+        restart: true
+    logging: *default-logging
 
   gmail-worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.local
+      context: ./
+      dockerfile: backend/Dockerfile
     container_name: vroom-gmail-worker
     restart: unless-stopped
     command: uv run arq src.modules.gmail.worker.WorkerSettings
     env_file:
-      - ./backend/.env
+      - .env
     environment:
-      AUTH_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-      AUTH_REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
+      AUTH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      AUTH_REDIS_URL: redis://:${REDIS_PASSWORD:-VroomRedisPass2026!}@redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
       EMPLOYEE_MINIO_ENDPOINT: minio:9000
       RECRUITMENT_MINIO_ENDPOINT: minio:9000
       EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
@@ -145,26 +250,39 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     volumes:
-      - ./backend/config:/app/config
+      - ./backend/config:/app/backend/config
+    networks:
+      - vroom-internal-net
+      - vroom-public-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 64M
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       redis:
         condition: service_healthy
+        restart: true
+    logging: *default-logging
 
   onboarding-worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.local
+      context: ./
+      dockerfile: backend/Dockerfile
     container_name: vroom-onboarding-worker
     restart: unless-stopped
     command: uv run arq src.modules.onboarding.worker.OnboardingWorkerSettings
     env_file:
-      - ./backend/.env
+      - .env
     environment:
-      AUTH_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-      AUTH_REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
+      AUTH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      AUTH_REDIS_URL: redis://:${REDIS_PASSWORD:-VroomRedisPass2026!}@redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
       EMPLOYEE_MINIO_ENDPOINT: minio:9000
       RECRUITMENT_MINIO_ENDPOINT: minio:9000
       EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
@@ -172,45 +290,68 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     volumes:
-      - ./backend/config:/app/config
+      - ./backend/config:/app/backend/config
+    networks:
+      - vroom-internal-net
+      - vroom-public-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 64M
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       redis:
         condition: service_healthy
+        restart: true
+    logging: *default-logging
 
   kb-worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.local
+      context: ./
+      dockerfile: backend/Dockerfile
     container_name: vroom-kb-worker
     restart: unless-stopped
     command: uv run arq src.modules.knowledge_base.worker.KnowledgeBaseWorkerSettings
     env_file:
-      - ./backend/.env
+      - .env
     environment:
-      KB_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
-      KB_REDIS_URL: redis://redis:6379/0
+      KB_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
+      KB_REDIS_URL: redis://:${REDIS_PASSWORD:-VroomRedisPass2026!}@redis:6379/0
       KB_MINIO_ENDPOINT: minio:9000
       KB_MINIO_BUCKET: knowledge-base
       KB_EMBEDDING_SERVICE_URL: http://vroom-embedding:8080
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/vroom_hr
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-vroom_hr}
       EMPLOYEE_MINIO_ENDPOINT: minio:9000
     dns:
       - 8.8.8.8
       - 8.8.4.4
     volumes:
-      - ./backend/config:/app/config
+      - ./backend/config:/app/backend/config
+    networks:
+      - vroom-internal-net
+      - vroom-public-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 128M
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       redis:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       vroom-embedding:
-        condition: service_healthy
-volumes:
-  postgres_data:
-  minio_data:
-  embedding-model-cache:
+        condition: service_started
+    logging: *default-logging

@@ -4,6 +4,7 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
@@ -22,11 +23,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Phase 1: removed `output: 'standalone'` (AI Studio Cloud Run artifact).
-  // It caused flaky ENOENT copyfile races in the standalone trace step when
-  // `.next` was reused or built concurrently; vroom-hr is now a normal
-  // integration frontend served by `next dev`/`next start`, not a Cloud Run
-  // bundle. Re-enable for production single-file deployment if needed.
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
