@@ -12,10 +12,13 @@ _Avoid_: Company, Tenant, Account, Client
 Thuật ngữ legacy từ Policy Engine, nơi `tenant_id` được thiết kế làm khóa cách ly nhiều công ty. Trong mô hình self-hosted, mỗi deployment chỉ có một công ty nên `tenant_id` thực tế là hằng số. Xem mọi `tenant_id` hiện có là implementation detail cần đóng băng hoặc loại bỏ, không phải khái niệm multi-tenancy đang hoạt động.
 _Avoid_: dùng Tenant như thể nhiều công ty cùng chia sẻ một deployment
 
-**HR**:
-Vai trò quản trị viên. Quản lý Employee, policy, lịch làm việc và phê duyệt cho Organization. Ánh xạ với role `admin` hiện có.
-_Avoid_: Manager (Manager là khái niệm quan hệ phê duyệt riêng), Administrator
+**System Admin** (Deployer / Quản trị hệ thống):
+Vai trò quản trị kỹ thuật và triển khai hệ thống (`UserRole.SYSTEM_ADMIN`). Chịu trách nhiệm thực hiện First-Run Setup, cấu hình Google Workspace OAuth Client ID/Secret, LLM Provider/API Keys, Email Whitelist, Organization Domains và xem System Audit Logs. System Admin bị cấm hoàn toàn (Strict Block) khỏi việc truy cập hoặc thao tác trên dữ liệu nghiệp vụ HR.
+_Avoid_: Super Admin, System Administrator, Deployer (dùng System Admin thống nhất trong spec/code)
 
+**HR**:
+Vai trò quản trị viên nghiệp vụ nhân sự (`UserRole.HR`). Quản lý Candidate, Job Opening, Onboarding, Employee Profile, Attendance, Employee Request, Payslip, Knowledge Base và tương tác HR Assistant. HR KHÔNG có quyền truy cập hoặc chỉnh sửa các secret cấu hình hạ tầng kỹ thuật của System Admin.
+_Avoid_: Manager (Manager là khái niệm quan hệ báo cáo riêng), Administrator
 **Employee**:
 Một người có hồ sơ việc làm trong hệ thống. Employee được tạo ngay khi Candidate được accepted, bắt đầu ở trạng thái **inactive** (`is_active = false`, đang onboarding). Khi onboarding hoàn tất, Employee trở thành **active** (`is_active = true`). Ranh giới: Candidate = chưa được accepted; Employee inactive = đã accepted, đang onboarding; Employee active = đã hoàn tất onboarding. Employee active sử dụng phần Employee Self-Service.
 _Avoid_: User (User là khái niệm tài khoản xác thực; Employee là khái niệm HR)

@@ -181,9 +181,7 @@ export async function cancelOvertime(
 // ---------------------------------------------------------------------------
 // Admin / HR review
 // ---------------------------------------------------------------------------
-
-const ADMIN_BASE = "/api/admin/employee-requests";
-
+const ADMIN_BASE = "/api/hr/employee-requests";
 export interface AdminEmployeeRequestItem {
   id: string;
   employee_id: string;

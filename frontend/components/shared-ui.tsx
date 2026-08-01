@@ -771,10 +771,8 @@ export function formatLatency(latencyMs: number | null, locale = 'vi-VN'): strin
           data_policy_accept: 'Data Policy Accepted',
           exact_email: 'Exact Email', domain_pattern: 'Domain Pattern',
           message_feedback: 'Message Feedback',
-          up: '👍 Helpful', down: '👎 Not Helpful',
-          admin: 'Admin (HR)', user: 'Employee',
-          database: 'Manual Entry', file: 'Config File',
-          published: 'Published', draft: 'Draft',
+          system_admin: 'System Admin', hr: 'HR Manager', user: 'Employee',
+          admin: 'System Admin', user_legacy: 'Employee',
         };
 
   // Keys that are internal UUIDs or IDs — skip them for readability

@@ -93,140 +93,91 @@ class RoleService:
         self._session = session
         self._super_admin_email = super_admin_email.lower() if super_admin_email else None
 
-    async def promote_to_admin(self, target_user_id: UUID, admin_user: User) -> User:
-        """Promote a user to the admin role.
+    async def promote_to_system_admin(self, target_user_id: UUID, admin_user: User) -> User:
+        """Promote a user to the system_admin role.
 
-        Changes the target user's role from USER to ADMIN. If the user
-        is already an admin, this is a no-op that returns the user unchanged.
-
-        Args:
-            target_user_id: The UUID of the user to promote.
-            admin_user: The admin user performing the promotion (for audit context).
-
-        Returns:
-            The updated User entity with admin role.
-
-        Raises:
-            UserNotFoundError: If no user exists with the given ID.
+        Changes the target user's role to SYSTEM_ADMIN.
         """
-        user = await self._get_user_by_id(target_user_id)
+        user = await self._user_repository.get_by_id(target_user_id)
         if user is None:
-            raise UserNotFoundError()
+            raise UserNotFoundError(f"User with ID {target_user_id} not found")
 
-        if user.role == UserRole.ADMIN:
+        if user.role == UserRole.SYSTEM_ADMIN:
             return user
 
-        user.role = UserRole.ADMIN
+        user.role = UserRole.SYSTEM_ADMIN
         self._session.add(user)
         await self._session.flush()
+        return user
 
-        logger.info(
-            "User %s promoted to admin by %s",
-            user.email,
-            admin_user.email,
-        )
+    async def promote_to_hr(self, target_user_id: UUID, admin_user: User) -> User:
+        """Promote a user to the hr role.
+
+        Changes the target user's role to HR.
+        """
+        user = await self._user_repository.get_by_id(target_user_id)
+        if user is None:
+            raise UserNotFoundError(f"User with ID {target_user_id} not found")
+
+        if user.role == UserRole.HR:
+            return user
+
+        user.role = UserRole.HR
+        self._session.add(user)
+        await self._session.flush()
         return user
 
     async def demote_to_user(self, target_user_id: UUID, admin_user: User) -> User:
-        """Demote an admin to regular user role.
+        """Demote a user to regular user role.
 
-        Changes the target user's role from ADMIN to USER. Enforces
-        protection against demoting the super admin or the last remaining
-        admin in the system.
-
-        Args:
-            target_user_id: The UUID of the user to demote.
-            admin_user: The admin user performing the demotion (for audit context).
-
-        Returns:
-            The updated User entity with user role.
-
-        Raises:
-            UserNotFoundError: If no user exists with the given ID.
-            SuperAdminProtectedError: If the target user is the super admin.
-            LastAdminError: If the target is the last remaining admin.
+        Changes the target user's role to USER. Enforces protection against
+        demoting the super admin or the last remaining system admin.
         """
-        user = await self._get_user_by_id(target_user_id)
+        user = await self._user_repository.get_by_id(target_user_id)
         if user is None:
-            raise UserNotFoundError()
+            raise UserNotFoundError(f"User with ID {target_user_id} not found")
 
         if user.role == UserRole.USER:
             return user
 
-        # Prevent self-demotion: an admin cannot change their own role.
+        # Prevent self-demotion
         if user.id == admin_user.id:
             raise SelfDemotionError()
 
-        # Protect the super admin from demotion.
-        if self._super_admin_email and user.email.lower() == self._super_admin_email:
+        # Prevent demoting super admin
+        if self._super_admin_email and user.email.lower() == self._super_admin_email.lower():
             raise SuperAdminProtectedError()
 
-        # Protect the last admin from demotion.
-        admin_count = await self._count_admins()
-        if admin_count <= 1:
-            raise LastAdminError()
+        # Prevent demoting the last system_admin
+        if user.role == UserRole.SYSTEM_ADMIN:
+            admin_count = await self._count_system_admins()
+            if admin_count <= 1:
+                raise LastAdminError()
 
         user.role = UserRole.USER
         self._session.add(user)
         await self._session.flush()
-
-        logger.info(
-            "User %s demoted to user by %s",
-            user.email,
-            admin_user.email,
-        )
+        logger.info("User %s demoted to user by %s", user.email, admin_user.email)
         return user
 
     async def ensure_super_admin(self, email: str) -> None:
-        """Ensure the super admin email has the admin role.
-
-        Called at application startup to bootstrap the first administrator.
-        If the user exists, their role is set to ADMIN. If the user does
-        not exist yet (hasn't logged in), a log message is emitted and
-        the role will be assigned on first login.
-
-        Args:
-            email: The super admin email address from AUTH_SUPER_ADMIN_EMAIL.
-        """
+        """Ensure the super admin email has the SYSTEM_ADMIN role."""
         statement = select(User).where(func.lower(User.email) == email.lower())
         result = await self._session.execute(statement)
         user = result.scalars().first()
 
         if user is None:
-            logger.info(
-                "Super admin user '%s' not found in database. "
-                "Admin role will be assigned on first login.",
-                email,
-            )
+            logger.info("Super admin user '%s' not found in database.", email)
             return
 
-        if user.role != UserRole.ADMIN:
-            user.role = UserRole.ADMIN
+        if user.role != UserRole.SYSTEM_ADMIN:
+            user.role = UserRole.SYSTEM_ADMIN
             self._session.add(user)
             await self._session.flush()
             logger.info("Super admin role assigned to existing user '%s'.", email)
-        else:
-            logger.debug("Super admin '%s' already has admin role.", email)
 
-    async def _get_user_by_id(self, user_id: UUID) -> User | None:
-        """Retrieve a user by their unique identifier.
-
-        Args:
-            user_id: The UUID primary key of the user.
-
-        Returns:
-            The User entity if found, None otherwise.
-        """
-        statement = select(User).where(User.id == user_id)
-        result = await self._session.execute(statement)
-        return result.scalars().first()
-
-    async def _count_admins(self) -> int:
-        """Count the number of users with the admin role.
-
-        Returns:
-            The total number of admin users in the database.
-        """
-        statement = select(func.count()).select_from(User).where(User.role == UserRole.ADMIN)
+    async def _count_system_admins(self) -> int:
+        """Count the number of users with the SYSTEM_ADMIN role."""
+        statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
         result = await self._session.execute(statement)
         return result.scalar_one()

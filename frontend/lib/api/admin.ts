@@ -177,10 +177,8 @@ export interface AssistantToolConfigListResponse {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const BASE = `${API_BASE_URL}/api/admin`;
+const BASE = `${API_BASE_URL}/api/system-admin`;
 const AUTH_BASE = `${API_BASE_URL}/api/auth`;
-
 /**
  * Internal fetch wrapper that always sends the HttpOnly auth cookie.
  */

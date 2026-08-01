@@ -29,11 +29,11 @@ from src.modules.employee_request.domain.enums import RequestStatus
 from src.modules.employee_request.infrastructure.employee_request_repository import (
     EmployeeRequestRepository,
 )
-from src.modules.identity.api.admin_router import AdminUserDep
+from src.modules.identity.api.admin_router import HRUserDep
 
 admin_employee_request_router = APIRouter(
-    prefix="/api/admin/employee-requests",
-    tags=["admin", "employee-requests"],
+    prefix="/api/hr/employee-requests",
+    tags=["hr", "employee-requests"],
 )
 
 
@@ -47,7 +47,7 @@ admin_employee_request_router = APIRouter(
     response_model=AdminReviewQueueResponse,
 )
 async def list_review_queue(
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     filters: ReviewQueueFilterParams = Depends(),
     repo: EmployeeRequestRepository = Depends(get_employee_request_repository),
 ) -> AdminReviewQueueResponse:
@@ -82,7 +82,7 @@ async def list_review_queue(
 async def approve_request(
     request_id: UUID,
     body: ReviewRequest,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     review_service: EmployeeRequestReviewService = Depends(
         get_employee_request_review_service,
     ),
@@ -106,7 +106,7 @@ async def approve_request(
 async def reject_request(
     request_id: UUID,
     body: RejectRequest,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     review_service: EmployeeRequestReviewService = Depends(
         get_employee_request_review_service,
     ),

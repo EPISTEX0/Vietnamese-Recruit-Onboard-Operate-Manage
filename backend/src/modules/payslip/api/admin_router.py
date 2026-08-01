@@ -10,7 +10,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.modules.identity.api.admin_router import AdminUserDep
+from src.modules.identity.api.admin_router import HRUserDep
 from src.modules.payslip.api.schemas import (
     AdminPayslipListResponse,
     CreatePayslipRequest,
@@ -28,8 +28,8 @@ from src.modules.payslip.domain.exceptions import (
 )
 
 admin_payslip_router = APIRouter(
-    prefix="/api/admin/payslips",
-    tags=["admin", "payslips"],
+    prefix="/api/hr/payslips",
+    tags=["hr", "payslips"],
 )
 
 
@@ -43,7 +43,7 @@ admin_payslip_router = APIRouter(
     response_model=AdminPayslipListResponse,
 )
 async def list_payslips(
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     page: int = 1,
     page_size: int = 20,
     employee_id: str | None = None,
@@ -113,7 +113,7 @@ async def list_payslips(
     status_code=201,
 )
 async def create_payslip(
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     request: CreatePayslipRequest,
     service: PayslipHRService = Depends(get_payslip_hr_service),
 ) -> PayslipResponse:
@@ -149,7 +149,7 @@ async def create_payslip(
 )
 async def get_payslip(
     payslip_id: str,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     service: PayslipHRService = Depends(get_payslip_hr_service),
 ) -> PayslipResponse:
     """Get a specific payslip by ID (any status)."""
@@ -177,7 +177,7 @@ async def get_payslip(
 )
 async def update_payslip(
     payslip_id: str,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     request: UpdatePayslipRequest,
     service: PayslipHRService = Depends(get_payslip_hr_service),
 ) -> PayslipResponse:
@@ -218,7 +218,7 @@ async def update_payslip(
 )
 async def publish_payslip(
     payslip_id: str,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     service: PayslipHRService = Depends(get_payslip_hr_service),
 ) -> PayslipResponse:
     """Publish a draft Payslip.
@@ -252,7 +252,7 @@ async def publish_payslip(
 )
 async def delete_payslip(
     payslip_id: str,
-    admin_user: AdminUserDep,
+    hr_user: HRUserDep,
     service: PayslipHRService = Depends(get_payslip_hr_service),
 ) -> None:
     """Delete a draft Payslip.

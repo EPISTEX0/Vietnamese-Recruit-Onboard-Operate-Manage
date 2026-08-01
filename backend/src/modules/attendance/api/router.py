@@ -47,11 +47,10 @@ attendance_router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 
 
 def _require_hr(user: User = Depends(get_current_user)) -> User:
-    """Dependency that requires HR/Admin role."""
-    if user.role != UserRole.ADMIN:
+    """Dependency that requires HR role."""
+    if user.role != UserRole.HR:
         raise AccessDeniedError()
     return user
-
 
 @attendance_router.get("/settings/network", response_model=NetworkAllowlistResponse)
 async def get_network_allowlist(

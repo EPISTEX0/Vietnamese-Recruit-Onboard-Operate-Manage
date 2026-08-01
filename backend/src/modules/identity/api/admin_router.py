@@ -86,38 +86,43 @@ from src.modules.identity.container import (
 from src.modules.identity.domain.entities import AuditActionType, User, UserRole
 from src.modules.identity.infrastructure.audit_log_repository import AuditLogRepository
 
-admin_router = APIRouter(prefix="/api/admin", tags=["admin"])
+admin_router = APIRouter(prefix="/api/system-admin", tags=["system-admin"])
+
+
+async def require_system_admin(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Verify the current user has the SYSTEM_ADMIN role."""
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "SYSTEM_ADMIN_ACCESS_DENIED", "message": "System Admin access required"},
+        )
+    return current_user
+
+
+async def require_hr(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Verify the current user has the HR role."""
+    if current_user.role != UserRole.HR:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "HR_ACCESS_DENIED", "message": "HR access required"},
+        )
+    return current_user
 
 
 async def require_admin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    """Verify the current user has the Admin role.
-
-    This dependency should be used on all admin endpoints to enforce
-    role-based access control. It first resolves the authenticated user
-    via ``get_current_user``, then checks that the user's role is ADMIN.
-
-    Args:
-        current_user: The authenticated User entity from the JWT.
-
-    Returns:
-        The authenticated User entity if they have the Admin role.
-
-    Raises:
-        HTTPException: 403 Forbidden if the user does not have the Admin role.
-    """
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "ADMIN_ACCESS_DENIED", "message": "Admin access required"},
-        )
-    return current_user
+    """Legacy alias for system admin or backward compatibility."""
+    return await require_system_admin(current_user)
 
 
-# Type alias for use in endpoint signatures.
-AdminUserDep = Annotated[User, Depends(require_admin)]
-
+SystemAdminUserDep = Annotated[User, Depends(require_system_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
+AdminUserDep = Annotated[User, Depends(require_system_admin)]
 
 # --- Dependency providers for admin services ---
 

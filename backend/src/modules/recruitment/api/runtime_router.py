@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.employee.infrastructure.config import EmployeeSettings
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_system_admin
 from src.modules.identity.container import get_db_session
 from src.modules.identity.domain.entities import User
 from src.modules.identity.infrastructure.config import AuthSettings
 
-runtime_router = APIRouter(prefix="/api/admin/runtime", tags=["runtime"])
+runtime_router = APIRouter(prefix="/api/system-admin/runtime", tags=["system-admin-runtime"])
 
 HEARTBEAT_TTL_SECONDS = 600  # must match worker TTL
 

@@ -94,8 +94,8 @@ async def _bootstrap_super_admin() -> None:
             await session.commit()
             logger.info("Super admin bootstrap completed for '%s'.", super_admin_email)
         else:
-            # Check if any admin exists in the database.
-            statement = select(func.count()).select_from(User).where(User.role == UserRole.ADMIN)
+            # Check if any system_admin exists in the database.
+            statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
             result = await session.execute(statement)
             admin_count = result.scalar_one()
             if admin_count == 0:

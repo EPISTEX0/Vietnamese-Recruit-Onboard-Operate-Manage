@@ -17,7 +17,8 @@ from sqlmodel import Field, SQLModel
 class UserRole(str, Enum):
     """Enumeration of user roles for access control."""
 
-    ADMIN = "admin"
+    SYSTEM_ADMIN = "system_admin"
+    HR = "hr"
     USER = "user"
 
 

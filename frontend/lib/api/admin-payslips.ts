@@ -1,9 +1,7 @@
 /** API client for Admin Payslip management (HR). */
 
 import { apiFetch } from "./client";
-
-const BASE = "/api/admin/payslips";
-
+const BASE = "/api/hr/payslips";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

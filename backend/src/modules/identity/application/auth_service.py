@@ -97,7 +97,7 @@ class AuthService:
                 email=email,
                 name=name,
                 password_hash=hash_password(password),
-                role=UserRole.ADMIN,
+                role=UserRole.SYSTEM_ADMIN,
                 must_change_password=False,
             )
         except Exception:
