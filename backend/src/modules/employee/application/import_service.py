@@ -120,7 +120,6 @@ class ImportService:
         Returns:
             A list of error dicts (empty if the row was processed successfully).
         """
-        errors: list[dict[str, Any]] = []
         department_id = None
         position_id = None
 
