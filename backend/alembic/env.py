@@ -22,57 +22,47 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-# Import SQLModel metadata so Alembic can detect tables
+# Import SQLModel metadata so Alembic can detect tables.
+#
+# This used to be a hand-written list of ``from src.modules.… import Entity``
+# lines, and it fell behind the source tree twice over: ``employee_requests``
+# (holding live rows) and ``attendance_records`` were both absent, so
+# autogenerate saw tables with no model and proposed ``op.drop_table()`` for
+# them. Discovery is derived from ``src`` now, so a new module cannot be
+# forgotten here. ``tests/test_alembic_metadata_complete.py`` guards it.
 from sqlmodel import SQLModel  # noqa: E402
 
-from src.modules.assistant.domain.entities import (  # noqa: E402, F401
-    AssistantToolConfig,
-)
-from src.modules.assistant.infrastructure.quality_models import (  # noqa: E402, F401
-    AssistantChatSession,
-    AssistantFeedbackEvent,
-    AssistantToolCallEvent,
-)
-from src.modules.employee.domain.entities import (  # noqa: E402, F401
-    Department,
-    Employee,
-    EmployeeDocument,
-    Position,
-)
-from src.modules.gmail.domain.entities import (  # noqa: E402, F401
-    EmailAttachment,
-    EmailMessage,
-    GmailAuditLog,
-    OutboundEmail,
-    SyncCursor,
-)
-from src.modules.identity.domain.entities import (  # noqa: E402, F401
-    OAuthGrant,
-    RefreshToken,
-    User,
-)
-from src.modules.knowledge_base.domain.entities import (  # noqa: E402, F401
-    KnowledgeBaseChunk,
-    KnowledgeBaseDocument,
-)
-from src.modules.onboarding.domain.entities import (  # noqa: E402, F401
-    OnboardingAuditLog,
-    OnboardingProcess,
-    OnboardingTask,
-)
-from src.modules.payslip.domain.entities import (  # noqa: E402, F401
-    Payslip,
-)
-from src.modules.recruitment.domain.entities import (  # noqa: E402, F401
-    Candidate,
-    CVDocument,
-    Interview,
-    InterviewParticipant,
-    JobApplication,
-    OrganizationSettings,
-    RecruitmentAuditLog,
-    RecruitmentInboxItem,
-)
+from src.shared.model_registry import import_all_entity_modules  # noqa: E402
+
+import_all_entity_modules()
+
+# Tables that exist in the database but deliberately have no model, so
+# autogenerate must not propose dropping them. See ``docs/schema-drift-audit.md``.
+UNMANAGED_TABLES = {
+    # The Gmail label feature (model, repository, service, routes, tests) was
+    # removed wholesale in 76e9143, but no migration ever dropped the table it
+    # left behind. Dev is empty, yet the feature shipped in 008 and ran from
+    # May to July 2026, so deployed databases may still hold rows. Dropping is
+    # irreversible; excluding it costs nothing. Remove this entry together with
+    # a drop migration once the deployed table is confirmed empty.
+    "gmail_label_mappings",
+}
+
+
+def include_object(
+    obj: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object,
+) -> bool:
+    """Keep unmanaged tables out of autogenerate's comparison."""
+    if type_ == "table" and name in UNMANAGED_TABLES:
+        return False
+    if type_ == "index" and getattr(getattr(obj, "table", None), "name", None) in UNMANAGED_TABLES:
+        return False
+    return True
+
 
 target_metadata = SQLModel.metadata
 
@@ -98,6 +88,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -106,7 +97,11 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations with the given connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()
