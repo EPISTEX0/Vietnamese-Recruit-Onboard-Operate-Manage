@@ -1,0 +1,76 @@
+# Build context for the images that build from the repository root.
+#
+# docker-compose.yml builds backend, kb-worker, gmail-worker,
+# onboarding-worker and frontend with `context: ./`, so without this file the
+# entire repository — .git, frontend/node_modules, backend/.venv, roughly 1.2 GB
+# — is uploaded to the Docker daemon on every build.
+#
+# vroom-embedding builds from `context: ./vroom-embedding` and is therefore NOT
+# covered by this file. For the same reason backend/.dockerignore and
+# frontend/.dockerignore are inert — Docker only reads the one at the context
+# root — so this file is where those rules have to live.
+#
+# Patterns are matched against paths relative to the context root, and Docker
+# does not imply a leading `**/`. Anything that can appear in a subdirectory
+# needs the prefix spelled out.
+
+# ---- Version control & CI ----
+.git
+.github
+.gitignore
+
+# ---- Python ----
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+**/.venv
+**/venv
+
+# ---- Node / Next.js ----
+**/node_modules
+**/.next
+**/out
+**/.pnpm-store
+**/*.tsbuildinfo
+
+# A stray frontend/pnpm-workspace.yaml lands at /app in the frontend builder
+# and makes pnpm resolve the app as a workspace root, which fails `pnpm build`.
+# It is gitignored, so it is invisible to git status while still reaching the
+# build context — hence blocking it here explicitly.
+**/pnpm-workspace.yaml
+
+# ---- Test output ----
+**/test-results
+**/playwright-report
+**/coverage
+
+# ---- Environment / secrets ----
+# Never bake local credentials into an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# ---- Editors & OS ----
+.idea
+.vscode
+**/.DS_Store
+**/*.swp
+**/*.log
+
+# ---- Local agent & tooling state ----
+.claude
+.kiro
+.pi
+.codegraph
+.mcp.json
+.mise.toml
+
+# ---- Docs & compose files (no build stage reads them) ----
+docs
+*.md
+docker-compose*.yml
