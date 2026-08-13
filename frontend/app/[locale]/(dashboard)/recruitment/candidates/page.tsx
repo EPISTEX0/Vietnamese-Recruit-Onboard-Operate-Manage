@@ -8,7 +8,6 @@ import { UserCheck, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   listCandidates, type CandidateStatus, type CandidateListParams,
 } from '@/lib/api/recruitment';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   ErrorBanner, Loading, EmptyState, StatusPill,
   CANDIDATE_STATUS_META, confidencePct,
@@ -18,7 +17,6 @@ const STATUSES: CandidateStatus[] = ['new', 'reviewing', 'interview_scheduled', 
 const PAGE_SIZE = 12;
 
 export default function CandidatesPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
   const router = useRouter();

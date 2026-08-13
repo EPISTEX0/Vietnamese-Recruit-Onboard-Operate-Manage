@@ -10,7 +10,6 @@ import {
 import * as gmailApi from '@/lib/api/gmail';
 import type { OrganizationGoogleConnectionResponse } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 
 
 import { ToastProvider, useToast } from './toast';
@@ -34,7 +33,6 @@ export default function GmailPage() {
 }
 
 function GmailPageInner() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('gmail');
   const { push } = useToast();
   const qc = useQueryClient();

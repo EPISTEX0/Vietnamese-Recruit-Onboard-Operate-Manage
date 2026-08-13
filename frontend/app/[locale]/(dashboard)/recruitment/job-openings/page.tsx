@@ -12,13 +12,11 @@ import {
 import { listPositions } from '@/lib/api/positions';
 import type { Position } from '@/lib/api/types';
 
-import { useAuthGuard } from '@/lib/auth/session';
 import { ErrorBanner, Loading, EmptyState, StatusPill, JOB_STATUS_META } from '@/components/shared-ui';
 
 type StatusFilter = 'all' | 'draft' | 'open' | 'closed' | 'cancelled';
 
 export default function JobOpeningsPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
   const qc = useQueryClient();

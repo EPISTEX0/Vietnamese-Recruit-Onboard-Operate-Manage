@@ -15,7 +15,6 @@ import {
   type SplitApplicantInput, type ApplicationSource,
   type JobOpeningListItem,
 } from '@/lib/api/recruitment';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   ErrorBanner, Loading, EmptyState, StatusPill,
   INBOX_STATUS_META, confidencePct,
@@ -37,7 +36,6 @@ export default function InboxPage() {
     { status: 'ready_for_review', label: t('readyForReview'), icon: CheckCircle2 },
     { status: 'resolved', label: t('resolved'), icon: CheckCircle2 },
   ];
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const qc = useQueryClient();
   const [activeGroup, setActiveGroup] = useState<InboxStatus | 'all'>('all');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});

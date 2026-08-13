@@ -9,7 +9,6 @@ import {
   CheckCircle, Clock, AlertTriangle, XCircle, Loader2,
   Pencil, UploadCloud, Trash2, Filter, Info,
 } from 'lucide-react';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   uploadDocument,
   listDocuments,
@@ -55,7 +54,6 @@ function formatFileSize(bytes: number): string {
 // ---------------------------------------------------------------------------
 
 export default function KnowledgeBasePage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const locale = useLocale();
   const t = useTranslations('knowledgeBase');
 

@@ -7,6 +7,8 @@
 
 import { z } from "zod";
 
+import { STAFF_ROLES, USER_ROLES } from "@/lib/auth/roles";
+
 // ---------------------------------------------------------------------------
 // Whitelist Add Schema
 // ---------------------------------------------------------------------------
@@ -73,15 +75,44 @@ export type OAuthConfigUpdateFormData = z.infer<typeof oauthConfigUpdateSchema>;
 // ---------------------------------------------------------------------------
 
 /**
- * Validates that the role value is either "admin" or "user".
+ * Validates that the role value is one of the three deployment roles.
+ * Mirrors the BE `UserRole` enum — see lib/auth/roles.ts.
  */
 export const roleUpdateSchema = z.object({
-  role: z.enum(["admin", "user"], {
-    message: "Vai trò phải là 'admin' hoặc 'user'",
+  role: z.enum(USER_ROLES, {
+    message: "Vai trò phải là 'system_admin', 'hr' hoặc 'user'",
   }),
 });
 
 export type RoleUpdateFormData = z.infer<typeof roleUpdateSchema>;
+
+// ---------------------------------------------------------------------------
+// Staff Account Create Schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates the payload for POST /api/system-admin/users.
+ *
+ * Only staff roles are offered: `user` accounts are provisioned by HR against
+ * an Employee record, not minted standalone here.
+ */
+export const staffAccountCreateSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email không được để trống")
+    .max(255, "Email không được vượt quá 255 ký tự")
+    .email("Email không hợp lệ"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Tên không được để trống")
+    .max(255, "Tên không được vượt quá 255 ký tự"),
+  role: z.enum(STAFF_ROLES, {
+    message: "Vai trò phải là 'hr' hoặc 'system_admin'",
+  }),
+});
+
+export type StaffAccountCreateFormData = z.infer<typeof staffAccountCreateSchema>;
 
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,9 @@
 import { API_BASE_URL } from "./client";
+import type { UserRole } from "@/lib/auth/roles";
 
 const BASE = `${API_BASE_URL}/api/auth`;
-export type UserRole = "admin" | "user";
+
+export type { UserRole };
 
 export interface CurrentUser {
   id: string;

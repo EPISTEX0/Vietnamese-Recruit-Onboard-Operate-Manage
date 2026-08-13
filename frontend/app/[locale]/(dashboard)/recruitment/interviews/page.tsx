@@ -13,11 +13,9 @@ import {
   type CreateInterviewRequest, type InterviewResponse,
 } from '@/lib/api/recruitment';
 import { getCalendars, selectCalendar, type CalendarListResponse } from '@/lib/api/gmail';
-import { useAuthGuard } from '@/lib/auth/session';
 import { ErrorBanner, Loading, EmptyState, StatusPill, CONFLICT_STATUS_META, formatAuditDetails } from '@/components/shared-ui';
 
 export default function InterviewsPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
   const router = useRouter();
@@ -98,14 +96,14 @@ export default function InterviewsPage() {
               <div className="text-xs text-rose-600 space-y-1">
                 <p className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {t('calendarCheckError')}</p>
                 <p className="text-slate-400">{t('calendarCheckErrorHint')}</p>
-                <button onClick={() => router.push('/settings')} className="mt-1 text-indigo-600 hover:text-indigo-700 font-medium">→ {t('openSettings')}</button>
+                <button onClick={() => router.push('/gmail')} className="mt-1 text-indigo-600 hover:text-indigo-700 font-medium">→ {t('openGmailConnection')}</button>
               </div>
             ) : calLoading ? (
               <p className="text-xs text-slate-500">{t('checkingCalendar')}</p>
             ) : !googleConnected ? (
               <div className="text-xs text-slate-600 space-y-1">
                 <p>{t('calendarNotConnected')}</p>
-                <button onClick={() => router.push('/settings')} className="mt-1 text-indigo-600 hover:text-indigo-700 font-medium">→ {t('openSettings')}</button>
+                <button onClick={() => router.push('/gmail')} className="mt-1 text-indigo-600 hover:text-indigo-700 font-medium">→ {t('openGmailConnection')}</button>
               </div>
         ) : selectedCalendarId ? (
           <p className="text-xs text-emerald-700">{t('calendarSelected')} <code className="font-mono">{calendars?.calendars?.find((c) => c.id === selectedCalendarId)?.summary ?? selectedCalendarId}</code></p>

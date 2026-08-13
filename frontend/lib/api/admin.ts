@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "./client";
 import { ApiError } from "./types";
 import { isValidationErrorDetail, formatValidationErrors } from "./validation-errors";
+import type { StaffRole, UserRole } from "@/lib/auth/roles";
 
 /**
  * Admin API client — typed functions for all admin endpoints.
@@ -92,8 +93,6 @@ export interface GoogleWorkspaceConnection {
   redirect_url: string | null;
   selected_calendar_id: string | null;
 }
-
-export type UserRole = 'admin' | 'user';
 
 export interface AdminUser {
   id: string;
@@ -509,9 +508,33 @@ export async function selectGoogleWorkspaceCalendar(calendarId: string): Promise
 // User Management Endpoints
 // ---------------------------------------------------------------------------
 
+export interface StaffAccountCreateResponse {
+  user: AdminUser;
+  /** One-time password. Returned only here — never readable again. */
+  temporary_password: string;
+}
+
 export async function listUsers(): Promise<AdminUser[]> {
   const res = await adminFetch(`${BASE}/users`);
   return handleResponse<AdminUser[]>(res);
+}
+
+/**
+ * Provision an HR or System Admin account (`POST /api/system-admin/users`).
+ *
+ * First-run setup mints exactly one system admin and every other
+ * account-creation route sits behind HR, so this is the only way a deployment
+ * gets its first HR account. The response carries a temporary password the
+ * system admin must hand over out of band; the account lands with
+ * `must_change_password` set.
+ */
+export async function createStaffAccount(data: {
+  email: string;
+  name: string;
+  role: StaffRole;
+}): Promise<StaffAccountCreateResponse> {
+  const res = await adminFetch(`${BASE}/users`, jsonBody(data));
+  return handleResponse<StaffAccountCreateResponse>(res);
 }
 
 export async function updateUserRole(userId: string, role: UserRole): Promise<AdminUser> {

@@ -19,14 +19,12 @@ import {
       type CreateInterviewRequest,
     } from '@/lib/api/recruitment';
     import { getCalendars, type CalendarListResponse } from '@/lib/api/gmail';
-    import { useAuthGuard } from '@/lib/auth/session';
     import {
       ErrorBanner, Loading, StatusPill,
       CANDIDATE_STATUS_META, confidencePct,
     } from '@/components/shared-ui';
 
 export default function CandidateDetailPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
   const params = useParams<{ id: string }>();

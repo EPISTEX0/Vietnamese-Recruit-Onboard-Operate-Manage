@@ -8,14 +8,13 @@ import { getEmployee, updateEmployee } from '@/lib/api/employees';
 import { listDepartments } from '@/lib/api/departments';
 import { listPositions } from '@/lib/api/positions';
 import type { Employee, Department, Position } from '@/lib/api/types';
-import { useAuthGuard, useSession } from '@/lib/auth/session';
+import { useSession } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
   ButtonPrimary, ErrorAlert, Badge, formatDateTime,
 } from '@/components/shared-ui';
 
 export default function EmployeeProfilePage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
   const t = useTranslations('employee');
   const locale = useLocale();
   const { user } = useSession();

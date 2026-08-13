@@ -8,7 +8,6 @@ import {
   listReviewQueue, submitCorrection, retryParse, dismissReview,
   type CVReviewItem, type ParsedCVInput, type ProcessingStatus,
 } from '@/lib/api/recruitment';
-import { useAuthGuard } from '@/lib/auth/session';
 import { ErrorBanner, Loading, EmptyState, StatusPill, confidencePct, MIME_TYPE_LABELS } from '@/components/shared-ui';
 
 const PROC_STATUS_META: Record<ProcessingStatus, { label: string; tone: 'amber' | 'emerald' | 'rose' | 'indigo' | 'slate' }> = {
@@ -25,7 +24,6 @@ const PROC_STATUS_META: Record<ProcessingStatus, { label: string; tone: 'amber' 
 };
 
 export default function ReviewPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('recruitment');
   const qc = useQueryClient();
   const [page, setPage] = useState(1);

@@ -1,11 +1,10 @@
 'use client';
 import { useTranslations } from 'next-intl';
-import { useAuthGuard, useSession } from '@/lib/auth/session';
+import { useSession } from '@/lib/auth/session';
 import { User, Clock, FileText, FileSpreadsheet, FolderOpen, Sparkles } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 
 export default function EmployeeDashboardPage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
   const { user } = useSession();
   const router = useRouter();
   const t = useTranslations('employee');

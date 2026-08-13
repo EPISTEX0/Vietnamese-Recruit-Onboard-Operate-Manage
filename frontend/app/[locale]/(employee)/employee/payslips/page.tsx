@@ -6,13 +6,11 @@ import { useQuery } from '@tanstack/react-query';
 import { FileSpreadsheet, Eye } from 'lucide-react';
 import { fetchMyPayslips, fetchMyPayslip } from '@/lib/api/payslips';
 import type { Payslip, PayslipListResponse } from '@/lib/api/payslips';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, ButtonPrimary, ErrorAlert, EmptyState, Badge, Modal, formatVND, formatDateTime,
 } from '@/components/shared-ui';
 
 export default function EmployeePayslipsPage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
  const t = useTranslations('employee');
  const locale = useLocale();
 

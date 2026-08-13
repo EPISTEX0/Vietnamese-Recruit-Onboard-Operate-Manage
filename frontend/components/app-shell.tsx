@@ -29,8 +29,6 @@ import LocaleSwitcher from '@/components/locale-switcher';
 const ROUTE_QUERY_MAP: Record<string, import('@tanstack/react-query').QueryKey[]> = {
   '/dashboard': [
     ['recruitment-metrics'],
-    ['runtime-health'],
-    ['audit-logs'],
   ],
   '/recruitment/inbox': [
     ['recruitment-inbox'],
@@ -71,6 +69,8 @@ const ROUTE_QUERY_MAP: Record<string, import('@tanstack/react-query').QueryKey[]
     ['gmail-messages'],
   ],
   '/settings': [
+    ['ai-config'],
+    ['runtime-health'],
     ['audit-logs'],
   ],
   '/employee': [
@@ -110,8 +110,12 @@ export interface AppShellProps {
   navGroups?: NavGroup[];
   /** Sidebar badge: the org/user card rendered above the nav section */
   sidebarBadge?: React.ReactNode;
-  /** Where the AI Assistant button links to, e.g. "/assistant" or "/employee/assistant" */
-  assistantHref: string;
+  /**
+   * Where the AI Assistant button links to, e.g. "/assistant" or
+   * "/employee/assistant". Omit to hide the button — the HR assistant is an HR
+   * surface, so the system admin shell has nothing to point it at.
+   */
+  assistantHref?: string;
   /** Default fallback for user display name */
   userDisplayNameFallback: string;
   /** Optional extra button in the top bar (e.g. settings gear icon) */
@@ -287,16 +291,18 @@ export default function AppShell({
           ))}
 
           {/* AI Assistant Button */}
-          <div className="pt-3 mt-3 border-t border-slate-100">
-            <button
-                  onMouseEnter={() => handleNavHover(assistantHref)}
-                  onClick={() => handleNavClick(assistantHref)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-100 transition-all"
-            >
-              <Sparkles className="w-4 h-4" />
-              {t('assistant')}
-            </button>
-          </div>
+          {assistantHref && (
+            <div className="pt-3 mt-3 border-t border-slate-100">
+              <button
+                    onMouseEnter={() => handleNavHover(assistantHref)}
+                    onClick={() => handleNavClick(assistantHref)}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-md shadow-indigo-100 transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                {t('assistant')}
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Main Content */}

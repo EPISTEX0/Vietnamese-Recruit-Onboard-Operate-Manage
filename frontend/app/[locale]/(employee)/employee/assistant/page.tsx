@@ -11,7 +11,6 @@ import {
   sendEmployeeFeedback,
   confirmEmployeeDraftAction,
 } from '@/lib/api/employee-assistant';
-import { useAuthGuard } from '@/lib/auth/session';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -34,7 +33,6 @@ const employeeAssistantApi: AiChatApi = {
 };
 
 export default function EmployeeAssistantPage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
  const t = useTranslations('employee');
 
   return (

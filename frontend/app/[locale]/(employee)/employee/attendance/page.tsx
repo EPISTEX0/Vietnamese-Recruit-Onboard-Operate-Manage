@@ -8,7 +8,6 @@ import {
   checkIn, checkOut, getTodayRecord, getMyHistory,
 } from '@/lib/api/attendance';
 import type { AttendanceRecord, HistoryResponse } from '@/lib/api/attendance';
-import { useAuthGuard } from '@/lib/auth/session';
 import { toast } from 'sonner';
 import {
   PageHeader, Card, SectionTitle, ButtonPrimary, ButtonGhost, ButtonDanger, ErrorAlert, EmptyState, Badge, LoadingRows, formatDateTime,
@@ -27,9 +26,8 @@ function relativeTime(iso: string | null, t: any): string | null {
   return t('daysAgo', { days });
 }
 
-  const t = useTranslations('employee');
 export default function EmployeeAttendancePage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
+  const t = useTranslations('employee');
   const locale = useLocale();
   const qc = useQueryClient();
 

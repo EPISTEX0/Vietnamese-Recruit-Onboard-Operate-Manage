@@ -17,7 +17,6 @@
     } from '@/lib/api/attendance';
     import { listEmployees } from '@/lib/api/employees';
     import type { EmployeeListResponse } from '@/lib/api/types';
-    import { useAuthGuard } from '@/lib/auth/session';
     import {
       PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
       Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatDateTime,
@@ -51,7 +50,6 @@
 
     export default function AttendancePage() {
       const locale = useLocale();
-      useAuthGuard({ requireAuth: true, requireAdmin: true });
       const t = useTranslations('attendance');
       const qc = useQueryClient();
       const [tab, setTab] = useState<Tab>('records');

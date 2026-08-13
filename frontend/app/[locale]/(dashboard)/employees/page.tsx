@@ -9,14 +9,12 @@ import { listEmployees } from '@/lib/api/employees';
 import { listDepartments } from '@/lib/api/departments';
 import { listPositions } from '@/lib/api/positions';
 import type { Employee, EmployeeListResponse, Department, Position } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, LoadingRows, EmptyState, ErrorAlert, Badge, statusTone,
   ButtonPrimary, ButtonGhost, Field, TextInput, Select,
 } from '@/components/shared-ui';
 
 export default function EmployeesListPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('employees');
   const router = useRouter();
 

@@ -6,12 +6,16 @@ import {
   User,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useSession } from '@/lib/auth/session';
+import { useAuthGuard } from '@/lib/auth/session';
 import AppShell from '@/components/app-shell';
 import type { NavItem } from '@/components/app-shell';
+import type { UserRole } from '@/lib/auth/roles';
+
+/** Employee self-service. Staff roles are sent back to their own home. */
+const ALLOW: readonly UserRole[] = ['user'];
 
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useSession();
+  const { user } = useAuthGuard({ requireAuth: true, allowRoles: ALLOW });
   const t = useTranslations();
 
   const navItems: NavItem[] = [

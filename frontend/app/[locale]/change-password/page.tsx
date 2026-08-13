@@ -9,6 +9,7 @@ import { Shield, AlertTriangle, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { changePassword, AuthApiError, type CurrentUser } from '@/lib/api/auth';
 import { useSession } from '@/lib/auth/session';
+import { homePathForRole, isUserRole } from '@/lib/auth/roles';
 import { getErrorMessage } from '@/lib/api/error-codes';
 import type { ApiError } from '@/lib/api/types';
 import { changePasswordSchema, type ChangePasswordFormData } from '@/lib/api/auth-schemas';
@@ -49,7 +50,7 @@ export default function ChangePasswordPage() {
       const result = await changePassword(data.current_password, data.new_password);
       qc.setQueryData<CurrentUser | null>(['session'], result.user);
       setSuccess(true);
-      const target = result.user.role === 'admin' ? '/dashboard' : '/employee';
+      const target = isUserRole(result.user.role) ? homePathForRole(result.user.role) : '/';
       setTimeout(() => router.replace(target), 2000);
     } catch (err: unknown) {
       if (err instanceof AuthApiError) {

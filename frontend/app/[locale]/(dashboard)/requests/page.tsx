@@ -12,14 +12,12 @@ import type {
 } from '@/lib/api/employee-requests';
 import { listEmployees } from '@/lib/api/employees';
 import type { EmployeeListResponse } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
   Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatDate, formatDateTime,
 } from '@/components/shared-ui';
 
 export default function RequestsReviewPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('requests');
       const locale = useLocale();
   const qc = useQueryClient();

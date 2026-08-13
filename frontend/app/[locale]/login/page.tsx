@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { LogIn, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { login, AuthApiError, type CurrentUser } from '@/lib/api/auth';
 import { useSession } from '@/lib/auth/session';
+import { homePathForRole, isUserRole } from '@/lib/auth/roles';
 import { getErrorMessage } from '@/lib/api/error-codes';
 import type { ApiError } from '@/lib/api/types';
 import { loginSchema, type LoginFormData } from '@/lib/api/auth-schemas';
@@ -17,7 +18,7 @@ import LocaleSwitcher from '@/components/locale-switcher';
 export default function LoginPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { isAuthenticated, isAdmin, isLoading } = useSession();
+  const { isAuthenticated, role, isLoading } = useSession();
   const t = useTranslations();
 
   const {
@@ -35,10 +36,10 @@ export default function LoginPage() {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace(isAdmin ? '/dashboard' : '/employee');
+    if (!isLoading && isAuthenticated && role) {
+      router.replace(homePathForRole(role));
     }
-  }, [isLoading, isAuthenticated, isAdmin, router]);
+  }, [isLoading, isAuthenticated, role, router]);
 
   const onSubmit = async (data: LoginFormData) => {
     setServerError('');
@@ -57,7 +58,8 @@ export default function LoginPage() {
       if (result.must_change_password) {
         router.replace('/change-password'); // locale-aware via @/i18n/navigation
       } else {
-        router.replace(result.user.role === 'admin' ? '/dashboard' : '/employee'); // locale-aware via @/i18n/navigation
+        // locale-aware via @/i18n/navigation; each role has its own home
+        router.replace(isUserRole(result.user.role) ? homePathForRole(result.user.role) : '/');
       }
     } catch (err: unknown) {
       if (err instanceof AuthApiError) {

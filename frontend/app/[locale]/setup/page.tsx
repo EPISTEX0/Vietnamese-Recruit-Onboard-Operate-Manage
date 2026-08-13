@@ -9,12 +9,13 @@ import { Shield, Building, User, CheckCircle, AlertTriangle, ArrowRight } from '
 import { getSetupStatus, setupFirstRun, AuthApiError } from '@/lib/api/auth';
 import { getErrorMessage } from '@/lib/api/error-codes';
 import { useSession } from '@/lib/auth/session';
+import { homePathForRole } from '@/lib/auth/roles';
 import { setupSchema, type SetupFormData } from '@/lib/api/auth-schemas';
 
 export default function SetupPage() {
       const router = useRouter();
       const t = useTranslations('setup');
-      const { isAuthenticated, setupComplete, isLoading: sessionLoading } = useSession();
+      const { isAuthenticated, role, setupComplete, isLoading: sessionLoading } = useSession();
 
   const {
     register,
@@ -39,8 +40,8 @@ export default function SetupPage() {
         const status = await getSetupStatus();
         if (status.setup_complete) {
           // Already set up — redirect accordingly
-          if (isAuthenticated) {
-            router.replace('/dashboard');
+          if (isAuthenticated && role) {
+            router.replace(homePathForRole(role));
           } else {
             router.replace('/login');
           }
@@ -54,14 +55,14 @@ export default function SetupPage() {
     if (!sessionLoading) {
       checkStatus();
     }
-  }, [sessionLoading, isAuthenticated, router]);
+  }, [sessionLoading, isAuthenticated, role, router]);
 
   // If already set up and authenticated, redirect
   useEffect(() => {
-    if (!sessionLoading && setupComplete && isAuthenticated) {
-      router.replace('/dashboard');
+    if (!sessionLoading && setupComplete && isAuthenticated && role) {
+      router.replace(homePathForRole(role));
     }
-  }, [sessionLoading, setupComplete, isAuthenticated, router]);
+  }, [sessionLoading, setupComplete, isAuthenticated, role, router]);
 
   const handleNextStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -409,15 +410,17 @@ export default function SetupPage() {
             </div>
 
             <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-xs max-w-sm mx-auto font-semibold">
-              Trạng thái: Setup complete. Trình quản trị HR Admin đã sẵn sàng.
+              Trạng thái: Setup complete. Tài khoản System Admin đã sẵn sàng —
+              hãy tạo tài khoản HR trong mục Người dùng &amp; Vai trò.
             </div>
 
+            {/* First-run setup mints a System Admin, not an HR account. */}
             <button
               id="setup-open-dashboard-btn"
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={() => { window.location.href = homePathForRole('system_admin'); }}
               className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold rounded-xl hover:from-indigo-500 hover:to-indigo-400 shadow-lg shadow-indigo-200 transition-all"
             >
-              Mở Trang quản trị (Dashboard)
+              Mở Bảng điều khiển hệ thống
             </button>
           </div>
           );

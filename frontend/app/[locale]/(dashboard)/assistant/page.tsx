@@ -12,7 +12,6 @@ import {
   confirmDraftAction,
   recordDraftDecision,
 } from '@/lib/api/assistant';
-import { useAuthGuard } from '@/lib/auth/session';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -33,7 +32,6 @@ const hrAssistantApi: AiChatApi = {
 };
 
 export default function HRAssistantPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('assistant');
 
   return (

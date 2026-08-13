@@ -3,22 +3,23 @@
 import { useEffect } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useSession } from '@/lib/auth/session';
+import { homePathForRole } from '@/lib/auth/roles';
 import { getSetupStatus } from '@/lib/api/auth';
 import { RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isAdmin, isLoading: sessionLoading } = useSession();
+  const { isAuthenticated, role, isLoading: sessionLoading } = useSession();
   const t = useTranslations('common');
 
   useEffect(() => {
     async function route() {
       if (sessionLoading) return;
 
-      // If authenticated, go to dashboard or employee
-      if (isAuthenticated) {
-        router.replace(isAdmin ? '/dashboard' : '/employee');
+      // Authenticated — each role lands on its own home.
+      if (isAuthenticated && role) {
+        router.replace(homePathForRole(role));
         return;
       }
 
@@ -36,7 +37,7 @@ export default function Home() {
       }
     }
     route();
-  }, [sessionLoading, isAuthenticated, isAdmin, router]);
+  }, [sessionLoading, isAuthenticated, role, router]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50">

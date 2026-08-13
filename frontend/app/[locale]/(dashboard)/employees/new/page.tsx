@@ -9,7 +9,6 @@ import { createEmployee } from '@/lib/api/employees';
 import { listDepartments } from '@/lib/api/departments';
 import { listPositions } from '@/lib/api/positions';
 import type { EmployeeCreateData, Department, Position } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
   ButtonPrimary, ButtonGhost, ErrorAlert,
@@ -31,7 +30,6 @@ const empty: EmployeeCreateData = {
 };
 
 export default function NewEmployeePage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('employees');
   const router = useRouter();
   const qc = useQueryClient();

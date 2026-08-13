@@ -15,7 +15,7 @@ import { listDepartments } from '@/lib/api/departments';
 import { listPositions } from '@/lib/api/positions';
 import type { Employee, EmployeeDocument, Department, Position, EmployeeUpdateData } from '@/lib/api/types';
 import type { EmployeeAccountStatusResponse, EmployeeAccountCreateResponse } from '@/lib/api/auth';
-import { useAuthGuard } from '@/lib/auth/session';
+import { isUserRole } from '@/lib/auth/roles';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
   ButtonPrimary, ButtonGhost, ButtonDanger, Badge, ErrorAlert, Modal, formatDateTime, formatDate,
@@ -24,10 +24,10 @@ import {
 const DOC_TYPES_KEY = ['docContract', 'docIdCard', 'docDegree', 'docInsurance', 'docOther'] as const;
 
 export default function EmployeeDetailPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const locale = useLocale();
   const t = useTranslations('employees');
   const tc = useTranslations('common');
+  const tr = useTranslations('roles');
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
@@ -325,7 +325,7 @@ export default function EmployeeDetailPage() {
         {account?.exists ? (
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs space-y-1">
             <p><span className="text-slate-500">{t('accountEmail')}:</span> <span className="font-semibold text-slate-800">{account.email}</span></p>
-            <p><span className="text-slate-500">{t('accountRole')}:</span> <span className="font-mono">{account.role === 'user' ? t('accountEmployee') : account.role}</span></p>
+            <p><span className="text-slate-500">{t('accountRole')}:</span> <span className="font-mono">{isUserRole(account.role) ? tr(account.role) : account.role}</span></p>
             <p><span className="text-slate-500">{t('accountMustChangePwd')}:</span> {account.must_change_password ? t('accountYes') : t('accountNo')}</p>
             <div className="pt-2">
               <ButtonDanger onClick={() => deleteAccountMut.mutate()} disabled={deleteAccountMut.isPending}>

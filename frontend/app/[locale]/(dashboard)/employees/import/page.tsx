@@ -7,13 +7,11 @@ import { useRouter } from '@/i18n/navigation';
 import { Upload, ArrowLeft, CheckCircle, XCircle, Download } from 'lucide-react';
 import { importEmployees } from '@/lib/api/employees';
 import type { ImportResult } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, ButtonPrimary, ButtonGhost, ErrorAlert,
 } from '@/components/shared-ui';
 
 export default function ImportEmployeesPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const t = useTranslations('employees');
   const router = useRouter();
   const qc = useQueryClient();

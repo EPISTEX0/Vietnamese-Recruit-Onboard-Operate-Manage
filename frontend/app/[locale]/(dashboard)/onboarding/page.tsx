@@ -9,7 +9,6 @@ import {
   updateTaskStatus,
   type OnboardingProcess, type OnboardingCounts, type OnboardingTaskStatus, type ProcessFilter,
 } from '@/lib/api/onboarding';
-import { useAuthGuard } from '@/lib/auth/session';
 import { ErrorBanner, Loading, EmptyState, StatusPill } from '@/components/shared-ui';
 
 const FILTERS: { key: ProcessFilter; label: string }[] = [
@@ -19,7 +18,6 @@ const FILTERS: { key: ProcessFilter; label: string }[] = [
 ];
 
 export default function OnboardingPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const qc = useQueryClient();
   const t = useTranslations('onboarding');
   const [filter, setFilter] = useState<ProcessFilter>('all');

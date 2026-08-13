@@ -10,7 +10,6 @@ import {
 import type {
   EmployeeRequestListResponse, EmployeeRequestListItem, CreateLeaveData, CreateOvertimeData, LeaveBalance,
 } from '@/lib/api/employee-requests';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select, ButtonPrimary, ButtonGhost,
   Badge, ErrorAlert, EmptyState, Modal, formatDate, formatDateTime,
@@ -60,9 +59,8 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
   );
 }
 
-  const t = useTranslations('employee');
 export default function EmployeeRequestsPage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
+  const t = useTranslations('employee');
   const locale = useLocale();
   const qc = useQueryClient();
 

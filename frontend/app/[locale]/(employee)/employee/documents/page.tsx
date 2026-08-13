@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderOpen, FileText, Upload, Download, Plus } from 'lucide-react';
 import { listDocuments, uploadDocument, downloadDocument } from '@/lib/api/employees';
 import type { EmployeeDocument } from '@/lib/api/types';
-import { useAuthGuard, useSession } from '@/lib/auth/session';
+import { useSession } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost,
   ErrorAlert, EmptyState, Modal, formatDate,
@@ -15,7 +15,6 @@ import {
 const DOC_TYPES = ['Hợp đồng', 'CMND/CCCD', 'Bằng cấp', 'Sổ bảo hiểm', 'Khác'];
 
 export default function EmployeeDocumentsPage() {
-  useAuthGuard({ requireAuth: true, requireEmployee: true });
   const t = useTranslations('employee');
   const locale = useLocale();
   const { user } = useSession();

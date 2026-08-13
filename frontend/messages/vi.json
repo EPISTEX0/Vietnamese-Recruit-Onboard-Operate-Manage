@@ -73,10 +73,14 @@
     "logout": "Đăng xuất",
     "menu": "Menu",
     "settings": "Cấu hình",
-    "hrLabel": "/ Quản trị",
+    "hrLabel": "/ Nhân sự (HR)",
     "employeeLabel": "/ Nhân viên",
     "hrSection": "Hệ Thống HR",
-    "essSection": "Trang Nhân Viên (ESS)"
+    "essSection": "Trang Nhân Viên (ESS)",
+    "systemAdminLabel": "/ Quản trị hệ thống",
+    "systemAdminSection": "Quản Trị Hệ Thống",
+    "hrFallbackName": "Nhân sự",
+    "systemAdminFallbackName": "Quản trị hệ thống"
   },
   "dashboard": {
     "title": "Tổng quan & Metrics",
@@ -462,9 +466,9 @@
     "interviewsDesc": "Để tạo lịch phỏng vấn, cần chọn lịch làm việc trước. Vòng đời: đã lên lịch → hoàn tất / đã hủy. Khi đổi lịch, buổi cũ được giữ nguyên. Nếu có xung đột lịch, bạn cần chọn hướng xử lý thủ công.",
     "interviewPrerequisites": "Điều kiện tạo Interview",
     "calendarCheckError": "Không thể kiểm tra kết nối Google Calendar — lỗi mạng hoặc chưa cấp quyền.",
-    "calendarCheckErrorHint": "Bạn vẫn có thể dùng các tính năng khác. Kiểm tra lại kết nối Gmail trong Cấu hình.",
+    "calendarCheckErrorHint": "Bạn vẫn có thể dùng các tính năng khác. Kiểm tra lại kết nối Google ở mục Kênh Gmail.",
     "checkingCalendar": "Đang kiểm tra kết nối Google Calendar...",
-    "calendarNotConnected": "Google Workspace chưa kết nối hoặc chưa có calendar. HR cần kết nối ở Gmail/Settings (Phase 3) trước khi tạo Interview.",
+    "calendarNotConnected": "Google Workspace chưa kết nối hoặc chưa có calendar. HR cần kết nối ở mục Kênh Gmail trước khi tạo Interview.",
     "calendarSelected": "Đã chọn calendar:",
     "calendarPickRequired": "Đã kết nối Google nhưng chưa chọn calendar cho phỏng vấn. Chọn calendar bên dưới.",
     "primary": "primary",
@@ -555,7 +559,8 @@
     "confirmCancelInterview": "Xác nhận hủy buổi phỏng vấn này? Hành động không thể hoàn tác.",
     "openSettings": "Mở Cấu hình",
     "fieldName": "tên:",
-    "fieldEmail": "email:"
+    "fieldEmail": "email:",
+    "openGmailConnection": "Mở Kênh Gmail"
   },
   "system": {
     "nav": "Hệ thống",
@@ -963,14 +968,10 @@
     "pageOf": "Trang {page} / {total}",
     "records": "bản ghi",
     "usersRolesDesc": "Quản lý tài khoản và phân quyền",
-    "promoteToAdmin": "nâng lên Quản trị (HR)",
-    "demoteToEmployee": "hạ xuống Nhân viên",
     "confirmRoleChange": "Bạn có chắc muốn {action} người dùng \"{name}\"?",
     "you": "Bạn",
     "created": "Tạo",
     "cannotSelfChange": "Bạn không thể tự thay đổi quyền của mình",
-    "employee": "Nhân viên",
-    "admin": "Quản trị (HR)",
     "noUsers": "Chưa có người dùng nào.",
     "whitelistDesc": "Quản lý email và tên miền được phép đăng nhập",
     "whitelistPlaceholder": "email@congty.com hoặc @congty.com",
@@ -1008,7 +1009,18 @@
     "tool_get_department_info_desc": "Xem thông tin phòng ban. Trả về tên phòng ban, mô tả, danh sách chức vụ (tên, số lượng nhân viên), và thông tin quản lý. Nếu bỏ qua department_id, trả về thông tin cho TẤT CẢ phòng ban. Sử dụng khi người dùng hỏi về cơ cấu phòng ban, chức vụ, hoặc quản lý.",
     "tool_draft_congratulations_email_name": "Soạn email chúc mừng",
     "tool_draft_congratulations_email_desc": "Soạn email chúc mừng/thông báo trúng tuyển cho candidate. Trả về Draft Action với nội dung email để HR xem xét và xác nhận. Sử dụng khi người dùng muốn gửi thư mời nhận việc/lời chúc mừng đến candidate.",
-    "error": "❌ Lỗi"
+    "error": "❌ Lỗi",
+    "assignRole": "đổi vai trò thành {role}",
+    "createStaffAccount": "Tạo tài khoản nhân sự",
+    "createStaffAccountDesc": "Tạo tài khoản HR hoặc Quản trị hệ thống. Hệ thống sinh mật khẩu tạm, người dùng phải đổi ở lần đăng nhập đầu.",
+    "staffName": "Họ tên",
+    "staffEmail": "Email",
+    "staffAccountCreated": "Đã tạo tài khoản {email}",
+    "temporaryPassword": "Mật khẩu tạm",
+    "temporaryPasswordNotice": "Mật khẩu này chỉ hiện một lần — hãy gửi cho người dùng ngay.",
+    "createAnother": "Tạo tài khoản khác",
+    "create": "Tạo",
+    "close": "Đóng"
   },
   "changePassword": {
     "title": "Đổi mật khẩu",
@@ -1355,5 +1367,10 @@
     "outbound_email_sent": "Đã gửi email",
     "outbound_email_failed": "Gửi email thất bại",
     "outbound_email_retry": "Thử lại gửi email"
+  },
+  "roles": {
+    "hr": "Nhân sự (HR)",
+    "system_admin": "Quản trị hệ thống",
+    "user": "Nhân viên"
   }
 }

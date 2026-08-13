@@ -73,10 +73,14 @@
     "logout": "Log out",
     "menu": "Menu",
     "settings": "Settings",
-    "hrLabel": "/ Admin",
+    "hrLabel": "/ HR",
     "employeeLabel": "/ Employee",
     "hrSection": "HR System",
-    "essSection": "Employee Self-Service"
+    "essSection": "Employee Self-Service",
+    "systemAdminLabel": "/ System Admin",
+    "systemAdminSection": "System Administration",
+    "hrFallbackName": "HR",
+    "systemAdminFallbackName": "System Admin"
   },
   "dashboard": {
     "title": "Dashboard & Metrics",
@@ -462,9 +466,9 @@
     "interviewsDesc": "To schedule interviews, select a calendar first. Lifecycle: scheduled → completed / cancelled. When rescheduling, the old slot is kept. If there are calendar conflicts, you need to resolve them manually.",
     "interviewPrerequisites": "Interview Prerequisites",
     "calendarCheckError": "Cannot check Google Calendar connection — network error or not authorized.",
-    "calendarCheckErrorHint": "You can still use other features. Check Gmail connection in Settings.",
+    "calendarCheckErrorHint": "You can still use other features. Check the Google connection under Gmail.",
     "checkingCalendar": "Checking Google Calendar connection...",
-    "calendarNotConnected": "Google Workspace is not connected or has no calendar. HR needs to connect in Gmail/Settings before creating interviews.",
+    "calendarNotConnected": "Google Workspace is not connected or has no calendar. HR needs to connect it under Gmail before creating interviews.",
     "calendarSelected": "Selected calendar:",
     "calendarPickRequired": "Google connected but no calendar selected for interviews. Pick one below.",
     "primary": "primary",
@@ -555,7 +559,8 @@
     "confirmCancelInterview": "Confirm cancel this interview? This action cannot be undone.",
     "openSettings": "Open Settings",
     "fieldName": "name:",
-    "fieldEmail": "email:"
+    "fieldEmail": "email:",
+    "openGmailConnection": "Open Gmail channel"
   },
   "system": {
     "nav": "System",
@@ -961,14 +966,10 @@
     "pageOf": "Page {page} / {total}",
     "records": "records",
     "usersRolesDesc": "Manage accounts and permissions",
-    "promoteToAdmin": "promote to Admin (HR)",
-    "demoteToEmployee": "demote to Employee",
     "confirmRoleChange": "Are you sure you want to {action} user \"{name}\"?",
     "you": "You",
     "created": "Created",
     "cannotSelfChange": "You cannot change your own role",
-    "employee": "Employee",
-    "admin": "Admin (HR)",
     "noUsers": "No users yet.",
     "adding": "Adding...",
     "add": "Add",
@@ -994,7 +995,18 @@
     "tool_get_department_info_desc": "View department information. Returns department name, description, list of positions (name, employee count), and management info. If department_id is omitted, returns info for ALL departments. Use when the user asks about department structure, positions, or management.",
     "tool_draft_congratulations_email_name": "Draft congratulations email",
     "tool_draft_congratulations_email_desc": "Draft a congratulation / offer letter email for a candidate. Returns a Draft Action with email content for HR to review and confirm. Use when the user wants to send a job offer or congratulations to a candidate.",
-    "error": "❌ Error"
+    "error": "❌ Error",
+    "assignRole": "change role to {role}",
+    "createStaffAccount": "Create staff account",
+    "createStaffAccountDesc": "Create an HR or System Admin account. A temporary password is generated; the user must change it at first login.",
+    "staffName": "Full name",
+    "staffEmail": "Email",
+    "staffAccountCreated": "Account {email} created",
+    "temporaryPassword": "Temporary password",
+    "temporaryPasswordNotice": "Shown once only — hand it over to the user now.",
+    "createAnother": "Create another",
+    "create": "Create",
+    "close": "Close"
   },
   "changePassword": {
     "title": "Change Password",
@@ -1341,5 +1353,10 @@
     "outbound_email_sent": "Sent Email",
     "outbound_email_failed": "Failed to Send Email",
     "outbound_email_retry": "Retry Email"
+  },
+  "roles": {
+    "hr": "HR",
+    "system_admin": "System Admin",
+    "user": "Employee"
   }
 }

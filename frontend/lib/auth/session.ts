@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { apiFetch } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
+import { homePathForRole, isUserRole, type UserRole } from "@/lib/auth/roles";
 
 /**
  * Fetch current user profile from BE via GET /api/auth/me.
@@ -34,14 +35,14 @@ async function fetchCurrentUser(): Promise<CurrentUser | null> {
 /**
  * React Query hook that fetches and caches the current user session.
  *
- * - Trả về `user` (CurrentUser flat, khớp BE `/api/auth/me`), `isLoading`,
- *   `isAuthenticated`, `isAdmin`, `mustChangePassword`, `setupComplete`.
+ * - Trả về `user` (CurrentUser flat, khớp BE `/api/auth/me`), `role`,
+ *   `isLoading`, `isAuthenticated`, `mustChangePassword`, `setupComplete`.
  * - Khi `/api/auth/me` 401/403 → `user` = null (unauthenticated).
  * - Refetch on window focus via React Query defaults.
  *
- * API public giữ nguyên so với bản cũ để các layout/page không phải refactor:
- * `user`, `isLoading`, `isAuthenticated`, `isAdmin`, `mustChangePassword`,
- * `setupComplete`, `error`, `refetch`.
+ * `isAdmin` cố tình KHÔNG còn tồn tại: nó gộp `system_admin` và `hr` — hai
+ * role có quyền tách rời — thành một boolean. Call site cần quyền thì đọc
+ * `role` và so với danh sách role mình cho phép (xem `useAuthGuard`).
  */
 export function useSession() {
   const { data, isLoading, error, refetch } = useQuery<CurrentUser | null>({
@@ -62,16 +63,18 @@ export function useSession() {
   // khi đang loading hoặc lỗi tạm thời chưa retry xong.
   const user: CurrentUser | null = data ?? null;
   const isAuthenticated = !!data && !error;
-  const isAdmin = user?.role === "admin";
+  // Một role BE trả về mà FE không biết là dữ liệu không tin được — coi như
+  // chưa có role thay vì đoán, để guard đẩy về /login chứ không cấp nhầm.
+  const role: UserRole | null = isUserRole(user?.role) ? user.role : null;
   const mustChangePassword = user?.must_change_password ?? false;
   // /api/auth/me trả 200 ⇔ đã có user (và org) ⇒ setup hoàn tất.
   const setupComplete = !!data;
 
   return {
     user,
+    role,
     isLoading,
     isAuthenticated,
-    isAdmin,
     mustChangePassword,
     setupComplete,
     error,
@@ -80,33 +83,34 @@ export function useSession() {
 }
 
 /**
- * Higher-level hook that redirects based on auth state.
- * Use in page components that need auth guards.
+ * Higher-level hook that redirects based on auth state and role.
+ * Use in page components and route-group layouts that need auth guards.
  *
  * Options:
  * - requireAuth: redirect to /login if not authenticated
- * - requireAdmin: redirect to /employee if not admin
- * - requireEmployee: redirect to / if not employee
- * - redirectIfAuthenticated: redirect to /dashboard if already logged in
+ * - allowRoles: the roles this surface belongs to. A signed-in user holding
+ *   any other role is sent to their own home (`homePathForRole`) — never
+ *   silently allowed through. The list is explicit at every call site so a
+ *   surface can't inherit access it never asked for.
+ * - redirectIfAuthenticated: send an already-signed-in user to their home
+ *
+ * `allowRoles` is passed as a module-level constant at every call site (not an
+ * inline literal), because the array lands in the effect's dependency list and
+ * a fresh literal on each render would re-run the redirect effect every time.
  */
 export function useAuthGuard(options: {
   requireAuth?: boolean;
-  requireAdmin?: boolean;
-  requireEmployee?: boolean;
+  allowRoles?: readonly UserRole[];
   redirectIfAuthenticated?: boolean;
 } = {}) {
-  const { user, isLoading, isAuthenticated, isAdmin } = useSession();
+  const { user, role, isLoading, isAuthenticated } = useSession();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
 
-    if (options.redirectIfAuthenticated && isAuthenticated) {
-      if (isAdmin) {
-        router.replace("/dashboard");
-      } else {
-        router.replace("/employee");
-      }
+    if (options.redirectIfAuthenticated && isAuthenticated && role) {
+      router.replace(homePathForRole(role));
       return;
     }
 
@@ -115,25 +119,27 @@ export function useAuthGuard(options: {
       return;
     }
 
-    if (options.requireAdmin && !isAdmin) {
-      router.replace("/employee");
-      return;
-    }
-
-    if (options.requireEmployee && isAdmin) {
-      router.replace("/dashboard");
-      return;
+    if (options.allowRoles && isAuthenticated) {
+      // Authenticated but the BE handed back a role this build doesn't know:
+      // no home to send them to, so treat it as a broken session.
+      if (!role) {
+        router.replace("/login");
+        return;
+      }
+      if (!options.allowRoles.includes(role)) {
+        router.replace(homePathForRole(role));
+        return;
+      }
     }
   }, [
     isLoading,
     isAuthenticated,
-    isAdmin,
+    role,
     router,
     options.requireAuth,
-    options.requireAdmin,
-    options.requireEmployee,
+    options.allowRoles,
     options.redirectIfAuthenticated,
   ]);
 
-  return { user, isLoading, isAuthenticated, isAdmin };
+  return { user, role, isLoading, isAuthenticated };
 }

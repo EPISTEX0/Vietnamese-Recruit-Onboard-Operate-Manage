@@ -14,7 +14,6 @@ import type {
 } from '@/lib/api/admin-payslips';
 import { listEmployees } from '@/lib/api/employees';
 import type { EmployeeListResponse } from '@/lib/api/types';
-import { useAuthGuard } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
   Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatVND, formatDateTime,
@@ -64,7 +63,6 @@ function joinMonth(year: string, month: string): string {
 }
 
 export default function PayslipsPage() {
-  useAuthGuard({ requireAuth: true, requireAdmin: true });
   const locale = useLocale();
   const t = useTranslations('payroll');
   const qc = useQueryClient();
