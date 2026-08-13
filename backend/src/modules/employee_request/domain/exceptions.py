@@ -33,6 +33,7 @@ class OvertimeOverlapError(EmployeeRequestError):
     message = "You already have a submitted or approved overtime request on this date"
 
     def __init__(self, work_date: _date) -> None:
+        self.public_context = {"work_date": work_date.isoformat()}
         self.message = (
             f"You already have a submitted or approved overtime request on {work_date.isoformat()}"
         )
@@ -56,6 +57,7 @@ class LeaveOverlapError(EmployeeRequestError):
 
     def __init__(self, start: _date | None = None, end: _date | None = None) -> None:
         if start and end:
+            self.public_context = {"start": start.isoformat(), "end": end.isoformat()}
             self.message = (
                 f"You already have a submitted or approved leave "
                 f"overlapping {start.isoformat()} to {end.isoformat()}"
@@ -71,6 +73,7 @@ class RequestNotFoundError(EmployeeRequestError):
     message = "Employee request not found"
 
     def __init__(self, request_id: UUID) -> None:
+        self.public_context = {"request_id": str(request_id)}
         self.message = f"Employee request {request_id} not found"
         super().__init__(self.message)
 
@@ -100,5 +103,6 @@ class RequestNotReviewableError(EmployeeRequestError):
 
     def __init__(self, request_id: UUID, current_status: str) -> None:
         status = current_status
+        self.public_context = {"request_id": str(request_id), "status": status}
         self.message = f"Request {request_id} is {status}, only submitted requests can be reviewed"
         super().__init__(self.message)

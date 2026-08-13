@@ -13,6 +13,7 @@ from src.modules.attendance.domain.exceptions import (
     OfficeNetworkRequiredError,
     TooManyNetworksError,
 )
+from src.shared.error_logging import log_domain_exception
 from src.shared.messages import get_request_language, resolve_error_message
 
 
@@ -25,6 +26,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: AttendanceError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -39,6 +41,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: AlreadyCheckedInError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -53,6 +56,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: NotCheckedInError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -67,6 +71,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: OfficeNetworkRequiredError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -81,6 +86,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: InvalidCidrError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -95,6 +101,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: DuplicateCidrError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -109,6 +116,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: TooManyNetworksError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -123,6 +131,7 @@ def register_attendance_error_handlers(app: FastAPI) -> None:
         exc: CidrNotFoundError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="attendance")
         return JSONResponse(
             status_code=exc.status_code,
             content={

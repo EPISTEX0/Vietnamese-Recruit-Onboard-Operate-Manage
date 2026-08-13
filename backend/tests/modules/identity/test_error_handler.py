@@ -145,8 +145,15 @@ class TestAuthErrorHandler:
             }
         }
 
-    def test_custom_message_preserved(self, app: FastAPI, client: TestClient) -> None:
-        """Custom message passed to exception is included in the response."""
+    def test_free_form_message_is_withheld_from_the_response(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """A free-form message is log-only: adapters build it from ``str(exc)``.
+
+        Only ``public_context`` values reach the body, so the response keeps
+        the catalog entry for the code instead of whatever the raise site
+        happened to interpolate.
+        """
 
         @app.get("/test-custom")
         async def _raise_custom_message() -> None:
@@ -157,7 +164,7 @@ class TestAuthErrorHandler:
         assert response.json() == {
             "error": {
                 "code": "AUTH_INVALID_STATE",
-                "message": "State token expired after 10 minutes",
+                "message": "Trạng thái xác thực không hợp lệ",
             }
         }
 

@@ -14,6 +14,7 @@ from src.modules.employee_request.domain.exceptions import (
     RequestNotOwnedByEmployeeError,
     RequestNotReviewableError,
 )
+from src.shared.error_logging import log_domain_exception
 from src.shared.messages import get_request_language, resolve_error_message
 
 
@@ -26,6 +27,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: EmployeeRequestError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -40,6 +42,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: OvertimeEndBeforeStartError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -54,6 +57,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: OvertimeOverlapError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -68,6 +72,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: LeaveEndBeforeStartError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -82,6 +87,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: LeaveOverlapError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -96,6 +102,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: RequestNotFoundError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -110,6 +117,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: RequestNotOwnedByEmployeeError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -124,6 +132,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: RequestNotCancellableError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -138,6 +147,7 @@ def register_employee_request_error_handlers(app: FastAPI) -> None:
         exc: RequestNotReviewableError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="employee_request")
         return JSONResponse(
             status_code=exc.status_code,
             content={

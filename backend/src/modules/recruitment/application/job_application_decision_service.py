@@ -127,19 +127,28 @@ class JobApplicationDecisionService:
         if application is None:
             raise JobApplicationNotFoundError(f"Job Application not found: {job_application_id}")
         if application.status == JobApplicationStatus.DISMISSED:
-            raise JobApplicationPromotionBlockedError("Job Application is dismissed")
+            raise JobApplicationPromotionBlockedError(
+                "Job Application is dismissed", reason_code="PROMOTION_BLOCKED_DISMISSED"
+            )
 
         name = applicant_name.strip()
         email = applicant_email.strip()
         if not name:
-            raise JobApplicationPromotionBlockedError("applicant_name is required")
+            raise JobApplicationPromotionBlockedError(
+                "applicant_name is required", reason_code="PROMOTION_BLOCKED_NAME_REQUIRED"
+            )
         if not email:
-            raise JobApplicationPromotionBlockedError("applicant_email is required")
+            raise JobApplicationPromotionBlockedError(
+                "applicant_email is required", reason_code="PROMOTION_BLOCKED_EMAIL_REQUIRED"
+            )
 
         if application.candidate_id is not None:
             candidate = await self._candidates.get_by_id(application.candidate_id)
             if candidate is None:
-                raise JobApplicationPromotionBlockedError("linked Candidate no longer exists")
+                raise JobApplicationPromotionBlockedError(
+                    "linked Candidate no longer exists",
+                    reason_code="PROMOTION_BLOCKED_CANDIDATE_GONE",
+                )
             return application, candidate
 
         effective_opening_id = (

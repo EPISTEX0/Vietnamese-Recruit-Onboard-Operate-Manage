@@ -251,9 +251,62 @@ MESSAGES: dict[str, dict[str, str]] = {
         "vi": "Không tìm thấy tài liệu CV",
         "en": "CV document not found",
     },
+    "JOB_APPLICATION_ASSIGNMENT_BLOCKED": {
+        "vi": "Không thể gán hồ sơ ứng tuyển vào tin tuyển dụng: {reason}",
+        "en": "Job Application cannot be assigned: {reason}",
+    },
+    "JOB_OPENING_INVALID_STATUS_TRANSITION": {
+        "vi": "Không thể thực hiện '{attempted_action}' khi tin tuyển dụng đang ở trạng thái '{current_status}'",  # noqa: E501
+        "en": "Cannot perform '{attempted_action}' on a Job Opening with status '{current_status}'",
+    },
+    "JOB_OPENING_NOT_OPEN": {
+        "vi": "Không thể gán ứng viên vào tin tuyển dụng {job_opening_id} đang ở trạng thái '{current_status}'",  # noqa: E501
+        "en": "Cannot assign a candidate to Job Opening {job_opening_id} with status '{current_status}'",  # noqa: E501
+    },
+    "INTERVIEW_INVALID_STATUS_TRANSITION": {
+        "vi": "Không thể thực hiện '{attempted_action}' khi lịch phỏng vấn đang ở trạng thái '{current_status}'",  # noqa: E501
+        "en": "Cannot perform '{attempted_action}' on an Interview with status '{current_status}'",
+    },
+    "ONBOARDING_INVALID_TASK_STATUS": {
+        "vi": "Trạng thái công việc '{value}' không hợp lệ; chỉ nhận pending hoặc done",
+        "en": "Invalid task status '{value}'; expected one of: pending, done",
+    },
+    "ONBOARDING_INVALID_STATUS_FILTER": {
+        "vi": "Bộ lọc trạng thái '{value}' không hợp lệ; chỉ nhận in_progress hoặc complete",
+        "en": "Invalid process status filter '{value}'; expected one of: in_progress, complete",
+    },
+    "ONBOARDING_EMPLOYEE_NOT_ACTIVE": {
+        "vi": "Hồ sơ nhân viên {employee_id} không còn hoạt động",
+        "en": "Employee record {employee_id} is not active",
+    },
+    "JOB_APPLICATION_PROMOTION_BLOCKED": {
+        "vi": "Không thể chuyển hồ sơ ứng tuyển thành ứng viên: {reason}",
+        "en": "Job Application cannot be promoted to Candidate: {reason}",
+    },
+    # Reasons above, drawn from a closed set so they translate with the frame.
+    "PROMOTION_BLOCKED_DISMISSED": {
+        "vi": "hồ sơ ứng tuyển đã bị loại",
+        "en": "the Job Application was dismissed",
+    },
+    "PROMOTION_BLOCKED_NAME_REQUIRED": {
+        "vi": "thiếu tên ứng viên",
+        "en": "applicant name is required",
+    },
+    "PROMOTION_BLOCKED_EMAIL_REQUIRED": {
+        "vi": "thiếu email ứng viên",
+        "en": "applicant email is required",
+    },
+    "PROMOTION_BLOCKED_CANDIDATE_GONE": {
+        "vi": "ứng viên đã liên kết không còn tồn tại",
+        "en": "the linked Candidate no longer exists",
+    },
+    "CALENDAR_GRANT_MISSING": {
+        "vi": "Chưa cấp quyền Google Calendar; vui lòng re-consent quyền Calendar",
+        "en": "Google Calendar access is not granted; please re-consent to Calendar access",
+    },
     "INVALID_STATUS_TRANSITION": {
-        "vi": "Chuyển trạng thái không hợp lệ",
-        "en": "Invalid status transition",
+        "vi": "Không thể '{attempted_action}' khi ứng viên ở trạng thái '{current_status}'",
+        "en": "Cannot perform '{attempted_action}' on a candidate with status '{current_status}'",
     },
     "CV_FILE_MISSING": {
         "vi": "Không tìm thấy tệp CV trong bộ nhớ",
@@ -388,20 +441,20 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     # Attendance IP allowlist
     "INVALID_CIDR": {
-        "vi": "Định dạng CIDR không hợp lệ",
-        "en": "Invalid CIDR format",
+        "vi": "Định dạng CIDR không hợp lệ: {cidr}",
+        "en": "Invalid CIDR format: {cidr}",
     },
     "DUPLICATE_CIDR": {
-        "vi": "CIDR đã tồn tại trong danh sách cho phép",
-        "en": "CIDR already exists in allowlist",
+        "vi": "CIDR đã tồn tại trong danh sách cho phép: {cidr}",
+        "en": "CIDR already exists in allowlist: {cidr}",
     },
     "TOO_MANY_NETWORKS": {
-        "vi": "Quá nhiều mạng trong danh sách cho phép",
-        "en": "Too many network entries",
+        "vi": "Quá nhiều mạng trong danh sách cho phép (tối đa {max_count})",
+        "en": "Too many network entries (max {max_count})",
     },
     "CIDR_NOT_FOUND": {
-        "vi": "Không tìm thấy CIDR trong danh sách cho phép",
-        "en": "CIDR not found in allowlist",
+        "vi": "Không tìm thấy CIDR trong danh sách cho phép: {cidr}",
+        "en": "CIDR not found in allowlist: {cidr}",
     },
     "CIDR_ADDED_SUCCESS": {
         "vi": "Đã thêm CIDR",
@@ -433,8 +486,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Insufficient leave balance",
     },
     "LEAVE_OVERLAP": {
-        "vi": "Đơn nghỉ phép trùng với đơn đã tồn tại",
-        "en": "Leave request overlaps with an existing request",
+        "vi": "Đơn nghỉ phép trùng với đơn đã tồn tại trong khoảng {start} đến {end}",
+        "en": "Leave request overlaps an existing request between {start} and {end}",
     },
     "INVALID_LEAVE_STATUS_TRANSITION": {
         "vi": "Chuyển trạng thái đơn nghỉ không hợp lệ",
@@ -458,8 +511,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "End time must be after start time",
     },
     "OVERTIME_OVERLAP": {
-        "vi": "Bạn đã có đơn tăng ca trong ngày này",
-        "en": "You already have an overtime request on this date",
+        "vi": "Bạn đã có đơn tăng ca vào ngày {work_date}",
+        "en": "You already have an overtime request on {work_date}",
     },
     # Schedule
     "SCHEDULE_NOT_FOUND": {
@@ -474,8 +527,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Employee request module error",
     },
     "REQUEST_NOT_FOUND": {
-        "vi": "Không tìm thấy yêu cầu",
-        "en": "Request not found",
+        "vi": "Không tìm thấy yêu cầu {request_id}",
+        "en": "Request {request_id} not found",
     },
     "REQUEST_NOT_OWNED": {
         "vi": "Bạn không sở hữu yêu cầu này",
@@ -486,8 +539,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only submitted requests can be cancelled",
     },
     "REQUEST_NOT_REVIEWABLE": {
-        "vi": "Chỉ có thể duyệt yêu cầu đang chờ",
-        "en": "Only submitted requests can be reviewed",
+        "vi": "Yêu cầu {request_id} đang ở trạng thái {status}; chỉ duyệt được yêu cầu đã gửi",
+        "en": "Request {request_id} is {status}; only submitted requests can be reviewed",
     },
     "REQUEST_SUBMIT_FORBIDDEN": {
         "vi": "Chỉ nhân viên mới có thể gửi yêu cầu",
@@ -501,24 +554,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Payslip module error",
     },
     "PAYSLIP_NOT_FOUND": {
-        "vi": "Không tìm thấy phiếu lương",
-        "en": "Payslip not found",
+        "vi": "Không tìm thấy phiếu lương {payslip_id}",
+        "en": "Payslip {payslip_id} not found",
     },
     "PAYSLIP_NOT_PUBLISHED": {
-        "vi": "Phiếu lương chưa được phát hành",
-        "en": "Payslip is not yet published",
+        "vi": "Phiếu lương {payslip_id} chưa được phát hành",
+        "en": "Payslip {payslip_id} is not yet published",
     },
     "PAYSLIP_ALREADY_EXISTS": {
-        "vi": "Phiếu lương đã tồn tại cho nhân viên và kỳ này",
-        "en": "A payslip already exists for this employee and period",
+        "vi": "Phiếu lương đã tồn tại cho nhân viên {employee_id} kỳ {period_month}",
+        "en": "A payslip already exists for employee {employee_id} period {period_month}",
     },
     "PAYSLIP_ALREADY_PUBLISHED": {
-        "vi": "Không thể sửa đổi phiếu lương đã phát hành",
-        "en": "Cannot modify a published payslip",
+        "vi": "Không thể sửa đổi phiếu lương {payslip_id} đã phát hành",
+        "en": "Cannot modify published payslip {payslip_id}",
     },
     "PAYSLIP_NOT_DRAFT": {
-        "vi": "Phiếu lương phải ở trạng thái nháp",
-        "en": "Payslip must be in draft status",
+        "vi": "Phiếu lương {payslip_id} phải ở trạng thái nháp",
+        "en": "Payslip {payslip_id} must be in draft status",
     },
     "PAYSLIP_CREATED_SUCCESS": {
         "vi": "Đã tạo phiếu lương",
@@ -862,20 +915,48 @@ def get_message(code: str, lang: str = "vi") -> str:
     return entry.get(lang, code)
 
 
+class MessageRef:
+    """A ``public_context`` value that is itself a catalog code.
+
+    Lets a raise site pass a reason drawn from a closed set without hardcoding
+    one language: the code is resolved against the catalog at render time, so
+    the substituted fragment follows ``Accept-Language`` like the template
+    around it.
+    """
+
+    __slots__ = ("code",)
+
+    def __init__(self, code: str) -> None:
+        """Store the catalog code to resolve when the response is rendered."""
+        self.code = code
+
+    def __repr__(self) -> str:
+        """Return a debug representation naming the code."""
+        return f"MessageRef({self.code!r})"
+
+
+class _PublicContext(dict[str, object]):
+    """Formatting map that blanks placeholders the exception did not supply."""
+
+    def __missing__(self, key: str) -> str:
+        """Return an empty string so one stale placeholder cannot 500 a response."""
+        return ""
+
+
 def resolve_error_message(exc: object, lang: str = "vi") -> str:
-    """Pick the message an API error response should carry for ``exc``.
+    """Render the message an API error response should carry for ``exc``.
 
-    Every module's domain exceptions follow the same shape: a class-level
-    ``message`` default plus an ``__init__`` that assigns ``self.message``
-    only when the caller supplies context (the offending CIDR, the payslip
-    id, the reason a promotion was blocked). Translating by error code alone
-    throws that context away, because the catalog is keyed by code and has
-    nowhere to put per-instance detail.
+    The response text is always built from curated strings: a catalog entry
+    for ``exc.error_code``, or -- when the code has no catalog entry -- the
+    exception's *class-level* default. The instance ``message`` is never used.
 
-    So an instance-level ``message`` -- the marker that a caller built one --
-    wins, and everything else reads from the localized catalog. When the code
-    is missing from the catalog, ``get_message`` would hand back the bare
-    code; the exception's own default message is more useful than that.
+    That distinction is the whole point. Infrastructure adapters build their
+    instance message by interpolating a third-party exception
+    (``f"Cannot connect to MinIO: {exc}"``), and a botocore error string names
+    the endpoint host, the bucket, and a request id. Rendering the instance
+    message would publish all of it in the response body, so per-instance
+    detail reaches the client only through ``public_context``: values a raise
+    site explicitly declared safe, substituted into the *translated* template.
 
     Args:
         exc: The domain exception being rendered.
@@ -884,19 +965,27 @@ def resolve_error_message(exc: object, lang: str = "vi") -> str:
     Returns:
         The message to place in the error response body.
     """
-    custom = vars(exc).get("message")
-    if isinstance(custom, str) and custom:
-        return custom
+    fallback = getattr(type(exc), "message", "")
+    if not isinstance(fallback, str):
+        fallback = ""
 
     code = getattr(exc, "error_code", None)
-    default = getattr(exc, "message", None)
     if not isinstance(code, str):
-        return default if isinstance(default, str) else ""
+        return fallback
 
-    message = get_message(code, lang)
-    if message == code and isinstance(default, str) and default:
-        return default
-    return message
+    template = get_message(code, lang)
+    if template == code:
+        # No catalog entry; the curated class default beats a bare code.
+        template = fallback or code
+
+    context = getattr(exc, "public_context", None)
+    if isinstance(context, dict) and context:
+        localized = {
+            key: get_message(value.code, lang) if isinstance(value, MessageRef) else value
+            for key, value in context.items()
+        }
+        return template.format_map(_PublicContext(localized))
+    return template
 
 
 def get_error_detail(code: str, lang: str = "vi") -> dict[str, str]:

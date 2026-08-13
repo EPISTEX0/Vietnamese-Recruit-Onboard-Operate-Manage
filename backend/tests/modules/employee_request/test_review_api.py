@@ -219,7 +219,11 @@ class TestApproveRequest:
             review_reason=None,
         )
         data = response.json()
-        assert "only submitted" in data["detail"].lower()
+        # Vietnamese by default; the offending status and id are the context
+        # the raise site declared publishable.
+        assert "chỉ duyệt được yêu cầu đã gửi" in data["detail"].lower()
+        assert "approved" in data["detail"]
+        assert str(request_id) in data["detail"]
 
     def test_returns_404_when_not_found(self) -> None:
         """Returns 404 when request does not exist."""

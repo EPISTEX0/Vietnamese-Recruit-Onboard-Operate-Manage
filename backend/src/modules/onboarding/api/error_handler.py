@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.modules.onboarding.domain.exceptions import OnboardingError
+from src.shared.error_logging import log_domain_exception
 from src.shared.messages import get_request_language, resolve_error_message
 
 
@@ -53,6 +54,7 @@ def register_onboarding_error_handlers(app: FastAPI) -> None:
             containing the error code and human-readable message.
         """
         lang = get_request_language(request)
+        log_domain_exception(exc, module="onboarding")
         return JSONResponse(
             status_code=exc.status_code,
             content={

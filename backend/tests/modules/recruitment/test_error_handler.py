@@ -313,7 +313,10 @@ class TestBaseRecruitmentError:
         response = await client.get("/test/base-error")
         data = response.json()
         assert data["error_code"] == "RECRUITMENT_ERROR"
-        assert data["message"] == "Something went wrong"
+        # The free-form constructor message is log-only; the body keeps the
+        # catalog entry so a wrapped third-party error cannot leak through.
+        assert data["message"] == "Lỗi module tuyển dụng"
+        assert "Something went wrong" not in response.text
 
 
 class TestCandidateValidationError:
@@ -363,10 +366,12 @@ class TestValueError:
 
 class TestCustomMessage:
     @pytest.mark.anyio
-    async def test_custom_message_in_response(self, client: AsyncClient):
+    async def test_free_form_message_is_withheld(self, client: AsyncClient):
+        """Only declared ``public_context`` reaches the body, never the message."""
         response = await client.get("/test/custom-message")
         data = response.json()
-        assert data["message"] == "Candidate abc123 not found"
+        assert data["message"] == "Không tìm thấy ứng viên"
+        assert "abc123" not in response.text
 
 
 class TestResponseFormat:

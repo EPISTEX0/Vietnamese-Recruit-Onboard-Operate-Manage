@@ -8,6 +8,7 @@ from src.modules.payslip.domain.exceptions import (
     PayslipNotFoundError,
     PayslipNotPublishedError,
 )
+from src.shared.error_logging import log_domain_exception
 from src.shared.messages import get_request_language, resolve_error_message
 
 
@@ -20,6 +21,7 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
         exc: PayslipError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="payslip")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -34,6 +36,7 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
         exc: PayslipNotFoundError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="payslip")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -48,6 +51,7 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
         exc: PayslipNotPublishedError,
     ) -> JSONResponse:
         lang = get_request_language(request)
+        log_domain_exception(exc, module="payslip")
         return JSONResponse(
             status_code=exc.status_code,
             content={

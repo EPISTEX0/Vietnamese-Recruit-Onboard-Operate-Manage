@@ -203,15 +203,19 @@ class TestBaseGmailError:
         response = await client.get("/test/base-error")
         data = response.json()
         assert data["error_code"] == "GMAIL_ERROR"
-        assert data["message"] == "Something went wrong"
+        # Free-form messages stay in the log; the body reads the catalog.
+        assert data["message"] == "Lỗi module Gmail"
+        assert "Something went wrong" not in response.text
 
 
 class TestCustomMessage:
     @pytest.mark.anyio
-    async def test_custom_message_in_response(self, client: AsyncClient):
+    async def test_free_form_message_is_withheld(self, client: AsyncClient):
+        """Only declared ``public_context`` reaches the body, never the message."""
         response = await client.get("/test/custom-message")
         data = response.json()
-        assert data["message"] == "Custom fetch error message"
+        assert data["message"] == "Lấy dữ liệu từ Gmail API thất bại"
+        assert "Custom fetch error message" not in response.text
 
 
 class TestResponseFormat:

@@ -8,6 +8,8 @@ service failures.
 from collections.abc import Sequence
 from uuid import UUID
 
+from src.shared.messages import MessageRef
+
 
 class RecruitmentError(Exception):
     """Base exception for the recruitment module.
@@ -19,7 +21,12 @@ class RecruitmentError(Exception):
     Attributes:
         status_code: HTTP status code to return to the client.
         error_code: Machine-readable error identifier.
-        message: Human-readable error description.
+        message: Human-readable error description. Server-side only: adapters
+            build it by interpolating third-party exceptions, so it is logged
+            but never rendered into an HTTP response body.
+        public_context: Values a raise site has explicitly declared safe to
+            publish, substituted into the translated catalog template (e.g.
+            ``{"candidate_id": ...}``). Anything not named here stays internal.
         details: Optional structured payload with extra context for the
             client (e.g. the unmatched interviewer identifiers).
     """
@@ -27,6 +34,7 @@ class RecruitmentError(Exception):
     status_code: int = 500
     error_code: str = "RECRUITMENT_ERROR"
     message: str = "A recruitment module error occurred"
+    public_context: dict[str, object] | None = None
     details: dict[str, object] | None = None
 
     def __init__(
@@ -73,8 +81,17 @@ class JobApplicationPromotionBlockedError(RecruitmentError):
     error_code = "JOB_APPLICATION_PROMOTION_BLOCKED"
     message = "Job Application cannot be promoted to Candidate"
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, *, reason_code: str | None = None) -> None:
+        """Initialize the error.
+
+        Args:
+            reason: Why promotion was refused, for the log.
+            reason_code: Catalog code for the same reason, so the client sees
+                it in its own language. Omit only if no catalog entry fits.
+        """
         self.message = "Job Application cannot be promoted: " + reason
+        if reason_code is not None:
+            self.public_context = {"reason": MessageRef(reason_code)}
         super().__init__(self.message)
 
 
@@ -89,6 +106,7 @@ class JobApplicationAssignmentBlockedError(RecruitmentError):
     message = "Job Application assignment is blocked"
 
     def __init__(self, reason: str) -> None:
+        self.public_context = {"reason": reason}
         self.message = "Job Application assignment is blocked: " + reason
         super().__init__(self.message)
 
@@ -153,6 +171,10 @@ class InvalidStatusTransitionError(RecruitmentError):
         """
         self.current_status = current_status
         self.attempted_action = attempted_action
+        self.public_context = {
+            "current_status": current_status,
+            "attempted_action": attempted_action,
+        }
         self.message = (
             f"Cannot perform '{attempted_action}' on candidate with status '{current_status}'"
         )
@@ -415,6 +437,10 @@ class JobOpeningInvalidStatusTransitionError(RecruitmentError):
         """
         self.current_status = current_status
         self.attempted_action = attempted_action
+        self.public_context = {
+            "current_status": current_status,
+            "attempted_action": attempted_action,
+        }
         self.message = (
             f"Cannot perform '{attempted_action}' on Job Opening with status '{current_status}'"
         )
@@ -447,6 +473,10 @@ class JobOpeningNotOpenError(RecruitmentError):
     def __init__(self, job_opening_id: UUID, current_status: str) -> None:
         self.job_opening_id = job_opening_id
         self.current_status = current_status
+        self.public_context = {
+            "job_opening_id": str(job_opening_id),
+            "current_status": current_status,
+        }
         self.message = (
             f"Cannot assign candidate to Job Opening {job_opening_id} "
             f"with status '{current_status}'"
@@ -496,6 +526,10 @@ class InterviewStatusTransitionError(RecruitmentError):
     def __init__(self, current_status: str, attempted_action: str) -> None:
         self.current_status = current_status
         self.attempted_action = attempted_action
+        self.public_context = {
+            "current_status": current_status,
+            "attempted_action": attempted_action,
+        }
         self.message = (
             f"Cannot perform '{attempted_action}' on Interview with status '{current_status}'"
         )

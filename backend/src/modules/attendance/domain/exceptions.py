@@ -54,6 +54,7 @@ class InvalidCidrError(AttendanceError):
     message = "Invalid CIDR format"
 
     def __init__(self, cidr: str) -> None:
+        self.public_context = {"cidr": cidr}
         self.message = f"Invalid CIDR: {cidr}"
         super().__init__(self.message)
 
@@ -66,6 +67,7 @@ class DuplicateCidrError(AttendanceError):
     message = "CIDR already exists in allowlist"
 
     def __init__(self, cidr: str) -> None:
+        self.public_context = {"cidr": cidr}
         self.message = f"CIDR already exists: {cidr}"
         super().__init__(self.message)
 
@@ -78,6 +80,7 @@ class TooManyNetworksError(AttendanceError):
     message = "Too many network entries"
 
     def __init__(self, max_count: int) -> None:
+        self.public_context = {"max_count": max_count}
         self.message = f"Too many entries (max {max_count})"
         super().__init__(self.message)
 
@@ -90,5 +93,6 @@ class CidrNotFoundError(AttendanceError):
     message = "CIDR not found in allowlist"
 
     def __init__(self, cidr: str) -> None:
+        self.public_context = {"cidr": cidr}
         self.message = f"CIDR not found: {cidr}"
         super().__init__(self.message)

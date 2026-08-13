@@ -19,6 +19,7 @@ from src.modules.recruitment.application.review_service import (
     ReviewValidationError,
 )
 from src.modules.recruitment.domain.exceptions import RecruitmentError
+from src.shared.error_logging import log_domain_exception
 from src.shared.messages import get_request_language, resolve_error_message
 
 
@@ -39,6 +40,7 @@ def register_recruitment_error_handlers(app: FastAPI) -> None:
     async def _recruitment_error_handler(request: Request, exc: RecruitmentError) -> JSONResponse:
         lang = get_request_language(request)
         """Handle RecruitmentError exceptions and return a JSON error response."""
+        log_domain_exception(exc, module="recruitment")
         return JSONResponse(
             status_code=exc.status_code,
             content={

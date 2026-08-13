@@ -88,6 +88,7 @@ class InvalidTaskStatusError(OnboardingError):
             value: The invalid status value that was supplied.
         """
         self.value = value
+        self.public_context = {"value": value}
         self.message = f"Invalid task status '{value}'; expected one of: pending, done"
         super().__init__(self.message)
 
@@ -114,6 +115,7 @@ class InvalidProcessStatusFilterError(OnboardingError):
             value: The invalid status filter value that was supplied.
         """
         self.value = value
+        self.public_context = {"value": value}
         self.message = (
             f"Invalid process status filter '{value}'; expected one of: in_progress, complete"
         )
@@ -217,5 +219,6 @@ class InactiveEmployeeAccessError(OnboardingError):
         """
         self.employee_id = employee_id
         if employee_id is not None:
+            self.public_context = {"employee_id": str(employee_id)}
             self.message = f"Employee record {employee_id} is not active"
         super().__init__(self.message)

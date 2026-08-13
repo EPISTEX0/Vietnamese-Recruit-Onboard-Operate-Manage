@@ -22,6 +22,7 @@ class PayslipNotFoundError(PayslipError):
     message = "Payslip not found"
 
     def __init__(self, payslip_id: str) -> None:
+        self.public_context = {"payslip_id": payslip_id}
         self.message = f"Payslip not found: {payslip_id}"
         super().__init__(self.message)
 
@@ -34,6 +35,7 @@ class PayslipNotPublishedError(PayslipError):
     message = "Payslip is not yet published"
 
     def __init__(self, payslip_id: str) -> None:
+        self.public_context = {"payslip_id": payslip_id}
         self.message = f"Payslip not yet published: {payslip_id}"
         super().__init__(self.message)
 
@@ -46,6 +48,7 @@ class PayslipAlreadyExistsError(PayslipError):
     message = "A payslip already exists for this employee and period"
 
     def __init__(self, employee_id: str, period_month: str) -> None:
+        self.public_context = {"employee_id": employee_id, "period_month": period_month}
         self.message = f"Payslip already exists for employee {employee_id} period {period_month}"
         super().__init__(self.message)
 
@@ -58,6 +61,7 @@ class PayslipAlreadyPublishedError(PayslipError):
     message = "Cannot modify a published payslip"
 
     def __init__(self, payslip_id: str) -> None:
+        self.public_context = {"payslip_id": payslip_id}
         self.message = f"Payslip already published: {payslip_id}"
         super().__init__(self.message)
 
@@ -70,5 +74,6 @@ class PayslipNotDraftError(PayslipError):
     message = "Payslip must be in draft status"
 
     def __init__(self, payslip_id: str) -> None:
+        self.public_context = {"payslip_id": payslip_id}
         self.message = f"Payslip is not draft: {payslip_id}"
         super().__init__(self.message)
