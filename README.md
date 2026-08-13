@@ -4,7 +4,7 @@ Vietnamese Recruit-Onboard-Operate-Manage — HRM platform for Vietnamese busine
 
 ## Project status & features
 
-Status reports are dated snapshots, such as [`docs/project-status-2026-07-14.md`](./docs/project-status-2026-07-14.md), and are not the current source of truth. To see where things stand now, inspect the wired routers in `backend/src/main.py`, the backend and frontend tests, the ADRs in `docs/adr/`, and open GitHub Issues.
+Status reports are dated snapshots and are not the current source of truth. To see where things stand now, inspect the wired routers in `backend/src/main.py`, the backend and frontend tests, the ADRs in `docs/adr/`, and open GitHub Issues.
 
 Start with [`CONTEXT.md`](./CONTEXT.md) for the domain language (Organization,
 Candidate, Onboarding, Backbone Flow...). For contribution conventions (skills
