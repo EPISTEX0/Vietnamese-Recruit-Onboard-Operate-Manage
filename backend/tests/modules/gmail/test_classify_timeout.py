@@ -8,12 +8,14 @@ configured request timeout.
 """
 
 import asyncio
+from contextlib import ExitStack, contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
 
 from src.modules.gmail.infrastructure.config import GmailSettings
+from src.modules.identity.domain.entities import UserRole
 
 
 def _create_test_app():
@@ -28,12 +30,17 @@ def _create_test_app():
 
 
 def _make_mock_user():
-    """Create a mock user with required attributes."""
+    """Create a mock user with required attributes.
+
+    ``POST /api/gmail/classify`` is gated by ``HRUserDep``, so the role has to
+    be HR -- with any other role the request is rejected with 403 before the
+    timeout path under test is ever reached.
+    """
     user = MagicMock()
     user.id = uuid4()
     user.email = "test@example.com"
     user.name = "Test User"
-    user.role = "user"
+    user.role = UserRole.HR
     return user
 
 
@@ -52,6 +59,87 @@ def _make_mock_email():
     return email
 
 
+def _make_mock_session(emails, total_remaining):
+    """Build a session mock that answers every query the classify flow issues.
+
+    The flow runs three queries before classification starts: the unclassified
+    batch (``scalars().all()``), its remaining count (``scalar()``), and the
+    organization AI config (``scalars().first()``). Feeding those from a fixed
+    ``side_effect`` list ties the mock to the current query *order and count*,
+    which is what broke this file. One result object that answers each accessor
+    independently survives the flow gaining or reordering a query.
+    """
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = emails
+    result.scalars.return_value.first.return_value = MagicMock()
+    result.scalar.return_value = total_remaining
+
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    return session
+
+
+def _make_app(mock_user, mock_email_repo):
+    """Build the gmail-router app with auth and infrastructure dependencies stubbed."""
+    from src.modules.gmail.container import (
+        get_connection_service,
+        get_email_repository,
+        get_gmail_adapter,
+    )
+    from src.modules.identity.container import get_current_user
+
+    mock_connection_service = AsyncMock()
+    mock_connection_service.get_status = AsyncMock(return_value=MagicMock(status="connected"))
+
+    async def _mock_get_connection_service():
+        return mock_connection_service
+
+    app = _create_test_app()
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[get_email_repository] = lambda: mock_email_repo
+    app.dependency_overrides[get_connection_service] = _mock_get_connection_service
+    app.dependency_overrides[get_gmail_adapter] = lambda: MagicMock()
+    return app
+
+
+@contextmanager
+def _classification_stubbed(test_settings, classify_batch):
+    """Pin the request timeout and replace the classification batch call.
+
+    ``_build_ai_classifier`` is stubbed too: it raises unless the organization
+    has a real encrypted provider key, and these tests are about the endpoint's
+    timeout wrapper, not about AI provider configuration.
+    """
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "src.modules.gmail.infrastructure.config.GmailSettings",
+                return_value=test_settings,
+            )
+        )
+        stack.enter_context(
+            patch("src.modules.gmail.container._build_ai_classifier", return_value=MagicMock())
+        )
+        stack.enter_context(
+            patch(
+                "src.modules.gmail.application.classification_service"
+                ".ClassificationService.classify_batch",
+                side_effect=classify_batch,
+            )
+        )
+        yield
+
+
+async def _post_classify(app):
+    """POST /api/gmail/classify against ``app`` and return the response."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post("/api/gmail/classify")
+
+
 class TestClassifyEndpointTimeout:
     """Tests that the classify endpoint returns HTTP 504 when timeout is exceeded."""
 
@@ -61,26 +149,8 @@ class TestClassifyEndpointTimeout:
         mock_user = _make_mock_user()
         mock_emails = [_make_mock_email() for _ in range(3)]
 
-        # Mock the session and its execute method
-        mock_session = AsyncMock()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = mock_emails
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-
-        # For the count query
-        mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 3
-
-        mock_session.execute = AsyncMock(side_effect=[mock_result, mock_count_result])
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
-
-        # Mock email_repo
         mock_email_repo = MagicMock()
-        mock_email_repo.session = mock_session
+        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=3)
 
         # Create settings with a very short timeout (1 second)
         test_settings = GmailSettings(
@@ -95,39 +165,10 @@ class TestClassifyEndpointTimeout:
             await asyncio.Future()
             return 3
 
-        app = _create_test_app()
+        app = _make_app(mock_user, mock_email_repo)
 
-        # Override dependencies
-        from src.modules.gmail.container import get_connection_service, get_email_repository
-        from src.modules.identity.container import get_current_user
-
-        mock_connection_service = AsyncMock()
-        mock_connection_service.get_status = AsyncMock(return_value=MagicMock(status="connected"))
-
-        async def _mock_get_connection_service():
-            return mock_connection_service
-
-        app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[get_email_repository] = lambda: mock_email_repo
-        app.dependency_overrides[get_connection_service] = _mock_get_connection_service
-
-        from src.modules.gmail.container import get_gmail_adapter
-
-        mock_gmail_adapter = MagicMock()
-        app.dependency_overrides[get_gmail_adapter] = lambda: mock_gmail_adapter
-
-        with patch(
-            "src.modules.gmail.infrastructure.config.GmailSettings",
-            return_value=test_settings,
-        ):
-            with patch(
-                "src.modules.gmail.application.classification_service"
-                ".ClassificationService.classify_batch",
-                side_effect=slow_classify_batch,
-            ):
-                transport = ASGITransport(app=app)
-                async with AsyncClient(transport=transport, base_url="http://test") as client:
-                    response = await client.post("/api/gmail/classify")
+        with _classification_stubbed(test_settings, slow_classify_batch):
+            response = await _post_classify(app)
 
         assert response.status_code == 504
         body = response.json()
@@ -139,23 +180,8 @@ class TestClassifyEndpointTimeout:
         mock_user = _make_mock_user()
         mock_emails = [_make_mock_email() for _ in range(2)]
 
-        mock_session = AsyncMock()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = mock_emails
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-
-        mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 2
-
-        mock_session.execute = AsyncMock(side_effect=[mock_result, mock_count_result])
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
-
         mock_email_repo = MagicMock()
-        mock_email_repo.session = mock_session
+        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=2)
 
         test_settings = GmailSettings(
             classification_request_timeout_seconds=1,
@@ -167,41 +193,10 @@ class TestClassifyEndpointTimeout:
             await asyncio.Future()
             return 2
 
-        app = _create_test_app()
+        app = _make_app(mock_user, mock_email_repo)
 
-        from src.modules.gmail.container import get_email_repository
-        from src.modules.identity.container import get_current_user
-
-        app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[get_email_repository] = lambda: mock_email_repo
-
-        from src.modules.gmail.container import get_connection_service
-
-        mock_connection_service = AsyncMock()
-        mock_connection_service.get_status = AsyncMock(return_value=MagicMock(status="connected"))
-
-        async def _mock_get_connection_service():
-            return mock_connection_service
-
-        app.dependency_overrides[get_connection_service] = _mock_get_connection_service
-
-        from src.modules.gmail.container import get_gmail_adapter
-
-        mock_gmail_adapter = MagicMock()
-        app.dependency_overrides[get_gmail_adapter] = lambda: mock_gmail_adapter
-
-        with patch(
-            "src.modules.gmail.infrastructure.config.GmailSettings",
-            return_value=test_settings,
-        ):
-            with patch(
-                "src.modules.gmail.application.classification_service"
-                ".ClassificationService.classify_batch",
-                side_effect=slow_classify_batch,
-            ):
-                transport = ASGITransport(app=app)
-                async with AsyncClient(transport=transport, base_url="http://test") as client:
-                    response = await client.post("/api/gmail/classify")
+        with _classification_stubbed(test_settings, slow_classify_batch):
+            response = await _post_classify(app)
 
         assert response.status_code == 504
         body = response.json()
@@ -218,23 +213,8 @@ class TestClassifyEndpointTimeout:
         for email in mock_emails:
             email.category = "recruitment"
 
-        mock_session = AsyncMock()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = mock_emails
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-
-        mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 2
-
-        mock_session.execute = AsyncMock(side_effect=[mock_result, mock_count_result])
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-        mock_session.flush = AsyncMock()
-
         mock_email_repo = MagicMock()
-        mock_email_repo.session = mock_session
+        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=2)
 
         # Use a generous timeout so classification succeeds
         test_settings = GmailSettings(
@@ -247,41 +227,10 @@ class TestClassifyEndpointTimeout:
             await asyncio.sleep(0.1)  # Fast — well within 10s timeout
             return 2
 
-        app = _create_test_app()
+        app = _make_app(mock_user, mock_email_repo)
 
-        from src.modules.gmail.container import get_email_repository
-        from src.modules.identity.container import get_current_user
-
-        app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[get_email_repository] = lambda: mock_email_repo
-
-        from src.modules.gmail.container import get_connection_service
-
-        mock_connection_service = AsyncMock()
-        mock_connection_service.get_status = AsyncMock(return_value=MagicMock(status="connected"))
-
-        async def _mock_get_connection_service():
-            return mock_connection_service
-
-        app.dependency_overrides[get_connection_service] = _mock_get_connection_service
-
-        from src.modules.gmail.container import get_gmail_adapter
-
-        mock_gmail_adapter = MagicMock()
-        app.dependency_overrides[get_gmail_adapter] = lambda: mock_gmail_adapter
-
-        with patch(
-            "src.modules.gmail.infrastructure.config.GmailSettings",
-            return_value=test_settings,
-        ):
-            with patch(
-                "src.modules.gmail.application.classification_service"
-                ".ClassificationService.classify_batch",
-                side_effect=fast_classify_batch,
-            ):
-                transport = ASGITransport(app=app)
-                async with AsyncClient(transport=transport, base_url="http://test") as client:
-                    response = await client.post("/api/gmail/classify")
+        with _classification_stubbed(test_settings, fast_classify_batch):
+            response = await _post_classify(app)
 
         assert response.status_code == 200
         body = response.json()
