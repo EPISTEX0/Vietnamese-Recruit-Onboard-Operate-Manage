@@ -26,8 +26,10 @@ node_modules/
 out/
 *.tsbuildinfo
 package-lock.json
-pnpm-workspace.yaml
-!vroom-hr/pnpm-workspace.yaml
+# NOTE: pnpm-workspace.yaml is NOT ignored. Under pnpm 10+ it is the real config
+# file for repo-wide settings (`allowBuilds` and friends), not local scratch.
+# Ignoring it meant CI checked out a tree without it, so every dependency build
+# script stayed unapproved and `pnpm install` died on ERR_PNPM_IGNORED_BUILDS.
 
 # ---- Logs ----
 *.log

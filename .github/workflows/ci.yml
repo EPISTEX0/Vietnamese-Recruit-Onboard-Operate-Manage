@@ -7,6 +7,14 @@ name: CI
 # The blocking gates are deliberately narrow. Each one catches a class of failure
 # that has already reached `main` in this repo. Do not widen them into a general
 # "make the repo clean" gate -- that is what the reporting jobs are for.
+#
+# Action pinning: astral-sh/setup-uv stopped publishing floating major tags after
+# v7 -- `v8`, `v9` and `v10` do not exist as refs, only `v8.0.0`-style exact tags
+# (verified via git/matching-refs/tags/v). `@v10` therefore fails to resolve and
+# killed all six backend jobs at "Set up job". It is pinned to the commit behind
+# v10.0.0, which an exact tag cannot guarantee since tags can be moved. The other
+# three actions do publish the floating major tags used below; each was confirmed
+# to resolve via git/ref/tags before being left alone.
 
 on:
   push:
@@ -55,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true
@@ -98,7 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true
@@ -138,7 +146,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true
@@ -167,7 +175,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true
@@ -205,7 +213,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true
@@ -252,7 +260,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
         with:
           python-version: '3.11'
           enable-cache: true

@@ -1,0 +1,44 @@
+# Dependency build-script policy (pnpm 11 `allowBuilds`).
+#
+# pnpm blocks dependency install/postinstall scripts by default and, under
+# `strictDepBuilds` (on by default in CI), fails the install until every blocked
+# package has an explicit `true` or `false`. A `set this to true or false`
+# placeholder is NOT a decision -- it leaves the package blocked and the install
+# still fails, which is what broke the frontend CI job.
+#
+# Every entry below is `false`. That is a decision, not a default: each script
+# was read at the pinned version and none of them do anything this repo needs.
+# The pattern repeats -- these packages ship their native binary as a
+# per-platform optional dependency, which pnpm already installs from the
+# lockfile, so the install script's only job is to notice the binary is present
+# and exit. Re-check the script before flipping any of these to `true`.
+#
+#   @google/genai        preinstall is literally `echo 'preinstall: no-op'`.
+#   @parcel/watcher      build-from-source.js runs node-gyp only when
+#                        npm_config_build_from_source=true; unset here, so no-op.
+#   @swc/core            postinstall probes the @swc/core-linux-x64-gnu binding
+#                        and only falls back to @swc/wasm if it is missing.
+#   @tailwindcss/oxide   scripts/install.js returns early when the platform
+#                        package resolves; otherwise it downloads a tarball at
+#                        install time, which is exactly what we do not want.
+#   protobufjs           scripts/postinstall only prints a version-scheme
+#                        warning. No build, no codegen.
+#   re2                  the one real node-gyp compile, but it is an optional
+#                        dependency of superstatic (via the firebase-tools dev
+#                        dependency) and nothing in `next build` loads it.
+#   sharp                install/check.js exits non-zero (triggering a libvips
+#                        build) only with a global libvips or an explicit
+#                        build-from-source flag; otherwise the prebuilt
+#                        @img/sharp-linux-x64 is used. Next only needs sharp for
+#                        runtime image optimization, not for `next build`.
+#   unrs-resolver        napi-postinstall checks the platform binding and fetches
+#                        one only if absent. Reaches eslint only.
+allowBuilds:
+  '@google/genai': false
+  '@parcel/watcher': false
+  '@swc/core': false
+  '@tailwindcss/oxide': false
+  protobufjs: false
+  re2: false
+  sharp: false
+  unrs-resolver: false
