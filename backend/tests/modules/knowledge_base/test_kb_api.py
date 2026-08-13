@@ -15,12 +15,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.postgres_support import make_postgres_container
+
 # testcontainers / docker are integration-only dependencies.
 docker = pytest.importorskip("docker")
-PostgresContainer = pytest.importorskip("testcontainers.postgres").PostgresContainer
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-PGVECTOR_IMAGE = "pgvector/pgvector:pg15"
 
 
 def _docker_available() -> bool:
@@ -60,7 +60,7 @@ def test_app() -> Iterator[TestClient]:
     if not _docker_available():
         pytest.skip("Docker is not available for the KB API integration test")
 
-    with PostgresContainer(PGVECTOR_IMAGE) as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
 

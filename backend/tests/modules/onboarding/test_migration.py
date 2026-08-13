@@ -27,10 +27,11 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from tests.postgres_support import make_postgres_container
+
 # testcontainers / docker are integration-only dependencies. Skip the whole
 # module cleanly if either the library or a running Docker daemon is absent.
 docker = pytest.importorskip("docker")
-PostgresContainer = pytest.importorskip("testcontainers.postgres").PostgresContainer
 
 # backend/ — the directory that holds alembic.ini and the alembic/ package.
 # test file: backend/tests/modules/onboarding/test_migration.py
@@ -89,7 +90,7 @@ def migrated_engine() -> Iterator[object]:
     if not _docker_available():
         pytest.skip("Docker is not available for the migration smoke test")
 
-    with PostgresContainer("postgres:15-alpine") as postgres:
+    with make_postgres_container() as postgres:
         # testcontainers returns a psycopg2 URL; derive the asyncpg variant that
         # the Alembic env.py expects for its async engine.
         sync_url = postgres.get_connection_url()

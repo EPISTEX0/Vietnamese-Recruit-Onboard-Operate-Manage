@@ -46,6 +46,7 @@ from src.modules.recruitment.infrastructure.config import RecruitmentSettings
 from src.modules.recruitment.infrastructure.org_settings_repository import (
     OrganizationSettingsRepository,
 )
+from tests.postgres_support import make_postgres_container
 
 # backend/ — the directory that holds alembic.ini and the alembic/ package.
 # test file: backend/tests/modules/recruitment/test_org_settings_repository.py
@@ -97,12 +98,11 @@ def postgres_async_url() -> Iterator[str]:
     a running Docker daemon is unavailable.
     """
     docker = pytest.importorskip("docker")
-    postgres_container = pytest.importorskip("testcontainers.postgres")
 
     if not _docker_available(docker):
         pytest.skip("Docker is not available for the repository integration tests")
 
-    with postgres_container.PostgresContainer("postgres:15-alpine") as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         _run_alembic_upgrade_head(async_url)

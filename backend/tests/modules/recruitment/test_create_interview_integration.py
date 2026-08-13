@@ -68,6 +68,7 @@ from src.modules.recruitment.infrastructure.repositories import (
     CandidateRepository,
     CVDocumentRepository,
 )
+from tests.postgres_support import make_postgres_container
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 _CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
@@ -208,12 +209,11 @@ def _run_alembic_upgrade_head(async_url: str) -> None:
 @pytest.fixture(scope="module")
 def postgres_async_url() -> Iterator[str]:
     docker = pytest.importorskip("docker")
-    postgres_container = pytest.importorskip("testcontainers.postgres")
 
     if not _docker_available(docker):
         pytest.skip("Docker is not available for interview integration test")
 
-    with postgres_container.PostgresContainer("postgres:15-alpine") as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         _run_alembic_upgrade_head(async_url)

@@ -13,9 +13,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from alembic import command
+from tests.postgres_support import make_postgres_container
 
 docker = pytest.importorskip("docker")
-PostgresContainer = pytest.importorskip("testcontainers.postgres").PostgresContainer
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 
@@ -50,7 +50,7 @@ def migration_database() -> Iterator[tuple[Engine, str]]:
     if not _docker_available():
         pytest.skip("Docker is not available for the migration integration test")
 
-    with PostgresContainer("postgres:15-alpine") as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         _run_alembic(async_url, "upgrade", "064")

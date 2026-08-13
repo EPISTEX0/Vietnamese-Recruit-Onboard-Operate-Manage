@@ -22,10 +22,11 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 
+from tests.postgres_support import make_postgres_container
+
 # testcontainers / docker are integration-only dependencies. Skip the whole
 # module cleanly if either the library or a running Docker daemon is absent.
 docker = pytest.importorskip("docker")
-PostgresContainer = pytest.importorskip("testcontainers.postgres").PostgresContainer
 
 # backend/
 BACKEND_DIR = Path(__file__).resolve().parents[3]
@@ -66,7 +67,7 @@ def migrated_engine() -> Iterator[Engine]:
     if not _docker_available():
         pytest.skip("Docker is not available for the migration smoke test")
 
-    with PostgresContainer("postgres:15-alpine") as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
 

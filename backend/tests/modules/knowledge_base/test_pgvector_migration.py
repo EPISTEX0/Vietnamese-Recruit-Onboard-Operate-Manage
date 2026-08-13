@@ -20,10 +20,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests.postgres_support import make_postgres_container
+
 # testcontainers / docker are integration-only dependencies. Skip the whole
 # module cleanly if either the library or a running Docker daemon is absent.
 docker = pytest.importorskip("docker")
-PostgresContainer = pytest.importorskip("testcontainers.postgres").PostgresContainer
 
 # backend/ — the directory that holds alembic.ini and the alembic/ package.
 # test file: backend/tests/modules/knowledge_base/test_pgvector_migration.py
@@ -31,7 +32,6 @@ BACKEND_DIR = Path(__file__).resolve().parents[3]
 
 # pgvector/pgvector:pg15 includes the vector extension pre-installed.
 # We use that image so the migration can just run CREATE EXTENSION.
-PGVECTOR_IMAGE = "pgvector/pgvector:pg15"
 
 
 def _docker_available() -> bool:
@@ -76,7 +76,7 @@ def migrated_engine() -> Iterator[object]:
         pytest.skip("Docker is not available for the pgvector migration test")
 
     # Use pgvector/pgvector:pg15 image which has the extension pre-installed
-    with PostgresContainer(PGVECTOR_IMAGE) as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
 

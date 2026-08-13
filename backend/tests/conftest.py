@@ -10,12 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.postgres_support import PGVECTOR_IMAGE as _PGVECTOR_IMAGE
+from tests.postgres_support import make_postgres_container
+
 # backend/ -- the directory holding alembic.ini and the alembic/ package.
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-# The migration chain runs ``CREATE EXTENSION vector`` for the knowledge base,
-# so a stock postgres image cannot reach head.
-PGVECTOR_IMAGE = "pgvector/pgvector:pg15"
+# Re-exported so existing imports of ``tests.conftest.PGVECTOR_IMAGE`` keep
+# working; the container itself is built by ``tests.postgres_support``.
+PGVECTOR_IMAGE = _PGVECTOR_IMAGE
 
 _SLOW_FILES = {
     "test_classify_concurrency.py",
@@ -91,21 +94,11 @@ def postgres_async_url() -> Iterator[str]:
     production actually has, not the ones the models would create.
     """
     docker = pytest.importorskip("docker")
-    postgres_container = pytest.importorskip("testcontainers.postgres")
 
     if not _docker_available(docker):
         pytest.skip("Docker is not available for database round-trip tests")
 
-    # Credentials are pinned rather than left to testcontainers' defaults,
-    # which fall back to POSTGRES_USER/PASSWORD/DB from the ambient
-    # environment. Earlier tests in a full-suite run leave the deployment
-    # values there, and that password contains a '!' -- which arrives
-    # percent-encoded in the URL and makes Alembic's configparser choke on
-    # "invalid interpolation syntax". Pinning them keeps this fixture
-    # independent of test ordering.
-    with postgres_container.PostgresContainer(
-        PGVECTOR_IMAGE, username="test", password="test", dbname="test"
-    ) as postgres:
+    with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         _run_alembic_upgrade_head(async_url)
