@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.modules.gmail.domain.exceptions import GmailError, RateLimitedException
-from src.shared.messages import get_message, get_request_language
+from src.shared.messages import get_request_language, resolve_error_message
 
 
 def register_gmail_error_handlers(app: FastAPI) -> None:
@@ -43,7 +43,7 @@ def register_gmail_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "message": get_message(exc.error_code, lang),
+                "message": resolve_error_message(exc, lang),
                 "details": {"retry_after": exc.retry_after},
             },
             headers=headers,
@@ -66,7 +66,7 @@ def register_gmail_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "message": get_message(exc.error_code, lang),
+                "message": resolve_error_message(exc, lang),
                 "details": None,
             },
         )

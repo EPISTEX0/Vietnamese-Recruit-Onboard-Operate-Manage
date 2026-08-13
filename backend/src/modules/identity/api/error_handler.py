@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.modules.identity.domain.exceptions import AuthError
-from src.shared.messages import get_message, get_request_language
+from src.shared.messages import get_request_language, resolve_error_message
 
 
 def register_auth_error_handlers(app: FastAPI) -> None:
@@ -47,7 +47,7 @@ def register_auth_error_handlers(app: FastAPI) -> None:
             content={
                 "error": {
                     "code": exc.error_code,
-                    "message": get_message(exc.error_code, lang),
+                    "message": resolve_error_message(exc, lang),
                 }
             },
         )

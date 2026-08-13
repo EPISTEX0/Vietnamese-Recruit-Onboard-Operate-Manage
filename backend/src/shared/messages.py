@@ -862,6 +862,43 @@ def get_message(code: str, lang: str = "vi") -> str:
     return entry.get(lang, code)
 
 
+def resolve_error_message(exc: object, lang: str = "vi") -> str:
+    """Pick the message an API error response should carry for ``exc``.
+
+    Every module's domain exceptions follow the same shape: a class-level
+    ``message`` default plus an ``__init__`` that assigns ``self.message``
+    only when the caller supplies context (the offending CIDR, the payslip
+    id, the reason a promotion was blocked). Translating by error code alone
+    throws that context away, because the catalog is keyed by code and has
+    nowhere to put per-instance detail.
+
+    So an instance-level ``message`` -- the marker that a caller built one --
+    wins, and everything else reads from the localized catalog. When the code
+    is missing from the catalog, ``get_message`` would hand back the bare
+    code; the exception's own default message is more useful than that.
+
+    Args:
+        exc: The domain exception being rendered.
+        lang: Language code ("vi" or "en"). Defaults to "vi".
+
+    Returns:
+        The message to place in the error response body.
+    """
+    custom = vars(exc).get("message")
+    if isinstance(custom, str) and custom:
+        return custom
+
+    code = getattr(exc, "error_code", None)
+    default = getattr(exc, "message", None)
+    if not isinstance(code, str):
+        return default if isinstance(default, str) else ""
+
+    message = get_message(code, lang)
+    if message == code and isinstance(default, str) and default:
+        return default
+    return message
+
+
 def get_error_detail(code: str, lang: str = "vi") -> dict[str, str]:
     """Get a structured error detail dict for use in HTTPException.
 

@@ -93,7 +93,15 @@ class TestUnauthorizedException:
         response = await client.get("/test/unauthorized")
         data = response.json()
         assert data["error_code"] == "UNAUTHORIZED"
-        assert data["message"] == "Missing or invalid authentication session"
+        # Vietnamese is the default response language for this HRM.
+        assert data["message"] == "Phiên đăng nhập không hợp lệ hoặc đã hết hạn"
+
+    @pytest.mark.anyio
+    async def test_accept_language_en_returns_english_message(self, client: AsyncClient):
+        response = await client.get("/test/unauthorized", headers={"Accept-Language": "en"})
+        data = response.json()
+        assert data["error_code"] == "UNAUTHORIZED"
+        assert data["message"] == "Session is invalid or has expired"
 
 
 class TestGmailConnectFailedException:

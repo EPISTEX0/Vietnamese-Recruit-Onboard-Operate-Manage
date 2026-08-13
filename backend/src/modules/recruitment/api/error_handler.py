@@ -19,7 +19,7 @@ from src.modules.recruitment.application.review_service import (
     ReviewValidationError,
 )
 from src.modules.recruitment.domain.exceptions import RecruitmentError
-from src.shared.messages import get_message, get_request_language
+from src.shared.messages import get_request_language, resolve_error_message
 
 
 def register_recruitment_error_handlers(app: FastAPI) -> None:
@@ -43,7 +43,7 @@ def register_recruitment_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "message": get_message(exc.error_code, lang),
+                "message": resolve_error_message(exc, lang),
                 "details": exc.details,
             },
         )

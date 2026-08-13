@@ -8,7 +8,7 @@ from src.modules.payslip.domain.exceptions import (
     PayslipNotFoundError,
     PayslipNotPublishedError,
 )
-from src.shared.messages import get_message, get_request_language
+from src.shared.messages import get_request_language, resolve_error_message
 
 
 def register_payslip_error_handlers(app: FastAPI) -> None:
@@ -24,7 +24,7 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "detail": get_message(exc.error_code, lang),
+                "detail": resolve_error_message(exc, lang),
             },
         )
 
@@ -38,7 +38,7 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "detail": get_message(exc.error_code, lang),
+                "detail": resolve_error_message(exc, lang),
             },
         )
 
@@ -52,6 +52,6 @@ def register_payslip_error_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content={
                 "error_code": exc.error_code,
-                "detail": get_message(exc.error_code, lang),
+                "detail": resolve_error_message(exc, lang),
             },
         )

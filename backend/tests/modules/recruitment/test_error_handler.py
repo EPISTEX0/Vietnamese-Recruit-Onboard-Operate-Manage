@@ -182,6 +182,15 @@ class TestCandidateNotFoundError:
         response = await client.get("/test/candidate-not-found")
         data = response.json()
         assert data["error_code"] == "CANDIDATE_NOT_FOUND"
+        # Vietnamese is the default response language for this HRM.
+        assert data["message"] == "Không tìm thấy ứng viên"
+
+    @pytest.mark.anyio
+    async def test_accept_language_en_returns_english_message(self, client: AsyncClient):
+        response = await client.get(
+            "/test/candidate-not-found", headers={"Accept-Language": "en"}
+        )
+        data = response.json()
         assert data["message"] == "Candidate not found"
 
 
@@ -196,7 +205,8 @@ class TestCVDocumentNotFoundError:
         response = await client.get("/test/cv-document-not-found")
         data = response.json()
         assert data["error_code"] == "CV_DOCUMENT_NOT_FOUND"
-        assert data["message"] == "CV document not found"
+        # Vietnamese is the default response language for this HRM.
+        assert data["message"] == "Không tìm thấy tài liệu CV"
 
 
 class TestInvalidStatusTransitionError:
