@@ -1,124 +1,225 @@
-# Vroom HR
+<p align="center">
 
-Vietnamese Recruit-Onboard-Operate-Manage — HRM platform for Vietnamese businesses.
+  <a href="./docs/assets/hero-banner.png">
+    <img src="./docs/assets/hero-banner.png" alt="Vroom HR — Open-Source Self-Hosted Vietnamese HRM Platform" width="100%" />
+  </a>
 
-## Project status & features
+</p>
 
-Status reports are dated snapshots and are not the current source of truth. To see where things stand now, inspect the wired routers in `backend/src/main.py`, the backend and frontend tests, the ADRs in `docs/adr/`, and open GitHub Issues.
+<p align="center">
+  <strong>Vroom HR</strong><br/>
+  Open-Source Self-Hosted Vietnamese HRM Platform (Recruit - Onboard - Operate - Manage)
+</p>
 
-Start with [`CONTEXT.md`](./CONTEXT.md) for the domain language (Organization,
-Candidate, Onboarding, Backbone Flow...). For contribution conventions (skills
-workflow, git/branch/commit/PR), see [`AGENTS.md`](./AGENTS.md).
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="./backend"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB.svg?logo=python&logoColor=white" alt="Python 3.11+" /></a>
+  <a href="./frontend"><img src="https://img.shields.io/badge/Next.js-15-black.svg?logo=next.js&logoColor=white" alt="Next.js 15" /></a>
+  <img src="https://img.shields.io/badge/FastAPI-009688.svg?logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Docker-compose-2496ED.svg?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build Passing" />
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" />
+</p>
 
-## Tech Stack
+<p align="center">
+  <b><a href="./README.vi.md">Tiếng Việt</a></b> |
+  <a href="./README.md">English</a>
+</p>
 
-- **Backend**: FastAPI + SQLModel + PostgreSQL 15 + Redis 7
-- **Frontend** (`vroom-hr/`, chính): Next.js 15 + React 19 + TypeScript + Tailwind v4 + TanStack Query + lucide-react
-- **Frontend legacy** (`frontend/`, backup): Next.js 14 + Tailwind 3 + shadcn/ui (Heritage theme) — không phát triển tính năng mới
-- **Auth**: Google OAuth2 + JWT (cookies)
-- **Storage**: MinIO
-- **AI**: OpenAI-compatible APIs (CV parsing)
+---
+
+## Overview
+
+**Vroom HR** is an open-source, self-hosted Human Resource Management platform purpose-built for modern Vietnamese enterprises. Every company runs its own isolated deployment — its own server and its own database — so sensitive HR data never leaves your infrastructure.
+
+Vroom HR goes beyond traditional HRM software by embedding **AI automation and a dual-knowledge-base RAG assistant** directly into the employee lifecycle: from sourcing and screening candidates, through onboarding, to the day-to-day operation and management of your workforce.
+
+**Four key pillars:**
+
+1. **Self-Hosted & Single-Tenant** — 100% data privacy. Each deployment serves exactly one company with its own database, object storage, and embedding service. No shared tenancy, no third-party data exposure.
+2. **AI Automation** — Automated **CV parsing**, **job-application intent classification** of inbound emails, and seamless **Gmail integration** that feeds the recruitment pipeline with human-in-the-loop review.
+3. **Dual-KB RAG Knowledge Base** — Two **physically isolated** knowledge bases (HR KB and Employee KB) indexed with **pgvector** and **MinIO**, powering domain-aware AI assistants for both HR and employees.
+4. **All-in-One HR Suite** — One platform covering the entire workforce journey: **Recruit → Onboard → Operate → Manage**, including attendance, employee requests, and payslips.
+
+> **Terminology note:** For the canonical domain glossary (Organization, Candidate, Backbone Flow, Knowledge Base, AI Assistant, and more), see [`CONTEXT.md`](./CONTEXT.md). Architectural decisions live in [`docs/adr/`](./docs/adr/).
+
+<p align="center">
+  <a href="./docs/assets/ai-features.png">
+    <img src="./docs/assets/ai-features.png" alt="Vroom HR AI Features & RAG Architecture" width="100%" />
+  </a>
+</p>
+
+---
+
+## Features
+
+| Area | Capabilities |
+| --- | --- |
+| **Recruitment** | Email ingestion via Gmail, AI intent classification (`job_application` / `partner` / `event` / `internal` / `other`), AI CV parsing with human-in-the-loop review, Candidate pipeline (`new → reviewing → interview scheduled → accepted/rejected/archived`), Job Openings, Recruitment Inbox. |
+| **AI Automation** | Event-driven background tasks — no chat. Classifies inbound emails, parses CVs into structured data, and moves accepted candidates straight into onboarding. |
+| **AI Assistant (HR)** | Conversational assistant that *reads* recruitment & onboarding data and *drafts* proposals (e.g. interview invitations); it never writes to the database — HR confirms every write (human-in-the-loop). |
+| **AI Assistant (Employee)** | Self-service assistant that reads only the asking employee's own data and can draft employee-owned requests (leave, overtime), never writing on its own. |
+| **Dual-KB RAG** | Two physically isolated knowledge bases: **HR KB** (HR-only docs) and **Employee KB** (docs HR publishes). Ingestion is asynchronous via an ARQ worker: PDF/DOCX → chunk → embed (1024-dim Vietnamese embeddings) → pgvector, with raw files stored on MinIO. |
+| **Onboarding** | Checklist-driven onboarding triggered by the `candidate_accepted` event. `OnboardingProcess` with fixed tasks; the employee becomes **active** once all mandatory tasks and department/position/manager/start-date are complete. |
+| **Employee Self-Service** | Employee accounts activated after onboarding: profile, leave & overtime requests, attendance, payslips. |
+| **Operate & Manage** | Attendance records, Employee Requests (leave/overtime) reviewed by HR, Payslip publishing (read-only for employees). |
+| **Auth & Security** | Google OAuth2 + JWT cookies, role-based access (`SYSTEM_ADMIN` / `HR` / `Employee`), strict separation between infrastructure admin and HR business data. |
+| **i18n** | Vietnamese-first interface (default), with a full English/`next-intl` setup. |
+
+---
 
 ## Quick Start
 
+> **Prerequisites:** Docker + Docker Compose, `uv` (Python ≥ 3.11), and `pnpm` (Node ≥ 20).
+
+### 1. Infrastructure
+
 ```bash
-# Clone and setup
-git clone https://github.com/your-org/Vietnamese-Recruit-Onboard-Operate-Manage.git
+git clone git@github.com:EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage.git
 cd Vietnamese-Recruit-Onboard-Operate-Manage
 
-# Start infrastructure
+# Start core infrastructure (PostgreSQL+pgvector, Redis)
 docker compose up -d postgres redis
 
-# Backend
+# Optional — full RAG stack (embedding service + MinIO object storage):
+# docker compose up -d
+```
+
+### 2. Backend
+
+```bash
 cd backend
 cp .env.example .env
-# Edit .env with your settings
-uv sync
-uv run alembic upgrade head
-uvicorn src.main:app --reload --port 8000
+# Edit .env — set at minimum AUTH_JWT_SECRET_KEY, AUTH_OAUTH_TOKEN_ENCRYPTION_KEY,
+# and your Google OAuth credentials if using Gmail integration.
 
-# Frontend (vroom-hr — chính)
-cd ../vroom-hr
-cp .env.example .env.local
-# Edit .env.local (NEXT_PUBLIC_API_URL, GEMINI_API_KEY, APP_URL)
-pnpm install
-pnpm dev   # http://localhost:3000
-#
-# (Legacy) frontend/ cũ — Next.js 14 / Tailwind 3, chỉ backup:
-#   cd ../frontend && pnpm install && pnpm dev
+uv sync
+uv run alembic upgrade head          # apply database migrations
+
+# Start the API server (http://localhost:8000 — Swagger UI at /docs)
+uv run uvicorn src.main:app --reload --port 8000
 ```
+
+Run the background workers in separate terminals:
+
+```bash
+# Gmail sync + AI classification (polls every 5 minutes)
+uv run arq src.modules.gmail.worker.WorkerSettings
+
+# Knowledge Base ingestion (PDF/DOCX → embeddings → pgvector)
+uv run arq src.modules.knowledge_base.worker.KnowledgeBaseWorkerSettings
+
+# Onboarding (consumes candidate_accepted, drives OnboardingProcess)
+uv run arq src.modules.onboarding.worker.OnboardingWorkerSettings
+```
+
+> **Note:** when run via Docker Compose, all three workers plus the `vroom-embedding` service are launched automatically.
+
+### 3. Frontend
+
+```bash
+cd ../frontend                       # package: vroom-hr
+cp .env.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:8000 and NEXT_PUBLIC_APP_URL
+
+pnpm install
+pnpm dev                             # http://localhost:3000
+```
+
+> Default dev account: `admin@vroomhr.com` / `VroomAdmin!2026` (see `AGENTS.md`).
+
+---
 
 ## Environment Variables
 
-### Backend (.env)
+### Backend (`backend/.env`)
 
-```env
-# Database & Redis
-AUTH_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/vroom_hr
-AUTH_REDIS_URL=redis://localhost:6379/0
+| Variable | Description | Default |
+| --- | --- | --- |
+| `DATABASE_URL` | Async PostgreSQL DSN (main DB, pgvector) | `postgresql+asyncpg://postgres:postgres@localhost:5432/vroom_hr` |
+| `AUTH_DATABASE_URL` | Auth module database DSN | `postgresql+asyncpg://…/vroom_hr` |
+| `AUTH_REDIS_URL` | Redis DSN for cache & ARQ | `redis://localhost:6379/0` |
+| `AUTH_GOOGLE_CLIENT_ID` / `AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 credentials | — |
+| `AUTH_GOOGLE_REDIRECT_URI` | OAuth redirect callback | `http://localhost:8000/api/auth/callback` |
+| `AUTH_JWT_SECRET_KEY` | JWT signing secret (**change in prod**) | — |
+| `AUTH_OAUTH_TOKEN_ENCRYPTION_KEY` | AES-256-GCM base64 key for OAuth tokens | — |
+| `AUTH_FRONTEND_URL` | Frontend URL for CORS / redirects | `http://localhost:3000` |
+| `RECRUITMENT_LLM_BASE_URL` / `RECRUITMENT_LLM_MODEL` | LLM for CV parsing & classification | OpenAI-compatible endpoint |
+| `ASSISTANT_LLM_BASE_URL` / `ASSISTANT_LLM_MODEL` | LLM for the AI assistants | OpenAI-compatible endpoint |
+| `KB_MINIO_BUCKET` / `KB_EMBEDDING_SERVICE_URL` / `KB_DATABASE_URL` | Knowledge Base storage, embedding & DB | `knowledge-base` / `http://localhost:8080` |
 
-# Google OAuth
-AUTH_GOOGLE_CLIENT_ID=your-client-id
-AUTH_GOOGLE_CLIENT_SECRET=your-client-secret
-AUTH_GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/callback
+### Infrastructure & Docker Compose (`.env` at root)
 
-# JWT
-AUTH_JWT_SECRET_KEY=your-secret-key
-AUTH_JWT_ALGORITHM=HS256
-AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=15
-AUTH_REFRESH_TOKEN_EXPIRE_DAYS=7
+| Variable | Description | Default |
+| --- | --- | --- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | PostgreSQL container credentials | `postgres` / `postgres` / `vroom_hr` |
+| `REDIS_PASSWORD` | Redis container password | — |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | MinIO container admin credentials | `vroomminio` / `vroomminio` |
+| `EMBEDDING_MODEL_NAME` | Vietnamese embedding model for `vroom-embedding` | `AITeamVN/Vietnamese_Embedding_v2` |
+| `EMBEDDING_PORT` | `vroom-embedding` service port | `8080` |
+### Frontend (`frontend/.env.local`)
 
-# OAuth token encryption (base64 32-byte key)
-AUTH_OAUTH_TOKEN_ENCRYPTION_KEY=your-encryption-key
+| Variable | Description | Default |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | Backend (FastAPI) base URL for all API calls | `http://localhost:8000` |
+| `NEXT_PUBLIC_APP_URL` | Public URL where the frontend is hosted | `http://localhost:3000` |
 
-# Frontend URL
-AUTH_FRONTEND_URL=http://localhost:3000
+> See `backend/.env.example` for the complete set of module-prefixed settings (`AUTH_`, `GMAIL_`, `EMPLOYEE_`, `RECRUITMENT_`, `ASSISTANT_LLM_`, `KB_`) and their defaults.
 
-# Recruitment LLM (optional)
-RECRUITMENT_LLM_BASE_URL=https://gemma4.aibuddy.vn/v1
-RECRUITMENT_LLM_MODEL=bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4
+---
+
+## High-Level Architecture
+
+```
+Client (Next.js 15)  ──►  FastAPI Backend  ──►  PostgreSQL (pgvector)
+        ▲                      │   │   │
+        │                      │   │   └──► Redis (cache + ARQ queue)
+        │                      │   └──────► MinIO (object storage)
+        │                      └──────────► ARQ Workers (gmail · kb · onboarding)
+        │                                   │
+        │                                   └──► LLM Adapters ──► vroom-embedding (1024-dim)
+        └────────────────────────────────────────────┘
 ```
 
-### Frontend (.env.local)
+For a deep dive including the three Mermaid diagrams — **System High-Level Architecture**, **Dual-KB RAG**, and the **Backbone Flow sequence** — see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
-```env
-# Backend API URL (FastAPI) — base cho mọi API call từ vroom-hr/lib/api/client.ts
-NEXT_PUBLIC_API_URL=http://localhost:8000
+---
 
-# AI Studio / Gemini (legacy — Phase 3 thay bằng /api/assistant)
-GEMINI_API_KEY=""
-
-# URL hosting app
-APP_URL="http://localhost:3000"
-```
-
-## Modules
-
-| Module        | Description                                      |
-| ------------- | ------------------------------------------------ |
-| `identity`    | Auth, OAuth, JWT, roles, whitelist, audit        |
-| `employee`    | Employee CRUD, departments, positions, documents |
-| `recruitment` | Candidate pipeline, CV processing (AI)           |
-| `gmail`       | Gmail connection, sending, sync metadata         |
-
-Attendance đã có backend và UI HR chính; các trang schedule/holiday/leave/overtime còn chưa hoàn thiện. Payslip đã có CRUD/publish cho HR và read-only cho Employee. Payroll calculation engine, cấu hình phụ cấp và thuế chưa được triển khai.
-
-## Development
+## Development & Testing
 
 ```bash
-# Backend linting
+# Backend — lint & format
 cd backend
 ruff check src/ && ruff format src/
 mypy src/
-pytest tests/
 
-# Frontend linting
-cd vroom-hr
+# Backend — tests
+pytest tests/ -v
+
+# Frontend — lint
+cd ../frontend
 pnpm lint
-pnpm build
-pnpm test
 ```
+
+Reproduce the test environment:
+
+```bash
+# Reset the database and re-apply migrations (Docker infra must be running)
+docker exec vroom-postgres psql -U postgres -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'vroom_hr' AND pid <> pg_backend_pid();"
+docker exec vroom-postgres psql -U postgres -c "DROP DATABASE vroom_hr;"
+docker exec vroom-postgres psql -U postgres -c "CREATE DATABASE vroom_hr;"
+cd backend && uv run alembic upgrade head
+```
+
+> Contribution guide, issue templates, and PR standards are managed under `.github/` per our [Repository Governance](https://github.com/EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage/blob/main/docs/adr/0011-github-repository-governance-and-documentation-standard.md) standard. Domain language and AI concepts: [`CONTEXT.md`](./CONTEXT.md).
+
+---
+
+## Roadmap
+
+- **Current scope** — Backbone Flow end-to-end (Recruit → Onboard → Operate → Manage), Dual-KB RAG, HR & Employee AI Assistants, attendance, employee requests, payslips.
+- **Future** — Autonomous **AI Agent** (self-decided, self-executed writes) is explicitly out of current scope and tracked as a forward-looking direction only.
 
 ## License
 
-MIT
+Vroom HR is released under the [MIT License](./LICENSE). You are free to use, modify, and self-host Vroom HR for your own organization.

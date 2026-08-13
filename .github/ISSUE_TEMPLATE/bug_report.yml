@@ -1,0 +1,108 @@
+name: Bug report
+description: Report a reproducible bug in Vroom HR
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the form below.
+        **Do not** use this form for security vulnerabilities — see [SECURITY.md](../../SECURITY.md) for private disclosure.
+
+  - type: input
+    id: name
+    attributes:
+      label: Bug description
+      description: Concise, specific description of the bug.
+      placeholder: e.g. Creating a candidate with an accent in the name returns a 500 error
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+      placeholder: A clear, detailed description of the issue.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: How are you running Vroom HR?
+      options:
+        - Docker
+        - Local manual
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit
+      description: Which version or commit hash are you running?
+      placeholder: e.g. 0.1.0 / abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Your host operating system (and version).
+      placeholder: e.g. Ubuntu 24.04, macOS 14.5, Windows 11
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: Browser and version used to reproduce the bug (if frontend-related).
+      placeholder: e.g. Chrome 126, Firefox 127
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact, ordered steps to reproduce the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Perform '...'
+        4. See error
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs / Screenshots
+      description: |
+        Paste the relevant backend/frontend logs or error messages, and attach screenshots if applicable.
+        **Please redact any personal data (names, emails, phone numbers) before pasting.**
+      render: shell
+    validations:
+      required: false

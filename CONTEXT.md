@@ -197,3 +197,9 @@ _Avoid_: Banner, Tour popup, Slideshow
 **Tiếng Việt mặc định**:
 Ngôn ngữ mặc định của giao diện trong deployment dành cho doanh nghiệp Việt Nam; nhãn nghiệp vụ dùng tiếng Việt nhất quán.
 _Avoid_: trộn Việt/Anh không có chủ đích.
+
+## Tài liệu & Quản trị Repo
+
+**Repository Governance**:
+Hệ thống quy chuẩn tài liệu và quy trình quản trị dự án công khai trên GitHub (`README.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `SECURITY.md`, YAML Issue Forms, PR Template) đảm bảo tiêu chuẩn Open-Source chuyên nghiệp (chuẩn 10k+ stars).
+_Avoid_: Unstructured docs, Blank issue templates

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vroom HR Documentation & ADRs
+    url: https://github.com/EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage/tree/main/docs/adr
+    about: Read the canonical domain language (CONTEXT.md) and Architecture Decision Records before reporting an issue or requesting a feature.
+  - name: Vroom HR Discussions
+    url: https://github.com/EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage/discussions
+    about: Ask questions, share ideas, and discuss Vroom HR with the community.
+  - name: Security Vulnerabilities
+    url: https://github.com/EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage/security/advisories/new
+    about: Please report security vulnerabilities privately — do not create a public issue. See SECURITY.md.
