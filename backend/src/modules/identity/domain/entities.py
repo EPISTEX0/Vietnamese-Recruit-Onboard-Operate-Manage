@@ -13,6 +13,8 @@ from sqlalchemy import Column, DateTime, String
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
+from src.shared.sql_types import EnumAsString
+
 
 class UserRole(str, Enum):
     """Enumeration of user roles for access control."""
@@ -20,6 +22,13 @@ class UserRole(str, Enum):
     SYSTEM_ADMIN = "system_admin"
     HR = "hr"
     USER = "user"
+
+
+# Must match ``ROLE_COLUMN_LENGTH`` in migration 084, which widened the real
+# column from 10 to hold ``'system_admin'`` (12 characters). Leaving the model
+# at 10 would make the next ``alembic revision --autogenerate`` propose
+# narrowing the column back and reintroduce the bug 084 fixed.
+ROLE_COLUMN_LENGTH = 20
 
 
 class User(SQLModel, table=True):
@@ -52,7 +61,12 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True, nullable=False)
     role: UserRole = Field(
         default=UserRole.USER,
-        sa_column=Column(String(10), nullable=False, default="user", index=True),
+        sa_column=Column(
+            EnumAsString(UserRole, ROLE_COLUMN_LENGTH),
+            nullable=False,
+            default=UserRole.USER,
+            index=True,
+        ),
     )
 
 

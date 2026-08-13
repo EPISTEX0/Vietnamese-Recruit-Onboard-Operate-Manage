@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from src.modules.identity.domain.entities import UserRole
+from src.modules.identity.domain.entities import User, UserRole
 
 VERSIONS_DIR = Path(__file__).resolve().parents[3] / "alembic" / "versions"
 MIGRATION_082 = VERSIONS_DIR / "082_split_system_admin_and_hr_roles.py"
@@ -60,6 +60,32 @@ def test_role_column_is_wide_enough_for_every_role(source_084: str) -> None:
     assert len(longest.value) <= column_length, (
         f"UserRole.{longest.name} = '{longest.value}' is {len(longest.value)} chars "
         f"but users.role holds only {column_length}. Widen it in a new migration."
+    )
+
+
+def test_model_column_width_matches_the_migration(source_084: str) -> None:
+    """The model must declare the same width 084 gave the real column.
+
+    The model sat at ``VARCHAR(10)`` long after 084 widened the column to 20.
+    Nothing failed, because the test schema is built by ``alembic upgrade head``
+    rather than ``create_all`` -- but the next ``alembic revision
+    --autogenerate`` would read the model, see a narrower column and emit a
+    migration shrinking it back to 10, reinstating exactly the bug 084 fixed.
+
+    The assertion reads the width off the mapped column rather than the
+    ``ROLE_COLUMN_LENGTH`` constant: autogenerate reads the column, so a column
+    built from some other literal would drift with the constant still correct.
+    """
+    match = re.search(r"ROLE_COLUMN_LENGTH\s*=\s*(\d+)", source_084)
+    assert match, "084 must declare ROLE_COLUMN_LENGTH"
+    migration_length = int(match.group(1))
+
+    model_length = User.__table__.c.role.type.length  # type: ignore[union-attr]
+
+    assert model_length == migration_length, (
+        f"the User model maps users.role as VARCHAR({model_length}) but "
+        f"migration 084 made it VARCHAR({migration_length}); autogenerate will "
+        "propose resizing the live column to match the model."
     )
 
 
