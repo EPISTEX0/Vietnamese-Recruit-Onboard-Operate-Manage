@@ -141,8 +141,14 @@ class TestInfrastructureDetailStillReachesTheLog:
         """The detail is only useful if it is still recorded server-side.
 
         Capture is attached to the module's own logger rather than going
-        through ``caplog``, whose root-propagation the rest of the suite can
+        through ``caplog``, whose root propagation the rest of the suite can
         reconfigure -- this assertion must not depend on test ordering.
+
+        ``target.disabled`` is reset for the same reason: ``alembic/env.py``
+        calls ``fileConfig()``, which defaults to
+        ``disable_existing_loggers=True``, so every fixture that runs
+        ``alembic upgrade head`` switches off every logger already created in
+        the process -- including this one.
         """
         records: list[logging.LogRecord] = []
 
@@ -152,16 +158,18 @@ class TestInfrastructureDetailStillReachesTheLog:
 
         handler = _Collect(level=logging.ERROR)
         target = logging.getLogger("src.shared.error_logging")
-        previous_level, previous_disable = target.level, logging.root.manager.disable
+        previous = (target.level, target.disabled, logging.root.manager.disable)
 
         target.addHandler(handler)
         target.setLevel(logging.ERROR)
+        target.disabled = False
         logging.disable(logging.NOTSET)
         try:
             await _get_body(_build_app(_wrapped_storage_error()))
         finally:
             target.removeHandler(handler)
-            target.setLevel(previous_level)
-            logging.disable(previous_disable)
+            target.setLevel(previous[0])
+            target.disabled = previous[1]
+            logging.disable(previous[2])
 
         assert any(INFRA_DETAIL in record.getMessage() for record in records)
