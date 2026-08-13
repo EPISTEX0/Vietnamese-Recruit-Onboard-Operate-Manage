@@ -45,7 +45,6 @@
 - [ ] Backend: `pytest tests/ -v` pass
 - [ ] Frontend: `pnpm lint` pass
 - [ ] Frontend: `pnpm build` pass
-- [ ] Frontend: `pnpm test` pass
 - [ ] Manual verification performed (describe below)
 
 **Manual verification details:** (if applicable)

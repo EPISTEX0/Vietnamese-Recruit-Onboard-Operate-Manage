@@ -238,11 +238,10 @@ Also confirm:
 ### Frontend
 
 ```bash
-cd vroom-hr
+cd frontend
 
 pnpm lint
 pnpm build
-pnpm test
 ```
 
 Also confirm:
