@@ -19,6 +19,7 @@ class FakeSession:
     def __init__(self) -> None:
         self._settings = None
         self._flushed = False
+        self._committed = False
 
     async def execute(self, statement):
         class FakeResult:
@@ -42,6 +43,11 @@ class FakeSession:
 
     async def flush(self):
         self._flushed = True
+
+    async def commit(self):
+        # The repository's write paths commit; without this the double raises
+        # AttributeError and every write test fails before its own assertions.
+        self._committed = True
 
 
 @pytest.fixture
@@ -108,7 +114,7 @@ async def test_add_domains_duplicate_rejected() -> None:
         allowed_domains=["company.vn"],
     )
     repository = OrganizationSettingsRepository(session=session)
-    with pytest.raises(ValueError, match="already allowed"):
+    with pytest.raises(ValueError, match="đã có trong danh sách"):
         await repository.add_domains(["company.vn"])
 
 
@@ -134,7 +140,7 @@ async def test_remove_domain_not_found() -> None:
         allowed_domains=["company.vn"],
     )
     repository = OrganizationSettingsRepository(session=session)
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ValueError, match="không tìm thấy"):
         await repository.remove_domain("other.vn")
 
 
@@ -152,7 +158,7 @@ async def test_invalid_domain_rejected() -> None:
     """Invalid domain format is rejected."""
     session = FakeSession()
     repository = OrganizationSettingsRepository(session=session)
-    with pytest.raises(ValueError, match="Invalid domain"):
+    with pytest.raises(ValueError, match="không hợp lệ"):
         await repository.set_allowed_domains(["-invalid.vn"])
 
 
@@ -162,5 +168,5 @@ async def test_too_many_domains_rejected() -> None:
     session = FakeSession()
     repository = OrganizationSettingsRepository(session=session)
     domains = [f"d{i}.com" for i in range(51)]
-    with pytest.raises(ValueError, match="Too many"):
+    with pytest.raises(ValueError, match="Quá nhiều tên miền"):
         await repository.set_allowed_domains(domains)
