@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.minio_support import kb_bucket_status
 from tests.postgres_support import make_postgres_container
 
 # testcontainers / docker are integration-only dependencies.
@@ -77,6 +78,12 @@ def kb_client() -> Iterator[TestClient]:
     """
     if not _docker_available():
         pytest.skip("Docker is not available for the KB-05 integration test")
+
+    # These endpoints upload and replace files, so PostgreSQL alone is not
+    # enough; without a bucket every test here dies inside a request handler.
+    storage_available, storage_reason = kb_bucket_status()
+    if not storage_available:
+        pytest.skip(storage_reason)
 
     with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
