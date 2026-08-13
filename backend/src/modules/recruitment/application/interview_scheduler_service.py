@@ -1396,17 +1396,25 @@ class InterviewSchedulerService:
             InterviewerNotFoundError: If an interviewer ID has no Employee.
             InterviewerMissingEmailError: If a matched interviewer has no email.
         """
+        # Every unmatched id is collected before raising: R1.7 asks the client
+        # for the full list, and InterviewerNotFoundError takes a Sequence[UUID]
+        # -- handing it a formatted string makes list() shred it into characters.
         resolved: list[tuple[Any, str]] = []
+        unmatched: list[UUID] = []
         for emp_id in interviewer_ids:
             emp = await self._get_employee(emp_id)
             if emp is None:
-                raise InterviewerNotFoundError(f"Interviewer not found: employee_id={emp_id}")
+                unmatched.append(emp_id)
+                continue
             if not emp.email:
                 raise InterviewerMissingEmailError(
                     employee_id=emp_id,
                     name=emp.full_name or "Unknown",
                 )
             resolved.append((emp, emp.email))
+
+        if unmatched:
+            raise InterviewerNotFoundError(unmatched)
         return resolved
 
     async def _get_employee(self, employee_id: UUID) -> Any | None:
@@ -1442,12 +1450,22 @@ class InterviewSchedulerService:
             interviewer_emails: List of interviewer email addresses.
 
         Returns:
-            List of attendee email addresses (candidate first, then interviewers).
+            List of attendee email addresses (candidate first, then
+            interviewers), each address appearing once.
         """
+        # An interviewer may also be the candidate, or be recorded with
+        # different casing; Calendar should not be asked to invite the same
+        # mailbox twice (R5.1, R5.2). First spelling seen wins.
         attendees: list[str] = []
-        if candidate.email:
-            attendees.append(candidate.email)
-        attendees.extend(interviewer_emails)
+        seen: set[str] = set()
+        for email in [candidate.email, *interviewer_emails]:
+            if not email:
+                continue
+            key = email.strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            attendees.append(email)
         return attendees
 
     # ─── Private: Request validation ──────────────────────────────────
@@ -1479,9 +1497,13 @@ class InterviewSchedulerService:
                 f"Number of interviewers must be between 1 and 10, got {len(interviewer_ids)}"
             )
 
-        if not start.tzinfo:
-            # Accept naive datetimes (interpreted in org tz later)
-            pass
+        # R1.4: an interview cannot be booked in the past. A naive ``start``
+        # is only compared once it has been given the organization timezone,
+        # which happens later, so treat it as UTC for this bound -- the caller
+        # is rejected either way if the instant has already gone by.
+        reference = start if start.tzinfo else start.replace(tzinfo=UTC)
+        if reference <= datetime.now(UTC):
+            raise ValueError(f"Interview start must be in the future, got {start.isoformat()}")
 
         if notes and len(notes) > 1000:
             raise ValueError(f"Notes must be 1000 characters or fewer, got {len(notes)}")
