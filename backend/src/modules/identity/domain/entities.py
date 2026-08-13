@@ -89,7 +89,7 @@ class WhitelistEntry(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     value: str = Field(max_length=255, unique=True, nullable=False, index=True)
     entry_type: WhitelistEntryType = Field(
-        sa_column=Column(String(20), nullable=False),
+        sa_column=Column(EnumAsString(WhitelistEntryType, 20), nullable=False),
     )
     added_by_user_id: UUID = Field(foreign_key="users.id", nullable=False)
     created_at: datetime = Field(
@@ -341,7 +341,7 @@ class AuditLog(SQLModel, table=True):
     admin_user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     admin_email: str = Field(max_length=255, nullable=False)
     action_type: AuditActionType = Field(
-        sa_column=Column(String(50), nullable=False),
+        sa_column=Column(EnumAsString(AuditActionType, 50), nullable=False),
     )
     details: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     created_at: datetime = Field(

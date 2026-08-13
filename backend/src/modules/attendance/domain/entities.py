@@ -7,8 +7,10 @@ from datetime import UTC, date, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, Text
+from sqlalchemy import Column, DateTime, Text
 from sqlmodel import Field, SQLModel
+
+from src.shared.sql_types import EnumAsString
 
 
 class AttendanceSource(str, Enum):
@@ -50,7 +52,9 @@ class AttendanceRecord(SQLModel, table=True):
     check_out_user_agent: str | None = Field(default=None, max_length=512)
     source: AttendanceSource = Field(
         default=AttendanceSource.WEB,
-        sa_column=Column(String(20), nullable=False, default=AttendanceSource.WEB),
+        sa_column=Column(
+            EnumAsString(AttendanceSource, 20), nullable=False, default=AttendanceSource.WEB
+        ),
     )
     # HR correction fields
     corrected_by_user_id: UUID | None = Field(

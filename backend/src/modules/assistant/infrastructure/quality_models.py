@@ -9,8 +9,10 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
+
+from src.shared.sql_types import EnumAsString
 
 
 class AssistantType(str, Enum):
@@ -41,7 +43,7 @@ class AssistantChatSession(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     assistant_type: AssistantType = Field(
-        sa_column=Column(String(10), nullable=False),
+        sa_column=Column(EnumAsString(AssistantType, 10), nullable=False),
     )
     employee_id: UUID | None = Field(default=None, foreign_key="employees.id", index=True)
     start_at: datetime = Field(
@@ -74,7 +76,7 @@ class AssistantFeedbackEvent(SQLModel, table=True):
     )
     message_index: int = Field(nullable=False)
     feedback_type: FeedbackType = Field(
-        sa_column=Column(String(4), nullable=False),
+        sa_column=Column(EnumAsString(FeedbackType, 4), nullable=False),
     )
     optional_text: str | None = Field(default=None)
     created_at: datetime = Field(

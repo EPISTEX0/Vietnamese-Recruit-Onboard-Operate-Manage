@@ -11,6 +11,7 @@ from sqlalchemy import Column, DateTime, Text
 from sqlmodel import Field, SQLModel
 
 from src.modules.employee_request.domain.enums import LeaveType, RequestStatus, RequestType
+from src.shared.sql_types import EnumAsText
 
 
 class EmployeeRequest(SQLModel, table=True):
@@ -30,11 +31,13 @@ class EmployeeRequest(SQLModel, table=True):
         index=True,
     )
     request_type: RequestType = Field(
-        sa_column=Column(Text, nullable=False),
+        sa_column=Column(EnumAsText(RequestType), nullable=False),
     )
     status: RequestStatus = Field(
         default=RequestStatus.SUBMITTED,
-        sa_column=Column(Text, nullable=False, default="submitted"),
+        sa_column=Column(
+            EnumAsText(RequestStatus), nullable=False, default=RequestStatus.SUBMITTED
+        ),
     )
 
     # --- Timestamps ---
@@ -72,7 +75,9 @@ class EmployeeRequest(SQLModel, table=True):
     project_or_task: str | None = Field(default=None, max_length=255)
 
     # --- Leave-specific fields (nullable, validated by service) ---
-    leave_type: LeaveType | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    leave_type: LeaveType | None = Field(
+        default=None, sa_column=Column(EnumAsText(LeaveType), nullable=True)
+    )
     start_date: date | None = Field(default=None, index=True)
     end_date: date | None = Field(default=None)
 
