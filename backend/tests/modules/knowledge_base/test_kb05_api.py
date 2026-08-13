@@ -14,12 +14,18 @@ import uuid
 from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.minio_support import kb_bucket_status
 from tests.postgres_support import make_postgres_container
+
+if TYPE_CHECKING:
+    # Runtime imports of ``src`` stay inside the functions below, which run
+    # only after the fixture has pointed the app at the test container.
+    from src.modules.identity.domain.entities import User
 
 # testcontainers / docker are integration-only dependencies.
 docker = pytest.importorskip("docker")
@@ -58,7 +64,7 @@ def _run_alembic_upgrade_head(async_url: str) -> None:
             os.environ["DATABASE_URL"] = previous
 
 
-def _make_admin_user() -> User:  # type: ignore[name-defined]
+def _make_admin_user() -> User:
     """Build a fake admin User for auth dependency overrides."""
     from src.modules.identity.domain.entities import User, UserRole
 

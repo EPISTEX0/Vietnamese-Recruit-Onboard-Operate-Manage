@@ -50,7 +50,6 @@ from src.modules.identity.container import (
     get_jwt_utils,
     get_oauth_config_manager,
     get_oauth_service,
-    get_password_reset_service,
     get_rate_limiter,
     get_settings,
     get_token_service,
