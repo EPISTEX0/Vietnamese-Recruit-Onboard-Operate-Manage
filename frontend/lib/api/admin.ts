@@ -4,10 +4,17 @@ import { isValidationErrorDetail, formatValidationErrors } from "./validation-er
 import type { StaffRole, UserRole } from "@/lib/auth/roles";
 
 /**
- * Admin API client — typed functions for all admin endpoints.
+ * System-admin API client — typed functions for `/api/system-admin/*` only.
  *
  * Wired to NEXT_PUBLIC_API_URL via lib/api/client (Phase 0 TODO closed).
  * All requests send credentials: "include" for HttpOnly cookie auth.
+ *
+ * Scope, deliberately: every function here hangs off `BASE`. Nothing in this
+ * file may call an endpoint HR owns. It used to hold the
+ * `/api/auth/organization-google-connection` wrappers — an HR surface, reachable
+ * from a module named `admin` — and that is exactly the ambiguity that let 38 HR
+ * endpoints end up gated by system admin. The Google connection lives in
+ * `lib/api/gmail.ts`, next to the `/gmail` page that uses it.
  */
 
 // ---------------------------------------------------------------------------
@@ -84,14 +91,6 @@ export interface OAuthConfig {
   redirect_uri: string;
   updated_at: string | null;
   source: string;
-}
-
-export interface GoogleWorkspaceConnection {
-  status: 'disconnected' | 'connected' | 'reauthorization_required';
-  email: string | null;
-  has_secret: boolean;
-  redirect_url: string | null;
-  selected_calendar_id: string | null;
 }
 
 export interface AdminUser {
@@ -177,7 +176,6 @@ export interface AssistantToolConfigListResponse {
 // Helpers
 // ---------------------------------------------------------------------------
 const BASE = `${API_BASE_URL}/api/system-admin`;
-const AUTH_BASE = `${API_BASE_URL}/api/auth`;
 /**
  * Internal fetch wrapper that always sends the HttpOnly auth cookie.
  */
@@ -447,61 +445,6 @@ export async function updateOAuthConfig(data: {
     body: JSON.stringify(data),
   });
   return handleResponse<OAuthConfig>(res);
-}
-
-// ---------------------------------------------------------------------------
-// Google Workspace connection (identity router) — wired to API_BASE_URL
-// ---------------------------------------------------------------------------
-
-export async function getGoogleWorkspaceConnection(): Promise<GoogleWorkspaceConnection> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection`);
-  return handleResponse<GoogleWorkspaceConnection>(res);
-}
-
-export async function getGoogleWorkspaceAuthorizeUrl(): Promise<GoogleWorkspaceConnection> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection/reconnect`, { method: "POST" });
-  return handleResponse<GoogleWorkspaceConnection>(res);
-}
-
-export async function saveGoogleWorkspaceConnection(): Promise<GoogleWorkspaceConnection> {
-  return getGoogleWorkspaceAuthorizeUrl();
-}
-
-export async function completeGoogleWorkspaceCallback(code: string, state: string): Promise<GoogleWorkspaceConnection> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection/callback`, jsonBody({ code, state }));
-  return handleResponse<GoogleWorkspaceConnection>(res);
-}
-
-export async function disconnectGoogleWorkspaceConnection(): Promise<GoogleWorkspaceConnection> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection`, { method: "DELETE" });
-  return handleResponse<GoogleWorkspaceConnection>(res);
-}
-
-export interface CalendarEntry {
-  id: string;
-  summary: string;
-  description: string | null;
-  primary: boolean;
-  access_role: string;
-}
-
-export interface CalendarListResponse {
-  calendars: CalendarEntry[];
-  selected_calendar_id: string | null;
-}
-
-export async function getGoogleWorkspaceCalendars(): Promise<CalendarListResponse> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection/calendars`);
-  return handleResponse<CalendarListResponse>(res);
-}
-
-export async function selectGoogleWorkspaceCalendar(calendarId: string): Promise<void> {
-  const res = await adminFetch(`${AUTH_BASE}/organization-google-connection/selected-calendar`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ calendar_id: calendarId }),
-  });
-  if (!res.ok) throw new Error('Failed to select calendar');
 }
 
 // ---------------------------------------------------------------------------
