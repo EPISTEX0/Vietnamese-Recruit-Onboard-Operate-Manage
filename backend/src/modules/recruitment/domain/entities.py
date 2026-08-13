@@ -325,7 +325,9 @@ class Interview(SQLModel, table=True):
     __tablename__ = "interviews"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    candidate_id: UUID = Field(foreign_key="candidates.id", index=True, nullable=False)
+    candidate_id: UUID = Field(
+        foreign_key="candidates.id", ondelete="CASCADE", index=True, nullable=False
+    )
     # status: scheduled, completed, cancelled
     status: str = Field(default="scheduled", max_length=30, nullable=False, index=True)
     round_name: str = Field(max_length=255, nullable=False)
@@ -359,7 +361,9 @@ class InterviewParticipant(SQLModel, table=True):
     __tablename__ = "interview_participants"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    interview_id: UUID = Field(foreign_key="interviews.id", index=True, nullable=False)
+    interview_id: UUID = Field(
+        foreign_key="interviews.id", ondelete="CASCADE", index=True, nullable=False
+    )
     type: str = Field(max_length=20, nullable=False, index=True)  # candidate, employee, external
     email: str = Field(max_length=255, nullable=False)
     name: str | None = Field(
@@ -387,8 +391,12 @@ class CalendarConflict(SQLModel, table=True):
     __tablename__ = "calendar_conflicts"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    # Only ``candidate_id`` cascades on the real table; ``interview_id`` is
+    # NO ACTION (pg_constraint.confdeltype 'a'). Keep the pair asymmetric.
     interview_id: UUID = Field(foreign_key="interviews.id", index=True, nullable=False)
-    candidate_id: UUID = Field(foreign_key="candidates.id", index=True, nullable=False)
+    candidate_id: UUID = Field(
+        foreign_key="candidates.id", ondelete="CASCADE", index=True, nullable=False
+    )
     calendar_event_id: str = Field(max_length=1024, nullable=False)
     # Vroom-side snapshot at conflict time
     local_snapshot: dict[str, Any] = Field(
@@ -485,10 +493,16 @@ class JobApplicationLinkProposal(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     recruitment_inbox_item_id: UUID = Field(
-        foreign_key="recruitment_inbox_items.id", nullable=False, index=True
+        foreign_key="recruitment_inbox_items.id",
+        ondelete="CASCADE",
+        nullable=False,
+        index=True,
     )
     target_job_application_id: UUID = Field(
-        foreign_key="job_applications.id", nullable=False, index=True
+        foreign_key="job_applications.id",
+        ondelete="CASCADE",
+        nullable=False,
+        index=True,
     )
     status: str = Field(
         default=LinkProposalStatus.PENDING, max_length=20, nullable=False, index=True

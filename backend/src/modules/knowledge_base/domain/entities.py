@@ -58,6 +58,7 @@ class KnowledgeBaseChunk(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(
         foreign_key="hr_knowledge_base_documents.id",
+        ondelete="CASCADE",
     )
     chunk_index: int
     content: str = Field(sa_column=Column(Text, nullable=False))
@@ -122,6 +123,7 @@ class EmployeeKnowledgeBaseChunk(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(
         foreign_key="employee_knowledge_base_documents.id",
+        ondelete="CASCADE",
     )
     chunk_index: int
     content: str = Field(sa_column=Column(Text, nullable=False))
