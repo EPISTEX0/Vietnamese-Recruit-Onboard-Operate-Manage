@@ -290,10 +290,21 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Frontend -- `pnpm build` is blocking (it is green today and type-checks the
-  # build graph). Lint and the standalone tsc pass are reporting-only; both are
-  # red today for reasons tracked separately.
+  # build graph). Lint, the standalone tsc pass, and the vitest suite are
+  # reporting-only.
+  #
+  # `pnpm test` is reporting for now on purpose: the vitest suite was stood up in
+  # one go and has no history, so it has not yet earned the right to stop a
+  # merge. Promote it to blocking once it has been green across a run of real
+  # PRs -- the value of a blocking gate comes from its track record, not from the
+  # day it was added.
   # ---------------------------------------------------------------------------
   frontend:
+    # DO NOT rename. This exact string is a required status check on `main`
+    # (ruleset "main protection", id 16651838, alongside Gates 1/2/3/5). A rename
+    # retires the old context without ever reporting it again, and every open PR
+    # blocks forever waiting on a job that no longer exists. The step list below
+    # is free to grow; the job name is not.
     name: Frontend - lint/typecheck (reporting) + build (blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -307,6 +318,10 @@ jobs:
         with:
           version: 11
 
+      # `22` floats to the newest 22.x, which is what jsdom 30 needs
+      # (`engines: ^22.22.2 || ^24.15.0 || >=26.0.0`). Do not pin this down to an
+      # exact older 22.x — the vitest step is `continue-on-error`, so an engine
+      # mismatch would show up as a quietly red reporting check, not a failure.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -325,16 +340,22 @@ jobs:
         continue-on-error: true
         run: pnpm exec tsc --noEmit
 
+      - name: vitest
+        id: vitest
+        continue-on-error: true
+        run: pnpm test
+
       - name: Summary
         if: always()
         run: |
           {
-            echo "### Frontend lint/typecheck (reporting only)"
+            echo "### Frontend lint/typecheck/test (reporting only)"
             echo ""
             echo "| Check | Outcome |"
             echo "| --- | --- |"
             echo "| \`pnpm run lint\` | ${{ steps.eslint.outcome }} |"
             echo "| \`tsc --noEmit\` | ${{ steps.tsc.outcome }} |"
+            echo "| \`pnpm test\` | ${{ steps.vitest.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Blocking: next.config.ts sets typescript.ignoreBuildErrors=false, so this
