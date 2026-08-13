@@ -1,0 +1,335 @@
+name: CI
+
+# Gate ordering reflects value, not convenience:
+#   blocking   -> smoke-import, undefined-names, test-collection, repo-integrity
+#   reporting  -> backend-quality, backend-tests (run, surface state, never block)
+#
+# The blocking gates are deliberately narrow. Each one catches a class of failure
+# that has already reached `main` in this repo. Do not widen them into a general
+# "make the repo clean" gate -- that is what the reporting jobs are for.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+  # `AuthSettings` has four required fields and is constructed at module scope
+  # (src/main.py -> get_settings()). Locally that resolves because load_dotenv()
+  # walks up to the repo-root .env, which is gitignored and therefore absent in CI.
+  # Without these, every backend job would die on a pydantic ValidationError before
+  # reaching the thing it is supposed to measure.
+  #
+  # These are throwaway placeholders, NOT secrets. They exist so the gates test
+  # import/collection integrity rather than secret availability. Anything that
+  # needs a real credential belongs in a test that is skipped without one.
+  AUTH_GOOGLE_CLIENT_ID: ci-placeholder-client-id
+  AUTH_GOOGLE_CLIENT_SECRET: ci-placeholder-client-secret
+  AUTH_JWT_SECRET_KEY: ci-placeholder-jwt-secret
+  AUTH_OAUTH_TOKEN_ENCRYPTION_KEY: Y2ktZHVtbXkta2V5LW5vdC1mb3ItcmVhbC11c2UhISE=
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate 1 (blocking) -- the app must be importable.
+  #
+  # PR #281 merged a module-level NameError that made the backend unbootable and
+  # sat on `main` for days. This single command would have caught it.
+  # ---------------------------------------------------------------------------
+  smoke-import:
+    name: Gate 1 - smoke import
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      - name: Import the FastAPI application module
+        run: uv run --frozen --no-sync python -c "import src.main"
+
+  # ---------------------------------------------------------------------------
+  # Gate 2 (blocking) -- no undefined names in src/.
+  #
+  # F821 is the static equivalent of gate 1: it finds the NameError that gate 1
+  # only reaches if the broken line is at module level. Scoped to F821 on purpose
+  # so it stays a hard gate while the rest of the lint debt is paid down.
+  #
+  # `--select` does NOT override per-file-ignores. This PR deletes the
+  # `[tool.ruff.lint.per-file-ignores]` block that exempted
+  # src/modules/gmail/api/router.py from F821 -- which is where the undefined
+  # `HTTPException` hid -- so the inline config override below is belt and
+  # braces: it keeps the gate honest if an exemption is ever reintroduced,
+  # while keeping target-version and the rest of ruff's settings intact.
+  #
+  # NOT GREEN YET: `src` currently has 17 F821 hits outside the two files this
+  # PR fixed (assistant/application/tool_registry.py `get_message` x7,
+  # payslip/api/admin_router.py `admin_user` x6, employee_request/api/
+  # admin_router.py `admin_user` x2, gmail/api/error_handler.py `lang`,
+  # identity/api/admin_router.py `SelfDemotionError`). Until those are fixed
+  # this job blocks every PR. Fix them, or move this job to
+  # `continue-on-error: true` alongside gates 4a/4b.
+  # ---------------------------------------------------------------------------
+  undefined-names:
+    name: Gate 2 - undefined names (F821)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      - name: ruff check src --select F821
+        run: |
+          uv run --frozen --no-sync ruff check src \
+            --select F821 \
+            --config 'lint.per-file-ignores = {}'
+
+  # ---------------------------------------------------------------------------
+  # Gate 3 (blocking) -- pytest must be able to collect.
+  #
+  # Deliberately a separate job from `backend-tests`. A collection error aborts
+  # the whole run ("Interrupted"), so a red test suite and a suite that never ran
+  # at all look identical from the outside. This job makes the difference visible.
+  #
+  # NOT GREEN YET: three modules fail to collect on `AttributeError: type object
+  # 'UserRole' has no attribute 'ADMIN'` -- PR #281 renamed the enum member to
+  # SYSTEM_ADMIN/HR and left 14 `UserRole.ADMIN` references behind
+  # (tests/modules/onboarding/test_existence_before_authz_property.py,
+  # tests/modules/onboarding/test_non_admin_rejection_property.py,
+  # tests/modules/payslip/test_admin_payslip_api.py). Gate 4b's comment below
+  # already acknowledges this. Until it is fixed this job blocks every PR; fix
+  # the references, or move this job to `continue-on-error: true`.
+  # ---------------------------------------------------------------------------
+  test-collection:
+    name: Gate 3 - test collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      - name: pytest --collect-only
+        run: uv run --frozen --no-sync pytest --collect-only -q
+
+  # ---------------------------------------------------------------------------
+  # Gate 5 (blocking) -- repository integrity. Cheap, currently green.
+  #
+  # Two failure modes that are silent until deploy time:
+  #   - uv.lock drifting out of sync with pyproject.toml
+  #   - two branches each adding a migration off the same parent, producing
+  #     multiple Alembic heads after merge, which makes `alembic upgrade head` fail
+  # ---------------------------------------------------------------------------
+  repo-integrity:
+    name: Gate 5 - repo integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+
+      - run: uv sync --frozen --extra dev
+
+      - name: Alembic has exactly one head
+        run: |
+          output=$(uv run --frozen --no-sync alembic heads)
+          echo "$output"
+          count=$(printf '%s\n' "$output" | grep -c '(head)' || true)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly 1 Alembic head, found $count. Merge the migration branches."
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Gate 4a (reporting) -- full lint and format state.
+  #
+  # Currently red. Every step is continue-on-error so the job reports the whole
+  # picture instead of stopping at the first failure, and so lint debt does not
+  # block merges while it is being paid down. Flip these to blocking once green.
+  # ---------------------------------------------------------------------------
+  backend-quality:
+    name: Gate 4a - backend lint/format (reporting)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      - name: ruff check
+        id: ruff_check
+        continue-on-error: true
+        run: uv run --frozen --no-sync ruff check src tests
+
+      - name: ruff format --check
+        id: ruff_format
+        continue-on-error: true
+        run: uv run --frozen --no-sync ruff format --check src tests
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Backend lint/format (reporting only)"
+            echo ""
+            echo "| Check | Outcome |"
+            echo "| --- | --- |"
+            echo "| \`ruff check src tests\` | ${{ steps.ruff_check.outcome }} |"
+            echo "| \`ruff format --check src tests\` | ${{ steps.ruff_format.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Gate 4b (reporting) -- the test suite itself.
+  #
+  # Reporting-only because it cannot currently run: collection aborts first (see
+  # gate 3). It stays here so the real state is visible, and so the day gate 3
+  # goes green this job immediately starts reporting actual test results.
+  # ---------------------------------------------------------------------------
+  backend-tests:
+    name: Gate 4b - backend tests (reporting)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      # Several integration tests spin up containers via testcontainers; Docker is
+      # preinstalled on ubuntu-latest runners.
+      #
+      # The explicit `timeout` matters: a job-level timeout-minutes kill is NOT
+      # covered by continue-on-error and would turn this reporting-only job red.
+      # Bounding the command instead keeps a hung test a step failure.
+      - name: pytest
+        id: pytest
+        continue-on-error: true
+        run: timeout 2100 uv run --frozen --no-sync pytest -q
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Backend tests (reporting only)"
+            echo ""
+            echo "\`pytest -q\` outcome: **${{ steps.pytest.outcome }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Frontend -- `pnpm build` is blocking (it is green today and type-checks the
+  # build graph). Lint and the standalone tsc pass are reporting-only; both are
+  # red today for reasons tracked separately.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend - lint/typecheck (reporting) + build (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: eslint
+        id: eslint
+        continue-on-error: true
+        run: pnpm run lint
+
+      - name: tsc --noEmit
+        id: tsc
+        continue-on-error: true
+        run: pnpm exec tsc --noEmit
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Frontend lint/typecheck (reporting only)"
+            echo ""
+            echo "| Check | Outcome |"
+            echo "| --- | --- |"
+            echo "| \`pnpm run lint\` | ${{ steps.eslint.outcome }} |"
+            echo "| \`tsc --noEmit\` | ${{ steps.tsc.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Blocking: next.config.ts sets typescript.ignoreBuildErrors=false, so this
+      # type-checks everything reachable from the build graph as well.
+      - name: next build
+        run: pnpm run build
