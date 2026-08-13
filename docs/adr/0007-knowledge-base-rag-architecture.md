@@ -16,6 +16,8 @@ Hệ thống bổ sung RAG retrieval cho AI Assistant và Employee Assistant th�
 
 - **Dùng chung provider cho embedding**: tận dụng endpoint OpenAI-compatible đã cấu hình. Bị loại vì `AITeamVN/Vietnamese_Embedding_v2` cho chất lượng tiếng Việt tốt hơn đáng kể và có thể chạy local, không gửi dữ liệu tài liệu nội bộ ra ngoài. Embedding model chạy trong Docker service riêng, không phụ thuộc vào provider chat.
 
+  > **Đã thay đổi.** Lựa chọn này về sau được chấp nhận — xem [ADR 0012](./0012-operator-configured-embedding-endpoint.md). `vroom-embedding` giờ proxy tới endpoint OpenAI-compatible do operator cấu hình; phần còn lại của ADR này (hai KB tách biệt, pgvector, ingestion bất đồng bộ, context injection) vẫn nguyên giá trị.
+
 ## Consequences
 
 - **Thêm 1 Docker service** (`vroom-embedding`) vào docker-compose, tăng RAM usage ~1-2GB cho model embedding tiếng Việt.

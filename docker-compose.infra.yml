@@ -25,13 +25,22 @@ services:
     ports:
       - "8080:8080"
     environment:
-      EMBEDDING_MODEL_NAME: AITeamVN/Vietnamese_Embedding_v2
+      # Required, no default — see .env.example.
+      EMBEDDING_API_BASE_URL: ${EMBEDDING_API_BASE_URL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      # Required, no default — see .env.example.
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-10}
+      EMBEDDING_TIMEOUT: ${EMBEDDING_TIMEOUT:-12}
+      EMBEDDING_MAX_RETRIES: ${EMBEDDING_MAX_RETRIES:-1}
+      EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 120s
+      retries: 5
+      start_period: 15s
 
   redis:
     image: redis:7

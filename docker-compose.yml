@@ -9,7 +9,6 @@ networks:
 volumes:
   postgres_data:
   minio_data:
-  embedding-model-cache:
 
 x-logging: &default-logging
   driver: "json-file"
@@ -61,8 +60,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:${EMBEDDING_PORT:-8080}:8080"
-    volumes:
-      - embedding-model-cache:/app/model_cache
     networks:
       - vroom-internal-net
       - vroom-public-net
@@ -70,22 +67,36 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     environment:
-      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-AITeamVN/Vietnamese_Embedding_v2}
-      MODEL_CACHE_DIR: /app/model_cache
-      HF_TOKEN: ${HF_TOKEN:-}
+      # Required, no default: this service hosts no model and must be pointed
+      # at an OpenAI-compatible /embeddings endpoint you choose. See .env.example.
+      EMBEDDING_API_BASE_URL: ${EMBEDDING_API_BASE_URL:-}
+      # Required. Left unset here so unrelated compose commands still work;
+      # the service itself refuses to start with a clear error if it is empty.
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      # Required, no default: model names are endpoint-specific.
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      # Provider caps a single /embeddings call at 10 inputs.
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-10}
+      # Worst-case retry budget stays under the 30s the retrieval path allows.
+      EMBEDDING_TIMEOUT: ${EMBEDDING_TIMEOUT:-12}
+      EMBEDDING_MAX_RETRIES: ${EMBEDDING_MAX_RETRIES:-1}
+      # Set false for endpoints that reject an explicit `dimensions` field
+      # (e.g. vLLM with a non-Matryoshka model).
+      EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-true}
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 3072M
+          cpus: '0.5'
+          memory: 256M
         reservations:
-          memory: 1024M
+          memory: 64M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 15s
       timeout: 5s
-      retries: 20
-      start_period: 120s
+      retries: 5
+      start_period: 15s
     logging: *default-logging
 
   redis:

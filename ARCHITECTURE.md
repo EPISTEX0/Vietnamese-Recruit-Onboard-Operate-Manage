@@ -34,7 +34,7 @@ flowchart TB
         PG["<b>PostgreSQL 15 + pgvector</b><br/>Relational model + <code>hr_knowledge_base_chunks</code><br/>and <code>employee_knowledge_base_chunks</code><br/>(Vector(1024))"]
         R["<b>Redis 7</b><br/>Cache + ARQ job queue"]
         MO["<b>MinIO</b><br/>S3-compatible object storage:<br/>raw PDF/DOCX, CVs, employee documents"]
-        EMB["<b>vroom-embedding</b><br/>SentenceTransformer<br/>AITeamVN/Vietnamese_Embedding_v2<br/>POST /embed -> 1024-dim vectors"]
+        EMB["<b>vroom-embedding</b><br/>Proxy to OpenAI-compatible<br/>/embeddings endpoint<br/>POST /embed -> 1024-dim vectors"]
     end
 
     subgraph Workers["Background Workers (ARQ)"]
@@ -75,7 +75,7 @@ flowchart TB
     class W1,W2,W3,LLM1,LLM2,EMB2 worker
 ```
 
-**Reading guide.** A single HTTP client (browser) talks to the Next.js 15 frontend, which proxies API calls to the FastAPI backend. The backend is the only process that owns write access to PostgreSQL. All long-running or event-driven work (Gmail polling, Knowledge Base ingestion, onboarding) is delegated to ARQ workers running off the same Redis queue. LLM capability is reached through two adapter kinds: **pipeline calls** (CV parsing, intent classification) and **conversational assistant calls**; both use OpenAI-compatible endpoints, and embeddings go through the self-hosted `vroom-embedding` service.
+**Reading guide.** A single HTTP client (browser) talks to the Next.js 15 frontend, which proxies API calls to the FastAPI backend. The backend is the only process that owns write access to PostgreSQL. All long-running or event-driven work (Gmail polling, Knowledge Base ingestion, onboarding) is delegated to ARQ workers running off the same Redis queue. LLM capability is reached through two adapter kinds: **pipeline calls** (CV parsing, intent classification) and **conversational assistant calls**; both use OpenAI-compatible endpoints, and embeddings go through the `vroom-embedding` service, which forwards to an OpenAI-compatible `/embeddings` endpoint configured by the operator.
 
 ---
 
@@ -107,7 +107,7 @@ flowchart LR
     EMPA["HR Publisher<br/>(publishes to Employee KB)"]
 
     ING["<b>ARQ kb-worker</b><br/>ingest_document (max_tries=3)"]
-    EMP["<b>vroom-embedding</b><br/>Vietnamese_Embedding_v2 · 1024-dim"]
+    EMP["<b>vroom-embedding</b><br/>configured /embeddings endpoint · 1024-dim"]
     MO["<b>MinIO</b><br/>bucket <code>knowledge-base</code>"]
     PG["<b>PostgreSQL pgvector</b>"]
 
@@ -151,7 +151,7 @@ flowchart LR
 1. HR uploads a PDF/DOCX through the client → the backend `/api/knowledge-base` router writes document metadata (`status = pending`) and enqueues an `ingest_document` ARQ job on the `kb-worker` queue.
 2. The **kb-worker** pulls the job (Redis), stores the raw file in MinIO, and parses it (PDF via PyMuPDF, DOCX via python-docx).
 3. The document is split into chunks of ~512 tokens with ~50-token overlap (`KB_CHUNK_SIZE_TOKENS`, `KB_CHUNK_OVERLAP_TOKENS`).
-4. Each chunk is embedded via the self-hosted **vroom-embedding** service (`AITeamVN/Vietnamese_Embedding_v2`) → 1024-dim normalized vector.
+4. Each chunk is embedded via the **vroom-embedding** service, which batches the chunks onto the configured OpenAI-compatible `/embeddings` endpoint → 1024-dim vector.
 5. Chunks + vectors + metadata are written to the appropriate table set in PostgreSQL (**pgvector**), and `status` flips to `indexed`. Failed jobs retry up to 3 times before the final failure is recorded.
 
 ---
@@ -255,7 +255,7 @@ The backend is the **single owner** of database writes; workers write only throu
 - **PostgreSQL 15 + pgvector** — relational HR model plus two `Vector(1024)` chunk tables for the dual KBs.
 - **Redis 7** — cache and ARQ job/broker backbone.
 - **MinIO** — S3-compatible object storage for raw documents (`knowledge-base` bucket), CVs (`recruitment-cv`), and employee documents.
-- **vroom-embedding** — self-hosted FastAPI service wrapping `AITeamVN/Vietnamese_Embedding_v2` (sentence-transformers), exposing `GET /health` and `POST /embed` returning 1024-dim normalized vectors. Runs as its own container and is shared by the KB ingestion and retrieval paths.
+- **vroom-embedding** — FastAPI service exposing `GET /health` and `POST /embed`, returning 1024-dim vectors. It holds no model itself: it forwards to whichever OpenAI-compatible `/embeddings` endpoint `EMBEDDING_API_BASE_URL` names (a cloud API, or a local one such as vLLM/TEI if data locality is required), splitting requests into provider-sized batches and verifying vector width at startup. Runs as its own container and is shared by the KB ingestion and retrieval paths.
 
 ### 4.5 AI Adapters
 
@@ -274,7 +274,7 @@ Both **AI Automation** (pipeline: CV parse, intent classification) and the **AI 
 3. **AI boundary is structural, not conventional.** The LLM is never given a tool capable of writing to the database. The HR Assistant can only *draft* (it proposes; HR confirms and calls a real endpoint). The Employee Assistant additionally cannot touch the HR Knowledge Base or other employees' data.
 4. **Dual-KB physical isolation.** Separate tables per KB (see §2) — an Employee query cannot reach HR-only chunks even with a retrieval bug, because the data lives in different tables.
 5. **Secrets.** JWT signing key, password salt, OAuth token encryption key are base64/hex secrets that must be rotated in production (`backend/.env.example` documents generation commands). OAuth tokens are encrypted at rest (AES-256-GCM).
-6. **Network topology (Docker).** `vroom-internal-net` is an internal-only network; only `postgres`, `redis`, `minio`, and the workers live there. The `vroom-public-net` carries only the backend, frontend, and embedding service (which needs HF model access via configured DNS).
+6. **Network topology (Docker).** `vroom-internal-net` is an internal-only network; only `postgres`, `redis`, `minio`, and the workers live there. The `vroom-public-net` carries only the backend, frontend, and embedding service (which needs outbound access to the configured embeddings endpoint via configured DNS).
 
 ## 6. Data Isolation Models
 

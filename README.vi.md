@@ -36,7 +36,7 @@ Vroom HR vượt xa phần mềm HRM truyền thống bằng cách tích hợp *
 
 **Bốn trụ cột chính:**
 
-1. **Tự host & Single-Tenant** — Riêng tư dữ liệu 100%. Mỗi deployment phục vụ đúng một công ty với database, object storage và dịch vụ embedding riêng. Không dùng chung tenancy, không phơi bày dữ liệu cho bên thứ ba.
+1. **Tự host & Single-Tenant** — Mỗi deployment phục vụ đúng một công ty, với database và object storage chạy trên hạ tầng của bạn. Không dùng chung tenancy. Các năng lực AI (LLM và embedding) được gọi qua endpoint OpenAI-compatible do **bạn** cấu hình — trỏ tới cloud API để triển khai nhẹ, hoặc trỏ tới endpoint trong mạng nội bộ nếu cần dữ liệu không rời hệ thống.
 2. **Tự động hóa bằng AI** — Tự động **parse CV**, **phân loại intent của email ứng tuyển (job application)**, và **tích hợp Gmail** liền mạch để đưa vào pipeline tuyển dụng với bước review có sự xác nhận của con người (human-in-the-loop).
 3. **Dual-KB RAG Knowledge Base** — Hai **kho tri thức cách ly về mặt vật lý** (HR KB và Employee KB) được index bằng **pgvector** và **MinIO**, phục vụ các trợ lý AI hiểu rõ domain cho cả HR lẫn nhân viên.
 4. **All-in-One HR Suite** — Một nền tảng bao trùm toàn bộ hành trình nhân sự: **Recruit → Onboard → Operate → Manage**, bao gồm chấm công, yêu cầu nhân viên và payslip.
@@ -59,7 +59,7 @@ Vroom HR vượt xa phần mềm HRM truyền thống bằng cách tích hợp *
 | **AI Automation** | Các tác vụ AI chạy nền theo event — không có hội thoại. Phân loại email đến, parse CV thành dữ liệu có cấu trúc, và đưa ứng viên được accepted thẳng vào onboarding. |
 | **AI Assistant (HR)** | Trợ lý hội thoại *đọc* dữ liệu recruitment & onboarding và *soạn thảo* proposal (ví dụ email mời phỏng vấn); nó không bao giờ tự ghi database — HR xác nhận mọi write (human-in-the-loop). |
 | **AI Assistant (Employee)** | Trợ lý self-service chỉ đọc dữ liệu của chính nhân viên đang hỏi và có thể soạn draft các request thuộc về nhân viên (nghỉ phép, làm thêm giờ), không bao giờ tự ghi dữ liệu. |
-| **Dual-KB RAG** | Hai kho tri thức cách ly về vật lý: **HR KB** (tài liệu chỉ dành cho HR) và **Employee KB** (tài liệu do HR publish). Ingestion diễn ra bất đồng bộ qua ARQ worker: PDF/DOCX → chunk → embed (embedding tiếng Việt 1024 chiều) → pgvector, file gốc lưu trên MinIO. |
+| **Dual-KB RAG** | Hai kho tri thức cách ly về vật lý: **HR KB** (tài liệu chỉ dành cho HR) và **Employee KB** (tài liệu do HR publish). Ingestion diễn ra bất đồng bộ qua ARQ worker: PDF/DOCX → chunk → embed (vector 1024 chiều, qua endpoint embedding bạn cấu hình) → pgvector, file gốc lưu trên MinIO. |
 | **Onboarding** | Onboarding dựa trên checklist, được kích hoạt bởi event `candidate_accepted`. `OnboardingProcess` với các task cố định; nhân viên trở thành **active** khi mọi task bắt buộc cùng thông tin department/position/manager/start-date được hoàn tất. |
 | **Employee Self-Service** | Tài khoản nhân viên được kích hoạt sau onboarding: hồ sơ, request nghỉ phép & làm thêm giờ, chấm công, payslip. |
 | **Operate & Manage** | Bản ghi chấm công (Attendance), Employee Request (nghỉ phép/làm thêm giờ) do HR review, publish Payslip (chỉ đọc cho nhân viên). |
@@ -82,8 +82,16 @@ cd Vietnamese-Recruit-Onboard-Operate-Manage
 docker compose up -d postgres redis
 
 # Tùy chọn — full RAG stack (dịch vụ embedding + object storage MinIO):
+# cp .env.example .env   # rồi đặt EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY
 # docker compose up -d
 ```
+
+> `vroom-embedding` là một proxy mỏng: nó gọi tới endpoint `/embeddings`
+> OpenAI-compatible mà bạn cấu hình, đúng theo cách `RECRUITMENT_LLM_BASE_URL`
+> và `ASSISTANT_LLM_BASE_URL` đang hoạt động. Lúc khởi động, service kiểm tra
+> endpoint có trả về vector đúng `EMBEDDING_DIMENSIONS` chiều hay không và sẽ
+> dừng ngay nếu lệch, nên một model cấu hình sai không thể làm hỏng index
+> pgvector.
 
 ### 2. Backend
 
@@ -155,7 +163,12 @@ pnpm dev                             # http://localhost:3000
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Thông tin quản trị container PostgreSQL | `postgres` / `postgres` / `vroom_hr` |
 | `REDIS_PASSWORD` | Mật khẩu container Redis | — |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Mật khẩu quản trị container MinIO | `vroomminio` / `vroomminio` |
-| `EMBEDDING_MODEL_NAME` | Model embedding tiếng Việt cho `vroom-embedding` | `AITeamVN/Vietnamese_Embedding_v2` |
+| `EMBEDDING_API_BASE_URL` | Endpoint `/embeddings` OpenAI-compatible mà `vroom-embedding` gọi tới. Không có mặc định — service sẽ không khởi động cho tới khi bạn đặt giá trị. Trỏ tới một API hosted, hoặc tới endpoint trong mạng nội bộ (vLLM, TEI, LocalAI) nếu muốn nội dung tài liệu không rời hệ thống | — **(bắt buộc)** |
+| `EMBEDDING_API_KEY` | API key của endpoint đó (để trống nếu endpoint không yêu cầu) | — |
+| `EMBEDDING_MODEL_NAME` | Tên model đúng như endpoint của bạn định danh (ví dụ `BAAI/bge-m3` cho endpoint nội bộ, `text-embedding-3-small` cho API hosted). Không có mặc định — để trống sẽ hoá trang thành lỗi 502 từ upstream thay vì lỗi cấu hình | — **(bắt buộc)** |
+| `EMBEDDING_DIMENSIONS` | Số chiều vector; phải khớp cột pgvector `Vector(1024)` | `1024` |
+| `EMBEDDING_BATCH_SIZE` | Số text tối đa mỗi request lên provider (provider mặc định giới hạn 10) | `10` |
+| `EMBEDDING_SEND_DIMENSIONS` | Có gửi tham số `dimensions` hay không; đặt `false` nếu endpoint từ chối (ví dụ vLLM với model không hỗ trợ Matryoshka) | `true` |
 | `EMBEDDING_PORT` | Port dịch vụ `vroom-embedding` | `8080` |
 ### Frontend (`frontend/.env.local`)
 
@@ -177,7 +190,7 @@ Client (Next.js 15)  ──►  FastAPI Backend  ──►  PostgreSQL (pgvector
         │                      │   └──────► MinIO (object storage)
         │                      └──────────► ARQ Workers (gmail · kb · onboarding)
         │                                   │
-        │                                   └──► LLM Adapters ──► vroom-embedding (1024-dim)
+        │                                   └──► LLM Adapters ──► vroom-embedding ──► endpoint embeddings (1024-dim)
         └────────────────────────────────────────────┘
 ```
 

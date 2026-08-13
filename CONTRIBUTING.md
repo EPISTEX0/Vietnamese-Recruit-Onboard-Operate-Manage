@@ -129,7 +129,7 @@ pnpm dev   # http://localhost:3000
 │   └── agents/           # Agent/workflow conventions
 ├── backend/              # FastAPI + SQLModel + PostgreSQL (uv)
 ├── frontend/             # Next.js 15 frontend (package vroom-hr, pnpm)
-└── vroom-embedding/      # Embedding microservice (Docker)
+└── vroom-embedding/      # Embedding microservice (Docker) — proxies to a configured OpenAI-compatible endpoint
 ```
 
 ---

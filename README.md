@@ -36,7 +36,7 @@ Vroom HR goes beyond traditional HRM software by embedding **AI automation and a
 
 **Four key pillars:**
 
-1. **Self-Hosted & Single-Tenant** — 100% data privacy. Each deployment serves exactly one company with its own database, object storage, and embedding service. No shared tenancy, no third-party data exposure.
+1. **Self-Hosted & Single-Tenant** — Each deployment serves exactly one company, with its own database and object storage running on your infrastructure. No shared tenancy. AI capabilities (LLM and embeddings) are reached through OpenAI-compatible endpoints that **you** configure — point them at a cloud API for a lighter deployment, or at an endpoint inside your own network to keep data local.
 2. **AI Automation** — Automated **CV parsing**, **job-application intent classification** of inbound emails, and seamless **Gmail integration** that feeds the recruitment pipeline with human-in-the-loop review.
 3. **Dual-KB RAG Knowledge Base** — Two **physically isolated** knowledge bases (HR KB and Employee KB) indexed with **pgvector** and **MinIO**, powering domain-aware AI assistants for both HR and employees.
 4. **All-in-One HR Suite** — One platform covering the entire workforce journey: **Recruit → Onboard → Operate → Manage**, including attendance, employee requests, and payslips.
@@ -59,7 +59,7 @@ Vroom HR goes beyond traditional HRM software by embedding **AI automation and a
 | **AI Automation** | Event-driven background tasks — no chat. Classifies inbound emails, parses CVs into structured data, and moves accepted candidates straight into onboarding. |
 | **AI Assistant (HR)** | Conversational assistant that *reads* recruitment & onboarding data and *drafts* proposals (e.g. interview invitations); it never writes to the database — HR confirms every write (human-in-the-loop). |
 | **AI Assistant (Employee)** | Self-service assistant that reads only the asking employee's own data and can draft employee-owned requests (leave, overtime), never writing on its own. |
-| **Dual-KB RAG** | Two physically isolated knowledge bases: **HR KB** (HR-only docs) and **Employee KB** (docs HR publishes). Ingestion is asynchronous via an ARQ worker: PDF/DOCX → chunk → embed (1024-dim Vietnamese embeddings) → pgvector, with raw files stored on MinIO. |
+| **Dual-KB RAG** | Two physically isolated knowledge bases: **HR KB** (HR-only docs) and **Employee KB** (docs HR publishes). Ingestion is asynchronous via an ARQ worker: PDF/DOCX → chunk → embed (1024-dim vectors, via your configured embeddings endpoint) → pgvector, with raw files stored on MinIO. |
 | **Onboarding** | Checklist-driven onboarding triggered by the `candidate_accepted` event. `OnboardingProcess` with fixed tasks; the employee becomes **active** once all mandatory tasks and department/position/manager/start-date are complete. |
 | **Employee Self-Service** | Employee accounts activated after onboarding: profile, leave & overtime requests, attendance, payslips. |
 | **Operate & Manage** | Attendance records, Employee Requests (leave/overtime) reviewed by HR, Payslip publishing (read-only for employees). |
@@ -82,8 +82,15 @@ cd Vietnamese-Recruit-Onboard-Operate-Manage
 docker compose up -d postgres redis
 
 # Optional — full RAG stack (embedding service + MinIO object storage):
+# cp .env.example .env   # then set EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY
 # docker compose up -d
 ```
+
+> `vroom-embedding` is a thin proxy: it calls whichever OpenAI-compatible
+> `/embeddings` endpoint you configure, the same way `RECRUITMENT_LLM_BASE_URL`
+> and `ASSISTANT_LLM_BASE_URL` work. It verifies at startup that the endpoint
+> returns `EMBEDDING_DIMENSIONS`-wide vectors and refuses to start otherwise,
+> so a misconfigured model cannot corrupt the pgvector index.
 
 ### 2. Backend
 
@@ -155,7 +162,12 @@ pnpm dev                             # http://localhost:3000
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | PostgreSQL container credentials | `postgres` / `postgres` / `vroom_hr` |
 | `REDIS_PASSWORD` | Redis container password | — |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | MinIO container admin credentials | `vroomminio` / `vroomminio` |
-| `EMBEDDING_MODEL_NAME` | Vietnamese embedding model for `vroom-embedding` | `AITeamVN/Vietnamese_Embedding_v2` |
+| `EMBEDDING_API_BASE_URL` | OpenAI-compatible embeddings endpoint `vroom-embedding` calls. No default — the service refuses to start until you set it. Point it at a hosted API, or at an endpoint on your own network (vLLM, TEI, LocalAI) to keep document text in-house | — **(required)** |
+| `EMBEDDING_API_KEY` | API key for that endpoint (leave empty if yours needs none) | — |
+| `EMBEDDING_MODEL_NAME` | Embedding model name exactly as your endpoint spells it (e.g. `BAAI/bge-m3` locally, `text-embedding-3-small` hosted). No default — unset, it would surface as an upstream 502 instead of a config error | — **(required)** |
+| `EMBEDDING_DIMENSIONS` | Vector width; must match the `Vector(1024)` pgvector column | `1024` |
+| `EMBEDDING_BATCH_SIZE` | Max texts per upstream call (the default provider caps at 10) | `10` |
+| `EMBEDDING_SEND_DIMENSIONS` | Send an explicit `dimensions` field; set `false` for endpoints that reject it (e.g. vLLM with a non-Matryoshka model) | `true` |
 | `EMBEDDING_PORT` | `vroom-embedding` service port | `8080` |
 ### Frontend (`frontend/.env.local`)
 
@@ -177,7 +189,7 @@ Client (Next.js 15)  ──►  FastAPI Backend  ──►  PostgreSQL (pgvector
         │                      │   └──────► MinIO (object storage)
         │                      └──────────► ARQ Workers (gmail · kb · onboarding)
         │                                   │
-        │                                   └──► LLM Adapters ──► vroom-embedding (1024-dim)
+        │                                   └──► LLM Adapters ──► vroom-embedding ──► embeddings endpoint (1024-dim)
         └────────────────────────────────────────────┘
 ```
 
