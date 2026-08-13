@@ -97,7 +97,7 @@ def hr_user() -> User:
         name="HR",
         avatar_url=None,
         password_hash="x",
-        role="admin",
+        role="hr",
         must_change_password=False,
         created_at=datetime.now(UTC),
         last_login=datetime.now(UTC),

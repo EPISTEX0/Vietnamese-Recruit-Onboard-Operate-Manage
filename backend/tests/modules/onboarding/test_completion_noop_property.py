@@ -199,7 +199,7 @@ def _admin_actor() -> User:
         email="hr.admin@example.com",
         name="HR Admin",
         google_sub=f"google-sub-{uuid4()}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 

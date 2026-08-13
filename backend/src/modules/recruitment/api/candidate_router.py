@@ -91,15 +91,15 @@ def _get_minio_client() -> RecruitmentMinIOClient:
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
-async def require_admin(current_user: CurrentUserDep) -> User:
+async def require_hr(current_user: CurrentUserDep) -> User:
     from fastapi import HTTPException
 
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if current_user.role != UserRole.HR:
+        raise HTTPException(status_code=403, detail="HR access required")
     return current_user
 
 
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 CandidateLifecycleServiceDep = Annotated[
     CandidateLifecycleService, Depends(get_candidate_lifecycle_service)
 ]
@@ -520,7 +520,7 @@ async def reschedule_interview(
 async def create_interview(
     candidate_id: UUID,
     body: CreateInterviewRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: InterviewSchedulerServiceDep,
 ) -> InterviewResponse:
     """Create a new interview with a Calendar event on the selected calendar.
@@ -602,7 +602,7 @@ async def create_interview(
 async def complete_interview(
     candidate_id: UUID,
     interview_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: InterviewSchedulerServiceDep,
 ) -> InterviewResponse:
     """Mark an Interview as completed.
@@ -669,7 +669,7 @@ async def complete_interview(
 async def cancel_interview(
     candidate_id: UUID,
     interview_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: InterviewSchedulerServiceDep,
 ) -> InterviewResponse:
     """Cancel an Interview and send Calendar cancellation.
@@ -739,7 +739,7 @@ async def create_replacement_interview(
     candidate_id: UUID,
     interview_id: UUID,
     body: CreateInterviewRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: InterviewSchedulerServiceDep,
 ) -> InterviewResponse:
     """Create a replacement Interview after cancellation.
@@ -992,7 +992,7 @@ async def archive_candidate(
 async def assign_candidate(
     candidate_id: UUID,
     body: AssignCandidateRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: CandidateLifecycleServiceDep,
 ) -> CandidateResponse:
     """Assign an unassigned Candidate to an open Job Opening.
@@ -1028,7 +1028,7 @@ async def assign_candidate(
 async def reassign_candidate(
     candidate_id: UUID,
     body: ReassignCandidateRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: CandidateLifecycleServiceDep,
 ) -> CandidateResponse:
     """Reassign a Candidate to a different open Job Opening.
@@ -1063,7 +1063,7 @@ async def reassign_candidate(
 )
 async def unassign_candidate(
     candidate_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     candidate_service: CandidateLifecycleServiceDep,
 ) -> CandidateResponse:
     """Remove a Candidate's assignment to a Job Opening.

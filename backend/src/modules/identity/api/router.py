@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.modules.employee.domain.entities import Employee
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.api.dependencies import PasswordResetServiceDep
 from src.modules.identity.api.schemas import (
     AuthLoginRequest,
@@ -100,7 +100,7 @@ OAuthServiceDep = Annotated[OAuthService, Depends(get_oauth_service)]
 RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
 AuthSettingsDep = Annotated[AuthSettings, Depends(get_settings)]
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
-AdminOnlyDep = Annotated[User, Depends(require_admin)]
+HROnlyDep = Annotated[User, Depends(require_hr)]
 OAuthConfigManagerDep = Annotated[OAuthConfigManager, Depends(get_oauth_config_manager)]
 
 # Compatibility alias for router tests and older dependency overrides.
@@ -241,7 +241,7 @@ async def setup(
 @router.post("/organization-google-connection")
 async def save_google_connection_config(
     body: OAuthConfigUpdateRequest,
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     manager: OAuthConfigManagerDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
@@ -257,7 +257,7 @@ async def save_google_connection_config(
 
 @router.get("/organization-google-connection/authorize-url")
 async def authorize_google_connection(
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.initiate(current_user)
@@ -266,7 +266,7 @@ async def authorize_google_connection(
 
 @router.get("/organization-google-connection")
 async def get_google_connection(
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.get_status()
@@ -275,7 +275,7 @@ async def get_google_connection(
 
 @router.post("/organization-google-connection/reconnect")
 async def reconnect_google_connection(
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.initiate(current_user)
@@ -286,7 +286,7 @@ async def reconnect_google_connection(
 async def callback_google_connection_redirect(
     code: str,
     state: str,
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> RedirectResponse:
     """Complete Organization Google consent using the env-configured redirect URI."""
@@ -297,7 +297,7 @@ async def callback_google_connection_redirect(
 
 @router.delete("/organization-google-connection")
 async def disconnect_google_connection(
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.disconnect(current_user)
@@ -307,7 +307,7 @@ async def disconnect_google_connection(
 @router.post("/organization-google-connection/callback")
 async def callback_google_connection(
     body: GoogleWorkspaceCallbackRequest,
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.callback(hr=current_user, state=body.state, code=body.code)
@@ -346,7 +346,7 @@ class SelectCalendarRequest(BaseModel):
 
 @router.get("/organization-google-connection/calendars")
 async def list_calendars_for_selection(
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
     session: AsyncSession = Depends(get_db_session),
 ) -> CalendarListResponseSchema:
@@ -381,7 +381,7 @@ async def list_calendars_for_selection(
 @router.put("/organization-google-connection/selected-calendar", status_code=204)
 async def save_selected_calendar(
     body: SelectCalendarRequest,
-    current_user: AdminOnlyDep,
+    current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
 ) -> None:
     """Save the selected calendar ID for interview scheduling."""

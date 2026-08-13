@@ -1,8 +1,13 @@
-"""FastAPI router for admin-only endpoints.
+"""FastAPI router for system-administration endpoints.
 
-Defines the /api/admin/* endpoints for managing whitelist entries,
-OAuth configuration, user roles, and audit logs. All endpoints require
-the authenticated user to have the Admin role.
+Defines the /api/system-admin/* endpoints for managing whitelist entries,
+OAuth configuration, LLM provider credentials, user roles, and audit logs.
+Every endpoint here requires the SYSTEM_ADMIN role (ADR-0009).
+
+This module also owns the two shared role guards, ``require_system_admin``
+and ``require_hr``. There is deliberately no generic ``require_admin``: an
+alias that accepts either role is how 38 HR endpoints silently ended up
+gated by SYSTEM_ADMIN. Call sites must name the role they mean.
 """
 
 from __future__ import annotations
@@ -45,6 +50,8 @@ from src.modules.identity.api.admin_schemas import (
     PaginatedAuditLogsResponse,
     RoleUpdateRequest,
     SetCredentialSourceRequest,
+    StaffAccountCreateRequest,
+    StaffAccountCreateResponse,
     UpdateProviderConfigRequest,
 )
 from src.modules.identity.api.schemas import (
@@ -56,6 +63,10 @@ from src.modules.identity.api.schemas import (
     WhitelistListResponse,
 )
 from src.modules.identity.application.audit_service import AuditService
+from src.modules.identity.application.auth_service import (
+    AccountAlreadyExistsError,
+    AuthService,
+)
 from src.modules.identity.application.oauth_config_manager import (
     OAuthConfigManager,
     OAuthConfigValidationError,
@@ -71,11 +82,13 @@ from src.modules.identity.application.organization_ai_config_service import (
 from src.modules.identity.application.role_service import (
     LastAdminError,
     RoleService,
+    SelfDemotionError,
     SuperAdminProtectedError,
     UserNotFoundError,
 )
 from src.modules.identity.application.whitelist_manager import WhitelistManager
 from src.modules.identity.container import (
+    get_auth_service,
     get_crypto_utils,
     get_current_user,
     get_db_session,
@@ -113,16 +126,8 @@ async def require_hr(
     return current_user
 
 
-async def require_admin(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> User:
-    """Legacy alias for system admin or backward compatibility."""
-    return await require_system_admin(current_user)
-
-
 SystemAdminUserDep = Annotated[User, Depends(require_system_admin)]
 HRUserDep = Annotated[User, Depends(require_hr)]
-AdminUserDep = Annotated[User, Depends(require_system_admin)]
 
 # --- Dependency providers for admin services ---
 
@@ -206,7 +211,7 @@ def _ai_view_response(view: object) -> OrganizationAIConfigurationResponse:
     include_in_schema=False,
 )
 async def get_organization_ai_config(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
 ) -> OrganizationAIConfigurationResponse:
     return _ai_view_response(await service.get_view())
@@ -217,6 +222,7 @@ async def get_organization_ai_config(
     response_model=ClassificationRolloutTelemetryResponse,
 )
 async def get_classification_rollout_telemetry(
+    system_admin_user: SystemAdminUserDep,
     session: AsyncSession = Depends(get_db_session),
     hours: int = Query(default=24, ge=1, le=720),
 ) -> ClassificationRolloutTelemetryResponse:
@@ -235,7 +241,7 @@ async def get_classification_rollout_telemetry(
 )
 async def configure_classification_rollout(
     body: ClassificationRolloutRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
@@ -255,7 +261,7 @@ async def configure_classification_rollout(
                 canary_percentage=body.canary_percentage,
                 release_metrics=metrics,
             ),
-            admin_user,
+            system_admin_user,
         )
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
@@ -263,7 +269,7 @@ async def configure_classification_rollout(
             detail={"code": "CLASSIFICATION_ROLLOUT_BLOCKED", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
@@ -276,16 +282,16 @@ async def configure_classification_rollout(
 )
 async def enforce_classification_guardrails(
     body: ClassificationReleaseMetricsRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Apply measured guardrails and automatically roll back unsafe rollout state."""
     result = await service.enforce_classification_guardrails(
-        ReleaseMetrics(**body.model_dump()), admin_user
+        ReleaseMetrics(**body.model_dump()), system_admin_user
     )
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
@@ -297,20 +303,20 @@ async def enforce_classification_guardrails(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def rollback_classification_rollout(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Restore retained stable versions without deleting Recruitment Inbox work."""
     try:
-        result = await service.rollback_classification_rollout(admin_user)
+        result = await service.rollback_classification_rollout(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "CLASSIFICATION_ROLLOUT_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
@@ -320,7 +326,7 @@ async def rollback_classification_rollout(
 @admin_router.post("/organization/ai-config/test", response_model=AIConnectionTestResponse)
 async def test_organization_ai_config(
     body: OrganizationAIConfigurationRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
 ) -> AIConnectionTestResponse:
     try:
@@ -340,14 +346,14 @@ async def test_organization_ai_config(
 @admin_router.put("/organization/ai-config", response_model=OrganizationAIConfigurationResponse)
 async def update_organization_ai_config(
     body: OrganizationAIConfigurationRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     try:
         result = await service.update(
             AIConfigurationCandidate(body.provider, body.base_url, body.model, body.api_key),
-            admin_user,
+            system_admin_user,
         )
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
@@ -360,7 +366,7 @@ async def update_organization_ai_config(
             detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
@@ -376,13 +382,13 @@ async def update_organization_ai_config(
 )
 async def set_credential_source(
     body: SetCredentialSourceRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Change the AI credential source (org_api_key or deployment_key)."""
     try:
-        result = await service.set_credential_source(body.credential_source, admin_user)
+        result = await service.set_credential_source(body.credential_source, system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -394,7 +400,7 @@ async def set_credential_source(
             detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_SOURCE,
         details=result.audit_details,
     )
@@ -410,20 +416,20 @@ async def set_credential_source(
 )
 async def activate_org_api_key(
     body: ActivateOrgApiKeyRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Activate a new Organization API key (assumes test already passed)."""
     try:
-        result = await service.activate_org_api_key(body.api_key, admin_user)
+        result = await service.activate_org_api_key(body.api_key, system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_ROTATE,
         details=result.audit_details,
     )
@@ -432,20 +438,20 @@ async def activate_org_api_key(
 
 @admin_router.post("/organization/ai-config/revoke-key", status_code=200)
 async def revoke_org_api_key(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Revoke the Organization API key, preserving provider/model configuration."""
     try:
-        result = await service.revoke_org_api_key(admin_user)
+        result = await service.revoke_org_api_key(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_REVOKE,
         details=result.audit_details,
     )
@@ -460,7 +466,7 @@ async def revoke_org_api_key(
     response_model=AIConnectionTestResponse,
 )
 async def test_deployment_key_connection(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
 ) -> AIConnectionTestResponse:
     """Test connectivity using the deployment-wide AI key (if configured)."""
@@ -492,14 +498,14 @@ async def test_deployment_key_connection(
 )
 async def update_provider_config(
     body: UpdateProviderConfigRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Update provider/model/base_url without changing the API key."""
     try:
         result = await service.update_provider_config(
-            body.provider, body.base_url, body.model, admin_user
+            body.provider, body.base_url, body.model, system_admin_user
         )
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
@@ -507,7 +513,7 @@ async def update_provider_config(
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
@@ -522,7 +528,7 @@ async def update_provider_config(
     response_model=DataPolicyResponse,
 )
 async def get_data_policy(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
 ) -> DataPolicyResponse:
     """Return the Organization AI data policy describing data sent to the provider."""
@@ -538,20 +544,20 @@ async def get_data_policy(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def accept_data_policy(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Accept the data policy before enabling AI capabilities for the first time."""
     try:
-        result = await service.accept_data_policy(admin_user)
+        result = await service.accept_data_policy(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
@@ -566,13 +572,13 @@ async def accept_data_policy(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def accept_automation_consent(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
-    result = await service.accept_automation_consent(admin_user)
+    result = await service.accept_automation_consent(system_admin_user)
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
@@ -584,13 +590,13 @@ async def accept_automation_consent(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def accept_assistant_consent(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
-    result = await service.accept_assistant_consent(admin_user)
+    result = await service.accept_assistant_consent(system_admin_user)
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
@@ -604,13 +610,13 @@ async def accept_assistant_consent(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def enable_ai_automation(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Enable AI Automation after validating preconditions."""
     try:
-        result = await service.enable_automation(admin_user)
+        result = await service.enable_automation(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -622,7 +628,7 @@ async def enable_ai_automation(
             detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
         details=result.audit_details,
     )
@@ -634,20 +640,20 @@ async def enable_ai_automation(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def disable_ai_automation(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Disable AI Automation."""
     try:
-        result = await service.disable_automation(admin_user)
+        result = await service.disable_automation(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
         details=result.audit_details,
     )
@@ -662,13 +668,13 @@ async def disable_ai_automation(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def enable_ai_assistant(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Enable AI Assistant after validating preconditions."""
     try:
-        result = await service.enable_assistant(admin_user)
+        result = await service.enable_assistant(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -680,7 +686,7 @@ async def enable_ai_assistant(
             detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
         details=result.audit_details,
     )
@@ -692,20 +698,20 @@ async def enable_ai_assistant(
     response_model=OrganizationAIConfigurationResponse,
 )
 async def disable_ai_assistant(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
     """Disable AI Assistant."""
     try:
-        result = await service.disable_assistant(admin_user)
+        result = await service.disable_assistant(system_admin_user)
     except OrganizationAIConfigValidationError as exc:
         raise HTTPException(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
         details=result.audit_details,
     )
@@ -719,14 +725,14 @@ async def disable_ai_assistant(
     "/organization/ai-config/policy-preset", response_model=OrganizationAIConfigurationResponse
 )
 async def set_ai_policy_preset(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     preset: AIPolicyPreset = Body(...),
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OrganizationAIConfigurationResponse:
-    result = await service.set_policy_preset(preset, admin_user)
+    result = await service.set_policy_preset(preset, system_admin_user)
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
@@ -737,7 +743,7 @@ async def set_ai_policy_preset(
 
 @admin_router.get("/whitelist", response_model=WhitelistListResponse)
 async def list_whitelist(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
 ) -> WhitelistListResponse:
     """List all whitelist entries (merged file + database).
@@ -746,7 +752,7 @@ async def list_whitelist(
     the database. File-based entries are marked as read-only.
 
     Args:
-        admin_user: The authenticated admin user (enforced by require_admin).
+        system_admin_user: The authenticated system admin (enforced by require_system_admin).
         whitelist_manager: The WhitelistManager for querying entries.
 
     Returns:
@@ -771,7 +777,7 @@ async def list_whitelist(
 @admin_router.post("/whitelist", response_model=WhitelistEntryCreatedResponse, status_code=201)
 async def add_whitelist_entry(
     body: WhitelistAddRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> WhitelistEntryCreatedResponse:
@@ -782,7 +788,7 @@ async def add_whitelist_entry(
 
     Args:
         body: The request body containing the value to whitelist.
-        admin_user: The authenticated admin user performing the action.
+        system_admin_user: The authenticated admin user performing the action.
         whitelist_manager: The WhitelistManager for entry management.
         audit_service: The AuditService for audit logging.
 
@@ -792,11 +798,11 @@ async def add_whitelist_entry(
     Raises:
         HTTPException: 422 if format is invalid, 409 if duplicate.
     """
-    entry = await whitelist_manager.add_entry(value=body.value, admin=admin_user)
+    entry = await whitelist_manager.add_entry(value=body.value, admin=system_admin_user)
 
     # Log the whitelist addition in the audit trail.
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.WHITELIST_ADD,
         details={
             "entry_id": str(entry.id),
@@ -811,7 +817,7 @@ async def add_whitelist_entry(
 @admin_router.delete("/whitelist/{entry_id}", status_code=204)
 async def remove_whitelist_entry(
     entry_id: UUID,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> None:
@@ -822,18 +828,18 @@ async def remove_whitelist_entry(
 
     Args:
         entry_id: The UUID of the entry to remove.
-        admin_user: The authenticated admin user performing the action.
+        system_admin_user: The authenticated admin user performing the action.
         whitelist_manager: The WhitelistManager for entry management.
         audit_service: The AuditService for audit logging.
 
     Raises:
         HTTPException: 404 if the entry does not exist.
     """
-    await whitelist_manager.remove_entry(entry_id=entry_id, admin=admin_user)
+    await whitelist_manager.remove_entry(entry_id=entry_id, admin=system_admin_user)
 
     # Log the whitelist removal in the audit trail.
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.WHITELIST_REMOVE,
         details={
             "entry_id": str(entry_id),
@@ -846,7 +852,7 @@ async def remove_whitelist_entry(
 
 @admin_router.get("/users", response_model=list[AdminUserResponse])
 async def list_users(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> list[AdminUserResponse]:
     """List all users with their roles.
@@ -855,7 +861,7 @@ async def list_users(
     and current role assignment.
 
     Args:
-        admin_user: The authenticated admin user (enforced by require_admin).
+        system_admin_user: The authenticated system admin (enforced by require_system_admin).
         session: The async database session.
 
     Returns:
@@ -867,24 +873,81 @@ async def list_users(
     return [AdminUserResponse.model_validate(user) for user in users]
 
 
+@admin_router.post("/users", response_model=StaffAccountCreateResponse, status_code=201)
+async def create_staff_account(
+    body: StaffAccountCreateRequest,
+    system_admin_user: SystemAdminUserDep,
+    auth_service: AuthService = Depends(get_auth_service),
+    audit_service: AuditService = Depends(get_audit_service),
+) -> StaffAccountCreateResponse:
+    """Provision an HR or SYSTEM_ADMIN account with a temporary password.
+
+    ADR-0009 section 3 puts the first HR account in the system admin's hands.
+    First-run setup mints exactly one SYSTEM_ADMIN and every other
+    account-creation route is gated by ``require_hr``, so this endpoint is the
+    only thing standing between a fresh deployment and a bootstrap deadlock.
+
+    Args:
+        body: The email, display name, and staff role to provision.
+        system_admin_user: The authenticated system admin performing the change.
+        auth_service: The AuthService that creates the local account.
+        audit_service: The AuditService for audit logging.
+
+    Returns:
+        The created account plus its one-time temporary password.
+
+    Raises:
+        HTTPException: 409 if an account already exists for that email.
+    """
+    try:
+        user, temporary_password = await auth_service.create_staff_account(
+            email=body.email,
+            name=body.name,
+            role=body.role,
+        )
+    except AccountAlreadyExistsError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.error_code, "message": exc.message},
+        ) from exc
+
+    await audit_service.log_action(
+        admin=system_admin_user,
+        action_type=AuditActionType.ROLE_CHANGE,
+        details={
+            "target_user_id": str(user.id),
+            "target_user_email": user.email,
+            "old_role": None,
+            "new_role": user.role.value,
+            "reason": "staff_account_created",
+        },
+    )
+
+    return StaffAccountCreateResponse(
+        user=AdminUserResponse.model_validate(user),
+        temporary_password=temporary_password,
+    )
+
+
 @admin_router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
 async def change_user_role(
     user_id: UUID,
     body: RoleUpdateRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     role_service: RoleService = Depends(get_role_service),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> AdminUserResponse:
-    """Change a user's role.
+    """Assign any of the three roles (system_admin, hr, user) to a user.
 
-    Promotes a user to admin or demotes an admin to regular user.
-    Logs an audit entry for the role change. Protects against demoting
-    the last admin or the super admin.
+    Role assignment is a system-administration act (ADR-0009 section 3): the
+    system admin provisions HR accounts and other system admins. The service
+    refuses changes that would lock the deployment out -- self-changes, the
+    configured super admin, and removing the last system admin.
 
     Args:
         user_id: The UUID of the target user.
         body: The request body containing the new role.
-        admin_user: The authenticated admin user performing the change.
+        system_admin_user: The authenticated system admin performing the change.
         role_service: The RoleService for role management.
         audit_service: The AuditService for audit logging.
 
@@ -892,13 +955,13 @@ async def change_user_role(
         The updated user with their new role.
 
     Raises:
-        HTTPException: 404 if user not found, 400 if last admin or super admin protected.
+        HTTPException: 404 if the user does not exist; 400 if the change is
+            refused (self-change, super admin, or last system admin).
     """
     try:
-        if body.role == UserRole.ADMIN:
-            updated_user = await role_service.promote_to_admin(user_id, admin_user)
-        else:
-            updated_user = await role_service.demote_to_user(user_id, admin_user)
+        updated_user, previous_role = await role_service.change_role(
+            user_id, body.role, system_admin_user
+        )
     except UserNotFoundError as exc:
         raise HTTPException(
             status_code=404,
@@ -922,15 +985,13 @@ async def change_user_role(
 
     # Log the role change in the audit trail.
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ROLE_CHANGE,
         details={
             "target_user_id": str(updated_user.id),
             "target_user_email": updated_user.email,
-            "old_role": UserRole.USER.value
-            if body.role == UserRole.ADMIN
-            else UserRole.ADMIN.value,
-            "new_role": body.role.value,
+            "old_role": previous_role.value,
+            "new_role": updated_user.role.value,
         },
     )
 
@@ -942,7 +1003,7 @@ async def change_user_role(
 
 @admin_router.get("/audit-logs", response_model=PaginatedAuditLogsResponse)
 async def get_audit_logs(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     audit_service: AuditService = Depends(get_audit_service),
     page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
@@ -960,7 +1021,7 @@ async def get_audit_logs(
     support for filtering by action type and date range.
 
     Args:
-        admin_user: The authenticated admin user (enforced by require_admin).
+        system_admin_user: The authenticated system admin (enforced by require_system_admin).
         audit_service: The AuditService for querying logs.
         page: The page number to retrieve (1-indexed).
         page_size: The number of entries per page (1-100).
@@ -992,7 +1053,7 @@ async def get_audit_logs(
 
 @admin_router.get("/oauth/config", response_model=OAuthConfigResponse)
 async def get_oauth_config(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     oauth_manager: OAuthConfigManager = Depends(get_oauth_config_manager),
 ) -> OAuthConfigResponse:
     """Get the current OAuth configuration with masked secret.
@@ -1002,7 +1063,7 @@ async def get_oauth_config(
     is always masked, showing only the last 4 characters.
 
     Args:
-        admin_user: The authenticated admin user (enforced by require_admin).
+        system_admin_user: The authenticated system admin (enforced by require_system_admin).
         oauth_manager: The OAuthConfigManager for retrieving configuration.
 
     Returns:
@@ -1021,7 +1082,7 @@ async def get_oauth_config(
 @admin_router.post("/oauth/config", response_model=OAuthConfigResponse)
 async def update_oauth_config(
     body: OAuthConfigUpdateRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     oauth_manager: OAuthConfigManager = Depends(get_oauth_config_manager),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> OAuthConfigResponse:
@@ -1034,7 +1095,7 @@ async def update_oauth_config(
 
     Args:
         body: The request body containing client_id, client_secret, and redirect_uri.
-        admin_user: The authenticated admin user performing the update.
+        system_admin_user: The authenticated admin user performing the update.
         oauth_manager: The OAuthConfigManager for credential management.
         audit_service: The AuditService for audit logging.
 
@@ -1050,7 +1111,7 @@ async def update_oauth_config(
             client_id=body.client_id,
             client_secret=body.client_secret,
             redirect_uri=body.redirect_uri,
-            admin=admin_user,
+            admin=system_admin_user,
         )
     except OAuthConfigValidationError as exc:
         raise HTTPException(
@@ -1060,7 +1121,7 @@ async def update_oauth_config(
 
     # Log the OAuth config update in the audit trail.
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.OAUTH_UPDATE,
         details={
             "client_id": body.client_id,
@@ -1101,7 +1162,7 @@ async def get_org_settings_repo(
 
 @admin_router.get("/organization/domains", response_model=DomainListResponse)
 async def list_domains(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
 ) -> DomainListResponse:
     """List the Organization's allowed login domains.
@@ -1110,7 +1171,7 @@ async def list_domains(
     employee login.  An empty list means no domain restriction.
 
     Args:
-        admin_user: The authenticated admin user.
+        system_admin_user: The authenticated admin user.
         org_repo: Repository for Organization settings.
 
     Returns:
@@ -1123,7 +1184,7 @@ async def list_domains(
 @admin_router.post("/organization/domains", response_model=DomainListResponse, status_code=200)
 async def add_domains(
     body: DomainAddRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> DomainListResponse:
@@ -1133,7 +1194,7 @@ async def add_domains(
 
     Args:
         body: Request containing the domains to add.
-        admin_user: The authenticated admin user.
+        system_admin_user: The authenticated admin user.
         org_repo: Repository for Organization settings.
         audit_service: Service for audit logging.
 
@@ -1149,7 +1210,7 @@ async def add_domains(
         raise HTTPException(status_code=400, detail={"code": "DOMAIN_ERROR", "message": str(exc)})
 
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "add", "domains": body.domains},
     )
@@ -1160,7 +1221,7 @@ async def add_domains(
 @admin_router.put("/organization/domains", response_model=DomainListResponse)
 async def replace_domains(
     body: DomainReplaceRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> DomainListResponse:
@@ -1168,7 +1229,7 @@ async def replace_domains(
 
     Args:
         body: Request containing the new complete list of domains.
-        admin_user: The authenticated admin user.
+        system_admin_user: The authenticated admin user.
         org_repo: Repository for Organization settings.
         audit_service: Service for audit logging.
 
@@ -1184,7 +1245,7 @@ async def replace_domains(
         raise HTTPException(status_code=400, detail={"code": "DOMAIN_ERROR", "message": str(exc)})
 
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "replace", "domains": body.domains},
     )
@@ -1195,7 +1256,7 @@ async def replace_domains(
 @admin_router.delete("/organization/domains/{domain}", response_model=DomainRemoveResponse)
 async def remove_domain(
     domain: str,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> DomainRemoveResponse:
@@ -1203,7 +1264,7 @@ async def remove_domain(
 
     Args:
         domain: The domain string to remove.
-        admin_user: The authenticated admin user.
+        system_admin_user: The authenticated admin user.
         org_repo: Repository for Organization settings.
         audit_service: Service for audit logging.
 
@@ -1219,7 +1280,7 @@ async def remove_domain(
         raise HTTPException(status_code=400, detail={"code": "DOMAIN_ERROR", "message": str(exc)})
 
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "remove", "domain": domain},
     )
@@ -1244,7 +1305,7 @@ async def get_tool_config_repository(
     response_model=AssistantToolConfigListResponse,
 )
 async def list_assistant_tools(
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     tool_config_repo: ToolConfigRepository = Depends(get_tool_config_repository),
 ) -> AssistantToolConfigListResponse:
     """List all assistant tools with their enabled status.
@@ -1279,7 +1340,7 @@ async def list_assistant_tools(
 )
 async def update_assistant_tools(
     body: AssistantToolConfigUpdateRequest,
-    admin_user: AdminUserDep,
+    system_admin_user: SystemAdminUserDep,
     tool_config_repo: ToolConfigRepository = Depends(get_tool_config_repository),
     audit_service: AuditService = Depends(get_audit_service),
 ) -> AssistantToolConfigListResponse:
@@ -1307,10 +1368,10 @@ async def update_assistant_tools(
 
     # Audit log
     await audit_service.log_action(
-        admin=admin_user,
+        admin=system_admin_user,
         action_type=AuditActionType.ASSISTANT_TOOL_CONFIG,
         details={"tools": body.tools},
     )
 
     # Return updated list
-    return await list_assistant_tools(admin_user, tool_config_repo)
+    return await list_assistant_tools(system_admin_user, tool_config_repo)

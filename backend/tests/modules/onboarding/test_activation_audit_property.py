@@ -185,7 +185,7 @@ def _make_admin_actor() -> User:
         email=f"hr-{suffix}@example.com",
         name="HR Admin",
         google_sub=f"sub-{suffix}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 

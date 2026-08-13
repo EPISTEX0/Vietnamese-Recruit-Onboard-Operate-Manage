@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from src.modules.identity.domain.entities import UserRole
 from src.modules.identity.domain.exceptions import (
     AccessDeniedError,
+    AuthError,
     InvalidCredentialsError,
     InvalidTokenError,
     SetupAlreadyCompletedError,
@@ -32,6 +33,14 @@ if TYPE_CHECKING:
     from src.modules.recruitment.infrastructure.org_settings_repository import (
         OrganizationSettingsRepository,
     )
+
+
+class AccountAlreadyExistsError(AuthError):
+    """An account already exists for the requested email address."""
+
+    status_code = 409
+    error_code = "ACCOUNT_ALREADY_EXISTS"
+    message = "An account already exists for this email"
 
 
 @dataclass
@@ -70,7 +79,7 @@ class AuthService:
             return (await self._user_repository.count_users()) > 0
         return (
             await self._organization_repository.get_setup_status()
-            and (await self._user_repository.count_admins()) > 0
+            and (await self._user_repository.count_system_admins()) > 0
         )
 
     async def setup_first_run(
@@ -146,6 +155,52 @@ class AuthService:
         )
         await self._token_service.revoke_user_tokens(updated.id)
         return await self._issue_session(updated)
+
+    async def create_staff_account(
+        self,
+        *,
+        email: str,
+        name: str,
+        role: UserRole,
+    ) -> tuple[Any, str]:
+        """Create an HR or SYSTEM_ADMIN account with a temporary password.
+
+        This is the system admin's provisioning path (ADR-0009 section 3).
+        First-run setup mints a single SYSTEM_ADMIN and every other
+        account-creation route sits behind ``require_hr``, so without this the
+        deployment can never produce its first HR account.
+
+        Args:
+            email: The new account's email address.
+            name: The new account's display name.
+            role: HR or SYSTEM_ADMIN. Self-service USER accounts are created by
+                HR against an Employee record via ``create_employee_account``.
+
+        Returns:
+            A tuple of (created user, the generated temporary password).
+
+        Raises:
+            AccountAlreadyExistsError: An account already uses this email.
+            ValueError: ``role`` is not a staff role.
+        """
+        if role not in (UserRole.HR, UserRole.SYSTEM_ADMIN):
+            raise ValueError(f"create_staff_account does not provision {role.value} accounts")
+
+        normalized_email = email.lower()
+        if await self._user_repository.get_by_email(normalized_email) is not None:
+            raise AccountAlreadyExistsError(f"Account already exists for {normalized_email}")
+
+        temp_password = generate_temporary_password()
+        user = await self._user_repository.create_local_account(
+            email=normalized_email,
+            name=name,
+            password_hash=hash_password(temp_password),
+            role=role,
+            must_change_password=True,
+        )
+        if self._session is not None:
+            await self._session.commit()
+        return user, temp_password
 
     async def create_employee_account(
         self,

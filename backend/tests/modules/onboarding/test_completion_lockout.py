@@ -19,7 +19,7 @@ from src.modules.onboarding.domain.exceptions import OnboardingProcessAlreadyCom
 @pytest.mark.asyncio
 async def test_update_setup_lockout_on_complete_process() -> None:
     process_id = uuid4()
-    admin_user = User(id=uuid4(), email="admin@vroom.vn", role=UserRole.ADMIN, name="Admin")
+    admin_user = User(id=uuid4(), email="admin@vroom.vn", role=UserRole.HR, name="Admin")
 
     completed_process = OnboardingProcess(
         id=process_id,
@@ -51,7 +51,7 @@ async def test_update_setup_lockout_on_complete_process() -> None:
 async def test_task_completion_lockout_on_complete_process() -> None:
     process_id = uuid4()
     task_id = uuid4()
-    admin_user = User(id=uuid4(), email="admin@vroom.vn", role=UserRole.ADMIN, name="Admin")
+    admin_user = User(id=uuid4(), email="admin@vroom.vn", role=UserRole.HR, name="Admin")
 
     completed_process = OnboardingProcess(
         id=process_id,

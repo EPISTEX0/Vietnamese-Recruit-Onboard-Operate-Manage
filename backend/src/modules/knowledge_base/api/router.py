@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.domain.entities import User
 from src.modules.knowledge_base.api.schemas import (
     DocumentDetailResponse,
@@ -31,7 +31,7 @@ from src.modules.knowledge_base.container import get_document_service
 # Type aliases
 # ---------------------------------------------------------------------------
 
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 DocumentServiceDep = Annotated[DocumentService, Depends(get_document_service)]
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ async def upload_document(
     display_name: str = Form(..., description="Tên hiển thị của tài liệu"),
     category: str = Form(default="general", description="Danh mục tài liệu"),
     kb_type: str = Form(default="hr", description="Loại knowledge base: hr | employee"),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> DocumentUploadResponse:
     """Tải lên tài liệu vào Knowledge Base (HR hoặc Nhân viên).
@@ -104,7 +104,7 @@ async def list_documents(
     status: str | None = Query(
         default=None, description="Lọc theo trạng thái: pending | processing | ready | error"
     ),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> DocumentListResponse:
     """Danh sách tài liệu trong Knowledge Base.
@@ -155,7 +155,7 @@ async def list_documents(
 async def get_document_detail(
     document_id: UUID,
     kb_type: str = Query(default="hr", description="Loại knowledge base: hr | employee"),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> DocumentDetailResponse:
     """Chi tiết một tài liệu trong Knowledge Base.
@@ -200,7 +200,7 @@ async def update_document_metadata(
     document_id: UUID,
     body: DocumentUpdateRequest,
     kb_type: str = Query(default="hr", description="Loại knowledge base: hr | employee"),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> DocumentUpdateResponse:
     """Cập nhật metadata của tài liệu (không re-index).
@@ -243,7 +243,7 @@ async def replace_document_file(
     document_id: UUID,
     file: UploadFile = File(...),
     kb_type: str = Form(default="hr", description="Loại knowledge base: hr | employee"),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> DocumentReplaceResponse:
     """Thay thế file của tài liệu và re-index.
@@ -297,7 +297,7 @@ async def replace_document_file(
 async def delete_document(
     document_id: UUID,
     kb_type: str = Query(default="hr", description="Loại knowledge base: hr | employee"),
-    _user: AdminUserDep = None,
+    _user: HRUserDep = None,
     service: DocumentServiceDep = None,
 ) -> MessageResponse:
     """Xóa vĩnh viễn tài liệu khỏi Knowledge Base.

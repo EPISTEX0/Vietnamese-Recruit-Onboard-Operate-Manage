@@ -32,7 +32,7 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.domain.entities import AuditActionType, AuditLog, User, UserRole
 from src.modules.payslip.api.admin_router import admin_payslip_router
 from src.modules.payslip.api.error_handler import register_payslip_error_handlers
@@ -54,7 +54,7 @@ _ADMIN_USER = User(
     id=uuid4(),
     email="admin@company.vn",
     name="Admin",
-    role=UserRole.ADMIN,
+    role=UserRole.HR,
     avatar_url=None,
     google_sub="admin-sub-123",
     created_at=datetime.now(UTC),
@@ -259,7 +259,7 @@ def _build_app(
         async def _override_admin() -> None:
             raise HTTPException(status_code=403, detail="Not authenticated")
 
-    app.dependency_overrides[require_admin] = _override_admin
+    app.dependency_overrides[require_hr] = _override_admin
 
     if service is not None:
 
@@ -277,7 +277,7 @@ def _build_app(
 
 
 class TestCreatePayslip:
-    """Tests for POST /api/admin/payslips."""
+    """Tests for POST /api/hr/payslips."""
 
     def test_hr_can_create_draft_payslip(self) -> None:
         """HR can create a draft payslip."""
@@ -289,7 +289,7 @@ class TestCreatePayslip:
         client = TestClient(app)
 
         resp = client.post(
-            "/api/admin/payslips",
+            "/api/hr/payslips",
             json={
                 "employee_id": str(employee_id),
                 "period_month": "2026-06-01",
@@ -321,7 +321,7 @@ class TestCreatePayslip:
         client = TestClient(app)
 
         resp = client.post(
-            "/api/admin/payslips",
+            "/api/hr/payslips",
             json={
                 "employee_id": str(employee_id),
                 "period_month": "2026-06-01",
@@ -342,7 +342,7 @@ class TestCreatePayslip:
         client = TestClient(app)
 
         resp = client.post(
-            "/api/admin/payslips",
+            "/api/hr/payslips",
             json={
                 "employee_id": str(uuid4()),
                 "period_month": "2026-06-01",
@@ -359,7 +359,7 @@ class TestCreatePayslip:
 
 
 class TestUpdatePayslip:
-    """Tests for PATCH /api/admin/payslips/{id}."""
+    """Tests for PATCH /api/hr/payslips/{id}."""
 
     def test_hr_can_update_draft_payslip(self) -> None:
         """HR can update draft payslip values."""
@@ -371,7 +371,7 @@ class TestUpdatePayslip:
         client = TestClient(app)
 
         resp = client.patch(
-            f"/api/admin/payslips/{payslip.id}",
+            f"/api/hr/payslips/{payslip.id}",
             json={"gross_salary": "18000000", "net_salary": "13400000"},
         )
 
@@ -392,7 +392,7 @@ class TestUpdatePayslip:
         client = TestClient(app)
 
         resp = client.patch(
-            f"/api/admin/payslips/{payslip.id}",
+            f"/api/hr/payslips/{payslip.id}",
             json={"gross_salary": "18000000"},
         )
 
@@ -404,7 +404,7 @@ class TestUpdatePayslip:
         client = TestClient(app)
 
         resp = client.patch(
-            f"/api/admin/payslips/{uuid4()}",
+            f"/api/hr/payslips/{uuid4()}",
             json={"gross_salary": "18000000"},
         )
 
@@ -421,7 +421,7 @@ class TestUpdatePayslip:
         client = TestClient(app)
 
         resp = client.patch(
-            f"/api/admin/payslips/{payslip.id}",
+            f"/api/hr/payslips/{payslip.id}",
             json={"gross_salary": "18000000"},
         )
 
@@ -432,7 +432,7 @@ class TestUpdatePayslip:
 
 
 class TestPublishPayslip:
-    """Tests for POST /api/admin/payslips/{id}/publish."""
+    """Tests for POST /api/hr/payslips/{id}/publish."""
 
     def test_hr_can_publish_draft_payslip(self) -> None:
         """HR can publish a draft payslip."""
@@ -443,7 +443,7 @@ class TestPublishPayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.post(f"/api/admin/payslips/{payslip.id}/publish")
+        resp = client.post(f"/api/hr/payslips/{payslip.id}/publish")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -461,7 +461,7 @@ class TestPublishPayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.post(f"/api/admin/payslips/{payslip.id}/publish")
+        resp = client.post(f"/api/hr/payslips/{payslip.id}/publish")
         assert resp.status_code == 400
 
     def test_employee_cannot_publish_payslip(self) -> None:
@@ -469,7 +469,7 @@ class TestPublishPayslip:
         app = _build_app(admin_auth=False)
         client = TestClient(app)
 
-        resp = client.post(f"/api/admin/payslips/{uuid4()}/publish")
+        resp = client.post(f"/api/hr/payslips/{uuid4()}/publish")
         assert resp.status_code == 403
 
     def test_publish_non_existent_returns_404(self) -> None:
@@ -479,12 +479,12 @@ class TestPublishPayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.post(f"/api/admin/payslips/{uuid4()}/publish")
+        resp = client.post(f"/api/hr/payslips/{uuid4()}/publish")
         assert resp.status_code == 404
 
 
 class TestDeletePayslip:
-    """Tests for DELETE /api/admin/payslips/{id}."""
+    """Tests for DELETE /api/hr/payslips/{id}."""
 
     def test_hr_can_delete_draft_payslip(self) -> None:
         """HR can delete a draft payslip."""
@@ -495,7 +495,7 @@ class TestDeletePayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.delete(f"/api/admin/payslips/{payslip.id}")
+        resp = client.delete(f"/api/hr/payslips/{payslip.id}")
         assert resp.status_code == 204
 
     def test_cannot_delete_published_payslip(self) -> None:
@@ -509,7 +509,7 @@ class TestDeletePayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.delete(f"/api/admin/payslips/{payslip.id}")
+        resp = client.delete(f"/api/hr/payslips/{payslip.id}")
         assert resp.status_code == 400
 
     def test_employee_cannot_delete_payslip(self) -> None:
@@ -517,7 +517,7 @@ class TestDeletePayslip:
         app = _build_app(admin_auth=False)
         client = TestClient(app)
 
-        resp = client.delete(f"/api/admin/payslips/{uuid4()}")
+        resp = client.delete(f"/api/hr/payslips/{uuid4()}")
         assert resp.status_code == 403
 
     def test_delete_non_existent_returns_404(self) -> None:
@@ -527,12 +527,12 @@ class TestDeletePayslip:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.delete(f"/api/admin/payslips/{uuid4()}")
+        resp = client.delete(f"/api/hr/payslips/{uuid4()}")
         assert resp.status_code == 404
 
 
 class TestListPayslips:
-    """Tests for GET /api/admin/payslips."""
+    """Tests for GET /api/hr/payslips."""
 
     def test_hr_can_list_payslips(self) -> None:
         """HR can list all payslips."""
@@ -543,7 +543,7 @@ class TestListPayslips:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.get("/api/admin/payslips")
+        resp = client.get("/api/hr/payslips")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["payslips"]) == 2
@@ -564,7 +564,7 @@ class TestListPayslips:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.get("/api/admin/payslips?status=draft")
+        resp = client.get("/api/hr/payslips?status=draft")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["payslips"]) == 1
@@ -581,7 +581,7 @@ class TestListPayslips:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.get(f"/api/admin/payslips?employee_id={emp1}")
+        resp = client.get(f"/api/hr/payslips?employee_id={emp1}")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["payslips"]) == 1
@@ -591,7 +591,7 @@ class TestListPayslips:
         app = _build_app(admin_auth=False)
         client = TestClient(app)
 
-        resp = client.get("/api/admin/payslips")
+        resp = client.get("/api/hr/payslips")
         assert resp.status_code == 403
 
 
@@ -607,7 +607,7 @@ class TestAuditLogging:
         client = TestClient(app)
 
         client.post(
-            "/api/admin/payslips",
+            "/api/hr/payslips",
             json={
                 "employee_id": str(employee_id),
                 "period_month": "2026-06-01",
@@ -632,7 +632,7 @@ class TestAuditLogging:
         client = TestClient(app)
 
         client.patch(
-            f"/api/admin/payslips/{payslip.id}",
+            f"/api/hr/payslips/{payslip.id}",
             json={"gross_salary": "18000000"},
         )
 
@@ -647,7 +647,7 @@ class TestAuditLogging:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        client.post(f"/api/admin/payslips/{payslip.id}/publish")
+        client.post(f"/api/hr/payslips/{payslip.id}/publish")
 
         assert any(log["action"] == "publish" for log in service.audit_log)
 
@@ -660,13 +660,13 @@ class TestAuditLogging:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        client.delete(f"/api/admin/payslips/{payslip.id}")
+        client.delete(f"/api/hr/payslips/{payslip.id}")
 
         assert any(log["action"] == "delete" for log in service.audit_log)
 
 
 class TestGetPayslipDetail:
-    """Tests for GET /api/admin/payslips/{id}."""
+    """Tests for GET /api/hr/payslips/{id}."""
 
     def test_hr_can_get_payslip_by_id(self) -> None:
         """HR can get any payslip by ID."""
@@ -677,7 +677,7 @@ class TestGetPayslipDetail:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.get(f"/api/admin/payslips/{payslip.id}")
+        resp = client.get(f"/api/hr/payslips/{payslip.id}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == str(payslip.id)
@@ -690,5 +690,5 @@ class TestGetPayslipDetail:
         app = _build_app(service=service)
         client = TestClient(app)
 
-        resp = client.get(f"/api/admin/payslips/{uuid4()}")
+        resp = client.get(f"/api/hr/payslips/{uuid4()}")
         assert resp.status_code == 404

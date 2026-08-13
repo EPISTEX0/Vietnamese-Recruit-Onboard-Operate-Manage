@@ -22,7 +22,7 @@ from src.modules.employee.api.router import delete_employee_account
 # ---------------------------------------------------------------------------
 
 
-def _make_user(role: str = "admin"):
+def _make_user(role: str = "hr"):
     user = MagicMock()
     user.id = uuid4()
     user.role = role
@@ -49,7 +49,7 @@ class TestDeleteEmployeeAccount:
     async def test_hr_deletes_existing_account(self):
         """HR admin deletes an existing employee account → 204, user gone, employee stays."""
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         emp = _make_employee(employee_id=emp_id)
 
         employee_svc = AsyncMock()
@@ -73,7 +73,7 @@ class TestDeleteEmployeeAccount:
     async def test_hr_deletes_nonexistent_account_idempotent(self):
         """HR admin deletes an account that doesn't exist → idempotent 204."""
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         emp = _make_employee(employee_id=emp_id)
 
         employee_svc = AsyncMock()
@@ -92,24 +92,24 @@ class TestDeleteEmployeeAccount:
         auth_svc.delete_employee_account.assert_awaited_once_with(emp)
 
     @pytest.mark.asyncio
-    async def test_non_admin_rejected_by_require_admin(self):
-        """Non-admin users are blocked by the AdminUserDep guard.
+    async def test_non_hr_rejected_by_require_hr(self):
+        """Non-HR users are blocked by the HRUserDep guard.
 
-        The guard is enforced by ``require_admin``, not inline in the handler.
+        The guard is enforced by ``require_hr``, not inline in the handler.
         This test verifies the dependency directly.
         """
-        from src.modules.identity.api.admin_router import require_admin
+        from src.modules.identity.api.admin_router import require_hr
 
         user = _make_user(role="user")
         with pytest.raises(HTTPException) as exc_info:
-            await require_admin(current_user=user)
+            await require_hr(current_user=user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_employee_row_preserved_after_delete(self):
         """Employee row is untouched after account deletion — only user row removed."""
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         emp = _make_employee(employee_id=emp_id)
 
         employee_svc = AsyncMock()

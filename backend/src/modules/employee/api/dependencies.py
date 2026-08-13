@@ -17,7 +17,7 @@ from src.modules.employee.infrastructure.employee_repository import (
     EmployeeRepository,
 )
 from src.modules.identity.container import get_current_user
-from src.modules.identity.domain.entities import User
+from src.modules.identity.domain.entities import User, UserRole
 
 
 async def get_current_employee(
@@ -26,17 +26,17 @@ async def get_current_employee(
 ) -> Employee | None:
     """Resolve the Employee record linked to the authenticated user.
 
-    Returns ``None`` for admin users who have no linked Employee record.
-    Returns the Employee for regular users.
+    Returns ``None`` for HR and SYSTEM_ADMIN users, who are not required to
+    have a linked Employee record. Returns the Employee for regular users.
 
     Raises:
-        HTTPException 403: If a non-admin user has no Employee record
+        HTTPException 403: If a self-service user has no Employee record
             or the Employee is inactive.
     """
     employee = await employee_repo.get_by_email(current_user.email)
 
     if employee is None:
-        if current_user.role == "admin":
+        if current_user.role != UserRole.USER:
             return None
         raise HTTPException(status_code=403, detail="Employee record not found")
 

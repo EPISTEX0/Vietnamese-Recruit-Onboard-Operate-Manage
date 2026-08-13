@@ -41,14 +41,14 @@ from src.modules.employee.container import (
     get_import_service,
     get_position_service,
 )
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.api.schemas import (
     EmployeeAccountCreateResponse,
     EmployeeAccountStatusResponse,
 )
 from src.modules.identity.application.auth_service import AuthService
 from src.modules.identity.container import get_auth_service, get_current_user, get_user_repository
-from src.modules.identity.domain.entities import User
+from src.modules.identity.domain.entities import User, UserRole
 from src.modules.identity.infrastructure.user_repository import UserRepository
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ from src.modules.identity.infrastructure.user_repository import UserRepository
 # ---------------------------------------------------------------------------
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 EmployeeServiceDep = Annotated[EmployeeService, Depends(get_employee_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 DepartmentServiceDep = Annotated[DepartmentService, Depends(get_department_service)]
@@ -95,9 +95,9 @@ async def list_employees(
 ) -> EmployeeListResponse:
     """List employees with pagination and optional filters.
 
-    Ownership check: non-admin employees can only see their own profile.
+    Ownership check: non-HR users can only see their own profile.
     """
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         if current_employee is None:
             return EmployeeListResponse(items=[], total=0, page=1, page_size=page_size)
         return EmployeeListResponse(
@@ -132,10 +132,10 @@ async def get_employee(
 ) -> EmployeeResponse:
     """Get a single employee by ID.
 
-    Ownership check: non-admin employees can only view their own profile.
+    Ownership check: non-HR users can only view their own profile.
     """
     employee = await employee_service.get_employee(employee_id)
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         if current_employee is None or employee.id != current_employee.id:
             raise HTTPException(
                 status_code=403,
@@ -147,7 +147,7 @@ async def get_employee(
 @employee_router.get("/{employee_id}/account", response_model=EmployeeAccountStatusResponse)
 async def get_employee_account(
     employee_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
     user_repository: UserRepositoryDep,
 ) -> EmployeeAccountStatusResponse:
@@ -168,7 +168,7 @@ async def get_employee_account(
 @employee_router.post("/{employee_id}/account", response_model=EmployeeAccountCreateResponse)
 async def create_employee_account(
     employee_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
     auth_service: AuthServiceDep,
 ) -> EmployeeAccountCreateResponse:
@@ -195,7 +195,7 @@ async def create_employee_account(
 @employee_router.delete("/{employee_id}/account", status_code=204)
 async def delete_employee_account(
     employee_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
     auth_service: AuthServiceDep,
 ) -> None:
@@ -207,7 +207,7 @@ async def delete_employee_account(
 @employee_router.post("", response_model=EmployeeResponse, status_code=201)
 async def create_employee(
     body: EmployeeCreate,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
 ) -> EmployeeResponse:
     """Create a new employee."""
@@ -226,10 +226,10 @@ async def update_employee(
 ) -> EmployeeResponse:
     """Update an existing employee.
 
-    Self-edit restriction: employees can only update phone and address.
+    Self-edit restriction: non-HR users can only update phone and address.
     """
     data = body.model_dump(exclude_unset=True)
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         allowed_fields = {"phone", "address"}
         disallowed = set(data.keys()) - allowed_fields
         if disallowed:
@@ -250,7 +250,7 @@ async def update_employee(
 @employee_router.delete("/{employee_id}", response_model=EmployeeResponse)
 async def delete_employee(
     employee_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
 ) -> EmployeeResponse:
     """Soft-delete an employee (set is_active=False)."""
@@ -261,7 +261,7 @@ async def delete_employee(
 @employee_router.post("/promote", response_model=EmployeeResponse, status_code=201)
 async def promote_candidate(
     body: PromoteCandidateRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     employee_service: EmployeeServiceDep,
 ) -> EmployeeResponse:
     """Promote a candidate to employee."""
@@ -272,7 +272,7 @@ async def promote_candidate(
 
 @employee_router.post("/import", response_model=ImportResult)
 async def import_employees(
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     import_service: ImportServiceDep,
     file: UploadFile = File(..., description="Excel .xlsx file to import"),
 ) -> ImportResult:
@@ -296,9 +296,9 @@ async def list_documents(
 ) -> list[DocumentResponse]:
     """List all documents for an employee.
 
-    Ownership check: employees can only view their own documents.
+    Ownership check: non-HR users can only view their own documents.
     """
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         if current_employee is None or employee_id != current_employee.id:
             raise HTTPException(
                 status_code=403,
@@ -324,9 +324,9 @@ async def upload_document(
 ) -> DocumentResponse:
     """Upload a document to an employee's document vault.
 
-    Ownership check: employees can only upload to their own vault.
+    Ownership check: non-HR users can only upload to their own vault.
     """
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         if current_employee is None or employee_id != current_employee.id:
             raise HTTPException(
                 status_code=403,
@@ -361,12 +361,12 @@ async def download_document(
 ) -> Response:
     """Download a document by its ID.
 
-    Ownership check: employees can only download their own documents.
+    Ownership check: non-HR users can only download their own documents.
     Fetches metadata first, checks ownership, then downloads from MinIO.
     """
     document = await document_service.get_document_metadata(document_id)
 
-    if current_user.role != "admin":
+    if current_user.role != UserRole.HR:
         if current_employee is None or document.employee_id != current_employee.id:
             raise HTTPException(
                 status_code=403,
@@ -387,7 +387,7 @@ async def download_document(
 @document_router.delete("/{document_id}", status_code=204)
 async def delete_document(
     document_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     document_service: DocumentServiceDep,
 ) -> None:
     """Delete a document by its ID.
@@ -415,7 +415,7 @@ async def list_departments(
 @department_router.post("", response_model=DepartmentResponse, status_code=201)
 async def create_department(
     body: DepartmentCreate,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     department_service: DepartmentServiceDep,
 ) -> DepartmentResponse:
     """Create a new department."""
@@ -428,7 +428,7 @@ async def create_department(
 async def update_department(
     department_id: UUID,
     body: DepartmentUpdate,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     department_service: DepartmentServiceDep,
 ) -> DepartmentResponse:
     """Update an existing department."""
@@ -440,7 +440,7 @@ async def update_department(
 @department_router.delete("/{department_id}", status_code=204)
 async def delete_department(
     department_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     department_service: DepartmentServiceDep,
 ) -> None:
     """Delete a department (cascade-protected)."""
@@ -465,7 +465,7 @@ async def list_positions(
 @position_router.post("", response_model=PositionResponse, status_code=201)
 async def create_position(
     body: PositionCreate,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     position_service: PositionServiceDep,
 ) -> PositionResponse:
     """Create a new position."""
@@ -478,7 +478,7 @@ async def create_position(
 async def update_position(
     position_id: UUID,
     body: PositionUpdate,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     position_service: PositionServiceDep,
 ) -> PositionResponse:
     """Update an existing position."""
@@ -490,7 +490,7 @@ async def update_position(
 @position_router.delete("/{position_id}", status_code=204)
 async def delete_position(
     position_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     position_service: PositionServiceDep,
 ) -> None:
     """Delete a position (cascade-protected)."""

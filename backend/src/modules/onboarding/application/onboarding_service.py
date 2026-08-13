@@ -552,8 +552,8 @@ class OnboardingService:
         if task is None:
             raise OnboardingTaskNotFoundError()
 
-        # Step 3: authorization — admin only (R4.5).
-        if actor.role != UserRole.ADMIN:
+        # Step 3: authorization — HR only (R4.5).
+        if actor.role != UserRole.HR:
             raise OnboardingAuthorizationError()
 
         # Step 4: idempotent no-op when the target status matches current status
@@ -748,7 +748,7 @@ class OnboardingService:
         actor: User,
         data: dict[str, Any],
     ) -> OnboardingProcess:
-        if actor.role != UserRole.ADMIN:
+        if actor.role != UserRole.HR:
             raise OnboardingAuthorizationError()
 
         try:

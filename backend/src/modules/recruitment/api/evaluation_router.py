@@ -84,13 +84,14 @@ class CommitToEvaluationSetRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _require_hr(current_user: User) -> None:
-    """Guard: require HR role for evaluation operations."""
-    if current_user.role != UserRole.ADMIN:
+async def require_hr(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Verify the current user has the HR role."""
+    if current_user.role != UserRole.HR:
         raise HTTPException(
             status_code=403,
             detail="Chỉ HR mới có quyền truy cập evaluation endpoints",
         )
+    return current_user
 
 
 def _build_evaluation_service(
@@ -107,6 +108,7 @@ def _build_evaluation_service(
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 
@@ -117,11 +119,10 @@ DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 @router.get("/sets", response_model=list[EvaluationSetResponse])
 async def list_evaluation_sets(
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> list[EvaluationSetResponse]:
     """List all evaluation sets, newest first."""
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
     sets = await eval_service.list_evaluation_sets()
 
@@ -143,11 +144,10 @@ async def list_evaluation_sets(
 @router.post("/sets", response_model=EvaluationSetResponse)
 async def create_evaluation_set(
     body: CreateEvaluationSetRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> EvaluationSetResponse:
     """Create a new versioned evaluation set."""
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
     es = await eval_service.create_evaluation_set(
         version=body.version,
@@ -165,11 +165,10 @@ async def create_evaluation_set(
 @router.get("/sets/{set_id}/samples", response_model=list[EvaluationSampleResponse])
 async def list_evaluation_samples(
     set_id: UUID,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> list[EvaluationSampleResponse]:
     """List all redacted samples in an evaluation set."""
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
     samples = await eval_service.list_samples_for_set(set_id)
 
@@ -201,14 +200,13 @@ async def list_evaluation_samples(
 async def commit_correction_to_evaluation_set(
     correction_id: UUID,
     body: CommitToEvaluationSetRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> EvaluationSampleResponse:
     """Commit a redacted correction to an evaluation set.
 
     The correction record must have been selected for evaluation first.
     """
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
 
     try:

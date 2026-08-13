@@ -43,7 +43,7 @@ from src.modules.assistant.infrastructure.quality_models import (
 from src.modules.assistant.infrastructure.tool_config_repository import (
     ToolConfigRepository,
 )
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.application.audit_service import AuditService
 from src.modules.identity.container import get_audit_service, get_db_session
 from src.modules.identity.domain.entities import AuditActionType, User
@@ -52,7 +52,7 @@ from src.modules.identity.domain.entities import AuditActionType, User
 # Type aliases
 # ---------------------------------------------------------------------------
 
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 AssistantServiceDep = Annotated[AssistantService, Depends(get_assistant_service)]
 AuditServiceDep = Annotated[AuditService, Depends(get_audit_service)]
 
@@ -72,7 +72,7 @@ router = APIRouter(prefix="/api/assistant", tags=["assistant"])
 )
 async def chat(
     body: ChatRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     assistant_service: AssistantServiceDep,
     audit_service: AuditServiceDep,
     session: AsyncSession = Depends(get_db_session),
@@ -147,7 +147,7 @@ async def chat(
 @router.post("/chat/stream")
 async def chat_stream(
     body: ChatRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     assistant_service: AssistantServiceDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> StreamingResponse:
@@ -208,7 +208,7 @@ async def chat_stream(
 @router.post("/feedback", status_code=204)
 async def assistant_feedback(
     body: AssistantFeedbackRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     audit_service: AuditServiceDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
@@ -241,7 +241,7 @@ async def assistant_feedback(
 @router.post("/draft-decision", status_code=204)
 async def record_draft_decision(
     body: DraftDecisionRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     audit_service: AuditServiceDep,
 ) -> None:
     """Record HR's confirm/reject decision without storing conversation text."""
@@ -265,7 +265,7 @@ async def record_draft_decision(
 @router.post("/session/start", response_model=SessionStartResponse)
 async def start_assistant_session(
     body: SessionStartRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> SessionStartResponse:
     """Start an AI Assistant chat session.
@@ -286,7 +286,7 @@ async def start_assistant_session(
 @router.post("/session/end", status_code=204)
 async def end_assistant_session(
     body: SessionEndRequest,
-    _user: AdminUserDep,
+    _user: HRUserDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """End an AI Assistant chat session.

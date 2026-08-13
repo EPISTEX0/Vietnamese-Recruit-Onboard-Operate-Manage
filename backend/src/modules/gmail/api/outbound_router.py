@@ -45,13 +45,13 @@ router = APIRouter(prefix="/api/outbound-emails", tags=["outbound-emails"])
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
-async def require_admin(current_user: CurrentUserDep) -> User:
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def require_hr(current_user: CurrentUserDep) -> User:
+    if current_user.role != UserRole.HR:
+        raise HTTPException(status_code=403, detail="HR access required")
     return current_user
 
 
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 
 
 async def get_outbound_service_dep(
@@ -78,7 +78,7 @@ OutboundServiceDep = Annotated[OutboundEmailService, Depends(get_outbound_servic
 @router.post("", response_model=OutboundEmailResponse, status_code=201)
 async def create_outbound_email(
     body: OutboundEmailCreateRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     outbound_service: OutboundServiceDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> OutboundEmailResponse:
@@ -192,7 +192,7 @@ async def list_outbound_emails(
 @router.post("/{outbound_id}/send", response_model=OutboundEmailResponse)
 async def send_outbound_email(
     outbound_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     outbound_service: OutboundServiceDep,
 ) -> OutboundEmailResponse:
     """Send a pending outbound email immediately.
@@ -228,7 +228,7 @@ async def send_outbound_email(
 @router.post("/{outbound_id}/retry", response_model=OutboundEmailRetryResponse)
 async def retry_outbound_email(
     outbound_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     outbound_service: OutboundServiceDep,
 ) -> OutboundEmailRetryResponse:
     """Retry a failed outbound email.

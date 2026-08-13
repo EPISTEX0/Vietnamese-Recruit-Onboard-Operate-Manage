@@ -48,7 +48,7 @@ from src.modules.onboarding.domain.exceptions import OnboardingAuthorizationErro
 
 # Every defined role that is NOT ``admin``. Built dynamically so the property
 # automatically covers any future non-admin role; Hypothesis varies across it.
-_NON_ADMIN_ROLES = [role for role in UserRole if role != UserRole.ADMIN]
+_NON_ADMIN_ROLES = [role for role in UserRole if role != UserRole.HR]
 
 # Printable ASCII excluding the space and '@' so generated names/emails are
 # non-empty and emails carry exactly one '@'.
@@ -266,7 +266,7 @@ def test_non_admin_actor_cannot_change_onboarding_state(
     Validates: Requirements 4.5
     """
     # Sanity: the generated role is genuinely not admin.
-    assert role != UserRole.ADMIN
+    assert role != UserRole.HR
 
     actor = User(email=email, name=name, google_sub=google_sub, role=role)
 

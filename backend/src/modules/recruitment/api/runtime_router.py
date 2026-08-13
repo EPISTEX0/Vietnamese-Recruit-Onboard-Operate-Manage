@@ -37,7 +37,7 @@ class ServiceStatus:
 @runtime_router.get("/health")
 async def runtime_health(
     session: AsyncSession = Depends(get_db_session),
-    _current_user: User = Depends(require_admin),
+    _current_user: User = Depends(require_system_admin),
 ) -> dict[str, Any]:
     """Check runtime health of all infrastructure services.
 

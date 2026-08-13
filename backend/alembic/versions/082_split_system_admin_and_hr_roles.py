@@ -23,4 +23,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("UPDATE users SET role = 'admin' WHERE role = 'hr'")
+    # The pre-split model had only 'admin' and 'user', so BOTH administrative
+    # roles must collapse back to 'admin'. Mapping only 'hr' would leave every
+    # 'system_admin' row holding a value the old model cannot interpret.
+    op.execute("UPDATE users SET role = 'admin' WHERE role IN ('hr', 'system_admin')")

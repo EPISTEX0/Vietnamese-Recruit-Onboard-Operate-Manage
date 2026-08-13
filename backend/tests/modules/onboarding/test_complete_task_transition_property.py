@@ -191,7 +191,7 @@ def _build_admin_actor(actor_id: UUID, actor_email: str, actor_name: str) -> Use
         email=actor_email,
         name=actor_name,
         google_sub=f"google-{actor_id}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 

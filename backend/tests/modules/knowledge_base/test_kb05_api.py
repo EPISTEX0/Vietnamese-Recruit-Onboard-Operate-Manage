@@ -65,7 +65,7 @@ def _make_admin_user() -> User:  # type: ignore[name-defined]
     return User(
         email=f"admin-{suffix}@vroomhr.com",
         name="Test Admin",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 
@@ -73,7 +73,7 @@ def _make_admin_user() -> User:  # type: ignore[name-defined]
 def kb_client() -> Iterator[TestClient]:
     """Start pgvector PostgreSQL, run migrations, wire a TestClient with auth override.
 
-    Overrides ``require_admin`` so all endpoints are authenticated as admin.
+    Overrides ``require_hr`` so all endpoints are authenticated as admin.
     """
     if not _docker_available():
         pytest.skip("Docker is not available for the KB-05 integration test")
@@ -98,11 +98,11 @@ def kb_client() -> Iterator[TestClient]:
 
         importlib.reload(main_module)
         from src.main import app
-        from src.modules.identity.api.admin_router import require_admin
+        from src.modules.identity.api.admin_router import require_hr
 
-        # Override require_admin to bypass auth in tests
+        # Override require_hr to bypass auth in tests
         admin_user = _make_admin_user()
-        app.dependency_overrides[require_admin] = lambda: admin_user
+        app.dependency_overrides[require_hr] = lambda: admin_user
 
         with TestClient(app) as test_client:
             yield test_client

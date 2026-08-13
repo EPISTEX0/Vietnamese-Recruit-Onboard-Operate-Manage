@@ -53,7 +53,7 @@ def _make_admin() -> User:
         created_at=datetime.now(UTC),
         last_login=datetime.now(UTC),
         is_active=True,
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 
@@ -125,7 +125,7 @@ def _model_dump_kwargs(
 
 
 class TestListReviewQueue:
-    """Tests for GET /api/admin/employee-requests."""
+    """Tests for GET /api/hr/employee-requests."""
 
     def test_returns_200_with_submitted_requests(self) -> None:
         """Returns 200 with list of submitted requests."""
@@ -152,7 +152,7 @@ class TestListReviewQueue:
 
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
-        response = client.get("/api/admin/employee-requests")
+        response = client.get("/api/hr/employee-requests")
 
         assert response.status_code == 200
         data = response.json()
@@ -164,7 +164,7 @@ class TestListReviewQueue:
 
 
 class TestApproveRequest:
-    """Tests for POST /api/admin/employee-requests/{id}/approve."""
+    """Tests for POST /api/hr/employee-requests/{id}/approve."""
 
     def test_returns_200_on_success(self) -> None:
         """Returns 200 when approve succeeds."""
@@ -182,7 +182,7 @@ class TestApproveRequest:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{request_id}/approve",
+            f"/api/hr/employee-requests/{request_id}/approve",
             json={"review_reason": "Approved by HR"},
         )
 
@@ -208,7 +208,7 @@ class TestApproveRequest:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{request_id}/approve",
+            f"/api/hr/employee-requests/{request_id}/approve",
             json={"review_reason": None},
         )
 
@@ -234,7 +234,7 @@ class TestApproveRequest:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{request_id}/approve",
+            f"/api/hr/employee-requests/{request_id}/approve",
             json={},
         )
 
@@ -249,7 +249,7 @@ class TestApproveRequest:
 
 
 class TestRejectRequest:
-    """Tests for POST /api/admin/employee-requests/{id}/reject."""
+    """Tests for POST /api/hr/employee-requests/{id}/reject."""
 
     def test_returns_200_on_success(self) -> None:
         """Returns 200 when reject succeeds."""
@@ -267,7 +267,7 @@ class TestRejectRequest:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{request_id}/reject",
+            f"/api/hr/employee-requests/{request_id}/reject",
             json={"decision_reason": "Budget constraints"},
         )
 
@@ -298,7 +298,7 @@ class TestRejectRequest:
         app = _build_app(admin_user=non_admin)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{uuid4()}/reject",
+            f"/api/hr/employee-requests/{uuid4()}/reject",
             json={"decision_reason": "Not needed"},
         )
 
@@ -306,7 +306,7 @@ class TestRejectRequest:
 
 
 class TestListReviewQueueFilters:
-    """Tests for GET /api/admin/employee-requests with filters."""
+    """Tests for GET /api/hr/employee-requests with filters."""
 
     def test_filters_by_request_type(self) -> None:
         """Filter by leave type returns only leave requests."""
@@ -316,7 +316,7 @@ class TestListReviewQueueFilters:
 
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
-        response = client.get("/api/admin/employee-requests?request_type=leave")
+        response = client.get("/api/hr/employee-requests?request_type=leave")
 
         assert response.status_code == 200
         mock_repo.get_all_filtered.assert_awaited_once()
@@ -331,7 +331,7 @@ class TestListReviewQueueFilters:
 
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
-        response = client.get("/api/admin/employee-requests?status=approved")
+        response = client.get("/api/hr/employee-requests?status=approved")
 
         assert response.status_code == 200
         mock_repo.get_all_filtered.assert_awaited_once()
@@ -347,7 +347,7 @@ class TestListReviewQueueFilters:
         emp_id = uuid4()
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
-        response = client.get(f"/api/admin/employee-requests?employee_id={emp_id}")
+        response = client.get(f"/api/hr/employee-requests?employee_id={emp_id}")
 
         assert response.status_code == 200
         mock_repo.get_all_filtered.assert_awaited_once()
@@ -363,7 +363,7 @@ class TestListReviewQueueFilters:
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
         response = client.get(
-            "/api/admin/employee-requests?date_from=2026-06-01&date_to=2026-06-30"
+            "/api/hr/employee-requests?date_from=2026-06-01&date_to=2026-06-30"
         )
 
         assert response.status_code == 200
@@ -382,7 +382,7 @@ class TestListReviewQueueFilters:
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
         response = client.get(
-            f"/api/admin/employee-requests?request_type=overtime&status=submitted&employee_id={emp_id}"
+            f"/api/hr/employee-requests?request_type=overtime&status=submitted&employee_id={emp_id}"
         )
 
         assert response.status_code == 200
@@ -400,7 +400,7 @@ class TestListReviewQueueFilters:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{uuid4()}/reject",
+            f"/api/hr/employee-requests/{uuid4()}/reject",
             json={},
         )
 
@@ -414,7 +414,7 @@ class TestListReviewQueueFilters:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{uuid4()}/reject",
+            f"/api/hr/employee-requests/{uuid4()}/reject",
             json={"decision_reason": ""},
         )
 
@@ -428,7 +428,7 @@ class TestListReviewQueueFilters:
         app = _build_app(admin_user=admin, mock_review_service=mock_service)
         client = TestClient(app)
         response = client.post(
-            f"/api/admin/employee-requests/{uuid4()}/reject",
+            f"/api/hr/employee-requests/{uuid4()}/reject",
             json={"decision_reason": "   "},
         )
 

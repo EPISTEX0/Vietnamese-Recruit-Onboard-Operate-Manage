@@ -40,13 +40,13 @@ from src.modules.recruitment.domain.exceptions import (
 # ---------------------------------------------------------------------------
 
 
-async def require_admin(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def require_hr(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    if current_user.role != UserRole.HR:
+        raise HTTPException(status_code=403, detail="HR access required")
     return current_user
 
 
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 InterviewSchedulerServiceDep = Annotated[
     InterviewSchedulerService, Depends(get_interview_scheduler_service)
 ]
@@ -69,7 +69,7 @@ conflict_router = APIRouter(
 
 @conflict_router.get("", response_model=CalendarConflictListResponse)
 async def list_calendar_conflicts(
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     interview_scheduler: InterviewSchedulerServiceDep,
     status: str | None = Query(
         default=None,
@@ -106,7 +106,7 @@ async def list_calendar_conflicts(
 )
 async def get_calendar_conflict(
     conflict_id: UUID,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> CalendarConflictResponse:
     """Get a single calendar conflict by ID."""
@@ -133,7 +133,7 @@ async def get_calendar_conflict(
 async def resolve_calendar_conflict(
     conflict_id: UUID,
     body: ResolveConflictRequest,
-    current_user: AdminUserDep,
+    current_user: HRUserDep,
     interview_scheduler: InterviewSchedulerServiceDep,
 ) -> CalendarConflictResponse:
     """Resolve a calendar conflict.

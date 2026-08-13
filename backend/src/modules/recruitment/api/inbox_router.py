@@ -67,13 +67,14 @@ router = APIRouter(prefix="/api/recruitment/inbox", tags=["recruitment-inbox"])
 # ---------------------------------------------------------------------------
 
 
-def _require_hr(current_user: User) -> None:
-    """Guard: require HR role for inbox operations."""
-    if current_user.role != UserRole.ADMIN:
+async def require_hr(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Verify the current user has the HR role."""
+    if current_user.role != UserRole.HR:
         raise HTTPException(
             status_code=403,
             detail="Chỉ HR mới có quyền truy cập Recruitment Inbox",
         )
+    return current_user
 
 
 def _build_inbox_service(
@@ -107,6 +108,7 @@ def _build_evaluation_service(
 # ---------------------------------------------------------------------------
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 
@@ -136,7 +138,7 @@ _VALID_FILTER_STR = ", ".join(v.value for v in _VALID_FILTERS)
 
 @router.get("", response_model=InboxListResponse)
 async def list_inbox(
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
     inbox_status: str | None = Query(
@@ -157,7 +159,6 @@ async def list_inbox(
     By default, returns all non-dismissed items. Dismissed items are
     excluded from the default list but retained for audit.
     """
-    _require_hr(current_user)
 
     # Validate filter value if provided
     if inbox_status is not None:
@@ -188,7 +189,7 @@ async def list_inbox(
 @router.get("/{item_id}", response_model=InboxItemResponse)
 async def get_inbox_item(
     item_id: UUID,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> InboxItemResponse:
@@ -197,7 +198,6 @@ async def get_inbox_item(
     Shows prediction, calibrated confidence, evidence, source hints,
     attachment metadata, correction history, and dismissal audit.
     """
-    _require_hr(current_user)
 
     service = _build_inbox_service(session, inbox_repo)
     try:
@@ -215,7 +215,7 @@ async def get_inbox_item(
 async def correct_inbox_intent(
     item_id: UUID,
     body: CorrectIntentRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> InboxItemResponse:
@@ -225,7 +225,6 @@ async def correct_inbox_intent(
     Also creates a CorrectionRecord for safe evaluation feedback.
     Dismissed items cannot be corrected.
     """
-    _require_hr(current_user)
 
     service = _build_inbox_service(session, inbox_repo)
     eval_service = _build_evaluation_service(session)
@@ -269,7 +268,7 @@ async def correct_inbox_intent(
 @router.post("/{item_id}/dismiss", response_model=InboxItemResponse)
 async def dismiss_inbox_item(
     item_id: UUID,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> InboxItemResponse:
@@ -279,7 +278,6 @@ async def dismiss_inbox_item(
     worker retry recreation. The action is idempotent — dismissing an
     already dismissed item returns the current state without error.
     """
-    _require_hr(current_user)
 
     service = _build_inbox_service(session, inbox_repo)
     try:
@@ -303,12 +301,11 @@ async def dismiss_inbox_item(
 async def split_inbox_item(
     item_id: UUID,
     body: SplitInboxItemRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> SplitInboxItemResponse:
     """Create one Job Application per HR-identified applicant."""
-    _require_hr(current_user)
     service = _build_inbox_service(session, inbox_repo)
     try:
         applications = await service.split_item(
@@ -340,12 +337,11 @@ async def split_inbox_item(
 async def propose_cross_thread_link(
     item_id: UUID,
     body: ProposeLinkRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> LinkProposalResponse:
     """Propose, but do not apply, a link outside the Gmail thread."""
-    _require_hr(current_user)
     service = _build_inbox_service(session, inbox_repo)
     try:
         proposal = await service.propose_cross_thread_link(
@@ -368,12 +364,11 @@ async def propose_cross_thread_link(
 async def resolve_cross_thread_link(
     proposal_id: UUID,
     body: ResolveLinkProposalRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
     inbox_repo: RecruitmentInboxItemRepository = Depends(get_inbox_repo),
 ) -> LinkProposalResponse:
     """Confirm or reject a pending cross-thread link proposal."""
-    _require_hr(current_user)
     service = _build_inbox_service(session, inbox_repo)
     try:
         proposal = await service.resolve_link_proposal(
@@ -401,11 +396,10 @@ async def resolve_cross_thread_link(
 @router.get("/{item_id}/corrections", response_model=list[dict[str, object]])
 async def list_item_corrections(
     item_id: UUID,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> list[dict[str, object]]:
     """List all correction records for an inbox item."""
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
     records = await eval_service.list_corrections_for_source(item_id)
     return [
@@ -434,11 +428,10 @@ async def list_item_corrections(
 async def select_correction_for_evaluation(
     item_id: UUID,
     correction_id: UUID,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     session: DbSessionDep,
 ) -> dict[str, object]:
     """Opt a correction record into evaluation for this inbox item."""
-    _require_hr(current_user)
     eval_service = _build_evaluation_service(session)
 
     # Build redacted subject/snippet from the inbox item

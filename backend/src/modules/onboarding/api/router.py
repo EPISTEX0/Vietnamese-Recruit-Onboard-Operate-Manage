@@ -14,12 +14,12 @@ onboarding processes and drive them to completion:
 
 Authorization ordering
 ----------------------
-The two ``GET`` endpoints enforce the ``admin`` role with the ``require_admin``
-route dependency (mirrored from ``identity.api.admin_router.require_admin``).
+The two ``GET`` endpoints enforce the ``admin`` role with the ``require_hr``
+route dependency (mirrored from ``identity.api.admin_router.require_hr``).
 
 ``PATCH /tasks/{task_id}`` must, per R4.4, evaluate task *existence* (404)
 before requester *authorization* (403), so it deliberately does **not** use
-``require_admin`` as a dependency. Instead it resolves the authenticated user
+``require_hr`` as a dependency. Instead it resolves the authenticated user
 via ``get_current_user`` and passes them to
 :meth:`OnboardingService.complete_task`, which performs the checks in the
 mandated order: path validation (UUID + status enum) → 422 (handled by FastAPI
@@ -51,7 +51,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.employee.infrastructure.employee_repository import EmployeeRepository
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.container import get_current_user, get_db_session
 from src.modules.identity.domain.entities import User
 from src.modules.onboarding.api.schemas import (
@@ -77,7 +77,7 @@ from src.modules.recruitment.infrastructure.repositories import (
 # ---------------------------------------------------------------------------
 
 OnboardingServiceDep = Annotated[OnboardingService, Depends(get_onboarding_service)]
-AdminUserDep = Annotated[User, Depends(require_admin)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
@@ -95,7 +95,7 @@ onboarding_router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
 @onboarding_router.get("/counts", response_model=OnboardingCountsResponse)
 async def get_counts(
-    _admin: AdminUserDep,
+    _admin: HRUserDep,
     onboarding_service: OnboardingServiceDep,
 ) -> OnboardingCountsResponse:
     """Return aggregate process counts by status for tab badges.
@@ -117,7 +117,7 @@ async def get_counts(
 
 @onboarding_router.get("/processes", response_model=OnboardingProcessListResponse)
 async def list_processes(
-    _admin: AdminUserDep,
+    _admin: HRUserDep,
     onboarding_service: OnboardingServiceDep,
     status: OnboardingStatus | None = Query(
         default=None, description="Filter by process status (in_progress or complete)"
@@ -186,7 +186,7 @@ async def list_processes(
 )
 async def get_process(
     process_id: UUID,
-    _admin: AdminUserDep,
+    _admin: HRUserDep,
     onboarding_service: OnboardingServiceDep,
     db_session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> OnboardingProcessDetailResponse:
@@ -286,7 +286,7 @@ async def update_task(
     or an invalid status yields a 422 before this handler runs (R3.5, R4.6).
 
     Authorization deliberately follows existence: this endpoint resolves the
-    user via ``get_current_user`` (not ``require_admin``) and delegates to
+    user via ``get_current_user`` (not ``require_hr``) and delegates to
     :meth:`OnboardingService.complete_task`, which checks task existence (404)
     before the actor's ``admin`` role (403) per R4.4/R4.5.
 

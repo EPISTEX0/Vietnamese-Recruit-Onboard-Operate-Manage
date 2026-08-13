@@ -10,7 +10,7 @@ from src.modules.identity.infrastructure.user_repository import UserRepository
 
 @pytest.mark.asyncio
 async def test_get_by_email_uses_case_insensitive_lookup() -> None:
-    user = User(email="hr@example.com", name="HR", role=UserRole.ADMIN)
+    user = User(email="hr@example.com", name="HR", role=UserRole.SYSTEM_ADMIN)
     result = MagicMock()
     result.scalars.return_value.first.return_value = user
     session = MagicMock()
@@ -31,11 +31,11 @@ async def test_create_local_account_persists_password_account() -> None:
         email="hr@example.com",
         name="HR",
         password_hash="hashed",
-        role=UserRole.ADMIN,
+        role=UserRole.SYSTEM_ADMIN,
     )
 
     assert user.email == "hr@example.com"
     assert user.password_hash == "hashed"
-    assert user.role is UserRole.ADMIN
+    assert user.role is UserRole.SYSTEM_ADMIN
     session.add.assert_called_once_with(user)
     session.flush.assert_awaited_once()

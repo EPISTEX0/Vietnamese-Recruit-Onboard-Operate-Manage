@@ -188,7 +188,7 @@ class TestListPayslips:
 
     def test_admin_without_employee_record_returns_403(self) -> None:
         """Admin user without Employee record gets 403."""
-        app = _build_app(employee=None, user=FakeUser(role=UserRole.ADMIN))
+        app = _build_app(employee=None, user=FakeUser(role=UserRole.HR))
         client = TestClient(app)
 
         resp = client.get("/api/payslips/me")
@@ -262,7 +262,7 @@ class TestGetPayslipById:
 
     def test_admin_without_employee_returns_403(self) -> None:
         """Admin without Employee record gets 403 on detail view."""
-        app = _build_app(employee=None, user=FakeUser(role=UserRole.ADMIN))
+        app = _build_app(employee=None, user=FakeUser(role=UserRole.HR))
         client = TestClient(app)
 
         resp = client.get(f"/api/payslips/me/{uuid4()}")

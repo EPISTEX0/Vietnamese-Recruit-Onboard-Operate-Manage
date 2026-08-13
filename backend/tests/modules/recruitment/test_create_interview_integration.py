@@ -312,7 +312,7 @@ async def _seed_data(
         email=f"hr-{suffix}@example.com",
         name="HR Admin",
         google_sub=f"gs-{suffix}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
     interviewer = Employee(
         employee_code=f"NV-{suffix}",

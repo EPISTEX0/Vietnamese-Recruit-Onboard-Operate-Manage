@@ -140,7 +140,7 @@ class TestGetEmployeeOwnership:
     @pytest.mark.asyncio
     async def test_admin_can_view_any_profile(self):
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         emp = _make_employee(employee_id=emp_id)
         svc = AsyncMock()
         svc.get_employee.return_value = emp
@@ -286,7 +286,7 @@ class TestUpdateEmployeeSelfEdit:
     @pytest.mark.asyncio
     async def test_admin_can_update_any_field(self):
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         emp = _make_employee(employee_id=emp_id)
         svc = AsyncMock()
         svc.update_employee.return_value = emp
@@ -351,7 +351,7 @@ class TestListDocumentsOwnership:
     @pytest.mark.asyncio
     async def test_admin_can_list_any_documents(self):
         emp_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         svc = AsyncMock()
         svc.list_documents.return_value = []
 
@@ -421,7 +421,7 @@ class TestDownloadDocumentOwnership:
     async def test_admin_can_download_any_document(self):
         emp_id = uuid4()
         doc_id = uuid4()
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         doc = _make_document(employee_id=emp_id, doc_id=doc_id)
 
         svc = AsyncMock()
@@ -448,30 +448,30 @@ class TestDownloadDocumentOwnership:
 class TestDeleteDocumentOwnership:
     """Ownership boundary for DELETE /api/documents/{id}.
 
-    The admin guard is enforced by the ``require_admin`` dependency, not
+    The HR guard is enforced by the ``require_hr`` dependency, not
     inline in the handler.  These tests verify the dependency directly.
     """
 
     @pytest.mark.asyncio
-    async def test_non_admin_rejected_by_require_admin(self):
-        from src.modules.identity.api.admin_router import require_admin
+    async def test_non_hr_rejected_by_require_hr(self):
+        from src.modules.identity.api.admin_router import require_hr
 
         user = _make_user(role="user")
         with pytest.raises(HTTPException) as exc_info:
-            await require_admin(current_user=user)
+            await require_hr(current_user=user)
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_admin_passes_require_admin(self):
-        from src.modules.identity.api.admin_router import require_admin
+    async def test_hr_passes_require_hr(self):
+        from src.modules.identity.api.admin_router import require_hr
 
-        user = _make_user(role="admin")
-        result = await require_admin(current_user=user)
-        assert result.role == "admin"
+        user = _make_user(role="hr")
+        result = await require_hr(current_user=user)
+        assert result.role == "hr"
 
     @pytest.mark.asyncio
     async def test_admin_can_delete_document(self):
-        user = _make_user(role="admin")
+        user = _make_user(role="hr")
         svc = AsyncMock()
 
         await delete_document(

@@ -79,7 +79,7 @@ async def test_setup_race_rolls_back_and_returns_stable_error() -> None:
         side_effect=IntegrityError("insert", {}, Exception("singleton conflict"))
     )
     users = MagicMock()
-    users.count_admins = AsyncMock(return_value=0)
+    users.count_system_admins = AsyncMock(return_value=0)
     users.count_users = AsyncMock(return_value=0)
     service = AuthService(
         settings=MagicMock(refresh_token_expire_days=7),

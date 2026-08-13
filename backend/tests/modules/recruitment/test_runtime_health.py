@@ -1,6 +1,6 @@
 """Tests for the runtime health API endpoint.
 
-Verifies the GET /api/admin/runtime/health endpoint returns correct status
+Verifies the GET /api/system-admin/runtime/health endpoint returns correct status
 for all infrastructure services (Redis, PostgreSQL, MinIO, Gmail Worker,
 Onboarding Worker) and handles unhealthy states properly.
 
@@ -36,7 +36,7 @@ def _make_admin() -> User:
     return User(
         id=uuid4(),
         email="admin@test.com",
-        role=UserRole.ADMIN,
+        role=UserRole.SYSTEM_ADMIN,
         is_active=True,
     )
 
@@ -58,7 +58,7 @@ async def _call_health(
     redis_ping_side_effect: BaseException | None = None,
     minio_status: int = 200,
 ) -> dict:
-    """Set up DI overrides and patched modules, then GET /api/admin/runtime/health."""
+    """Set up DI overrides and patched modules, then GET /api/system-admin/runtime/health."""
     admin = _make_admin()
     db_session = _make_db_session()
     app.dependency_overrides[get_current_user] = lambda: admin
@@ -106,7 +106,7 @@ async def _call_health(
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/admin/runtime/health")
+            resp = await client.get("/api/system-admin/runtime/health")
         return resp.json()
 
 

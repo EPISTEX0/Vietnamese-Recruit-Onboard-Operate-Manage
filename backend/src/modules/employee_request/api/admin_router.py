@@ -90,7 +90,7 @@ async def approve_request(
     """Approve a submitted employee request."""
     updated = await review_service.approve_request(
         request_id=request_id,
-        admin_user=admin_user,
+        admin_user=hr_user,
         review_reason=body.review_reason,
     )
     return ReviewResponse(
@@ -114,7 +114,7 @@ async def reject_request(
     """Reject a submitted employee request (reason required)."""
     updated = await review_service.reject_request(
         request_id=request_id,
-        admin_user=admin_user,
+        admin_user=hr_user,
         review_reason=body.decision_reason,
     )
     return ReviewResponse(

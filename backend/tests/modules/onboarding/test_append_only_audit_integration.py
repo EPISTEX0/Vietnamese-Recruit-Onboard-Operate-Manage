@@ -122,7 +122,7 @@ def _make_user() -> User:
         email=f"hr.admin-{suffix}@example.com",
         name="HR Admin",
         google_sub=f"google-sub-{suffix}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 

@@ -26,7 +26,6 @@ def register_gmail_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RateLimitedException)
     async def _rate_limited_handler(request: Request, exc: RateLimitedException) -> JSONResponse:
         """Handle RateLimitedException with Retry-After header.
-        lang = get_request_language(request)
 
         Args:
             request: The incoming request that triggered the exception.
@@ -35,6 +34,7 @@ def register_gmail_error_handlers(app: FastAPI) -> None:
         Returns:
             A JSONResponse with 429 status and Retry-After header.
         """
+        lang = get_request_language(request)
         headers = {}
         if exc.retry_after > 0:
             headers["Retry-After"] = str(exc.retry_after)

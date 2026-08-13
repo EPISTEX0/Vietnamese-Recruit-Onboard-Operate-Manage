@@ -15,7 +15,7 @@ API-layer contract of the onboarding router (``/api/onboarding/*``):
   read-model dataclasses to its response schema correctly (in particular the
   dataclasses' ``process_id`` → response ``id``).
 
-The router depends on three injectables: ``require_admin`` (GET auth),
+The router depends on three injectables: ``require_hr`` (GET auth),
 ``get_current_user`` (PATCH actor), and ``get_onboarding_service`` (the service).
 The tests build a fresh FastAPI app with the onboarding router + error handlers
 and override all three via ``app.dependency_overrides``: a fake admin ``User``
@@ -37,7 +37,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.modules.identity.api.admin_router import require_admin
+from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.container import get_current_user, get_db_session
 from src.modules.identity.domain.entities import User, UserRole
 from src.modules.onboarding.api.error_handler import register_onboarding_error_handlers
@@ -160,7 +160,7 @@ def _make_admin_user() -> User:
         email=f"hr-{suffix}@example.com",
         name="HR Admin",
         google_sub=f"sub-{suffix}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 
@@ -174,7 +174,7 @@ def fake_service() -> FakeOnboardingService:
 def client(fake_service: FakeOnboardingService) -> Iterator[TestClient]:
     """Build a TestClient over the onboarding router with overridden deps.
 
-    Overrides ``require_admin`` and ``get_current_user`` with a fake admin user
+    Overrides ``require_hr`` and ``get_current_user`` with a fake admin user
     (so auth is satisfied) and ``get_onboarding_service`` with the fake service
     (so no database is touched). Dependency overrides are cleaned up afterwards.
     """
@@ -191,7 +191,7 @@ def client(fake_service: FakeOnboardingService) -> Iterator[TestClient]:
     mock_result.scalars.return_value = mock_scalars
     mock_session = AsyncMock()
     mock_session.execute.return_value = mock_result
-    app.dependency_overrides[require_admin] = lambda: admin_user
+    app.dependency_overrides[require_hr] = lambda: admin_user
     app.dependency_overrides[get_current_user] = lambda: admin_user
     app.dependency_overrides[get_onboarding_service] = lambda: fake_service
     app.dependency_overrides[get_db_session] = lambda: mock_session
@@ -389,4 +389,4 @@ def test_patch_task_happy_path_serializes_task_response(
     called_task_id, called_actor, called_status = fake_service.complete_task_calls[0]
     assert called_task_id == _TASK_ID
     assert called_status == "done"
-    assert called_actor.role == UserRole.ADMIN
+    assert called_actor.role == UserRole.HR

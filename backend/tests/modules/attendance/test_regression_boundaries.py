@@ -313,7 +313,7 @@ class TestCorrectionAuditBoundary:
 
         from src.modules.identity.domain.entities import AuditActionType, User, UserRole
 
-        admin = User(id=uuid4(), role=UserRole.ADMIN, email="admin@test.com")
+        admin = User(id=uuid4(), role=UserRole.HR, email="admin@test.com")
 
         audit_service = AsyncMock()
         audit_service.log_action = AsyncMock()
@@ -429,7 +429,7 @@ class TestEmptyStateBoundary:
 
         from src.modules.identity.domain.entities import User, UserRole
 
-        admin = User(id=uuid4(), role=UserRole.ADMIN, email="admin@test.com")
+        admin = User(id=uuid4(), role=UserRole.HR, email="admin@test.com")
         audit_service = AsyncMock()
 
         with pytest.raises(ValueError, match="Attendance record not found"):

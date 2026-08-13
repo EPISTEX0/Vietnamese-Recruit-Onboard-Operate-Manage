@@ -133,7 +133,7 @@ class TestSetupEndpoint:
             name="HR Admin",
             avatar_url=None,
             employee_id=None,
-            role="admin",
+            role="hr",
             created_at=datetime(2024, 1, 1, tzinfo=UTC),
             last_login=datetime(2024, 1, 1, tzinfo=UTC),
         )

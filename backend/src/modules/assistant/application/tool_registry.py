@@ -19,6 +19,7 @@ import typing
 from typing import TYPE_CHECKING, Any
 
 from src.modules.assistant.domain.tools import DraftAction, ToolKind
+from src.shared.messages import get_message
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,14 +1,14 @@
 """Pydantic request/response schemas for the Admin API endpoints.
 
 Defines data transfer objects for user management, role changes,
-and audit log retrieval under /api/admin/*.
+and audit log retrieval under /api/system-admin/*.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from src.modules.gmail.application.classification_rollout import BusinessPolicy, RolloutMode
 from src.modules.identity.domain.entities import AuditActionType, UserRole
@@ -125,13 +125,29 @@ class DataPolicyResponse(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    """Request schema for PATCH /api/admin/users/{id}/role.
+    """Request schema for PATCH /api/system-admin/users/{id}/role.
 
     Attributes:
-        role: The new role to assign to the user. Must be 'admin' or 'user'.
+        role: The new role to assign. One of 'system_admin', 'hr', or 'user'.
     """
 
     role: UserRole
+
+
+class StaffAccountCreateRequest(BaseModel):
+    """Request schema for POST /api/system-admin/users.
+
+    Attributes:
+        email: The new account's email address.
+        name: The new account's display name.
+        role: The staff role to assign. Only 'hr' and 'system_admin' are
+            accepted -- self-service 'user' accounts are provisioned by HR
+            against an Employee record.
+    """
+
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=255)
+    role: Literal[UserRole.HR, UserRole.SYSTEM_ADMIN]
 
 
 class AdminUserResponse(BaseModel):
@@ -289,3 +305,16 @@ class AssistantToolConfigUpdateRequest(BaseModel):
     """
 
     tools: dict[str, bool]
+
+
+class StaffAccountCreateResponse(BaseModel):
+    """Response schema for POST /api/system-admin/users.
+
+    Attributes:
+        user: The created account.
+        temporary_password: One-time password; the account must change it at
+            first login. Returned only here and never persisted in clear text.
+    """
+
+    user: AdminUserResponse
+    temporary_password: str

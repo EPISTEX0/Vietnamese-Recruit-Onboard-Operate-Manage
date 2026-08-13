@@ -36,7 +36,7 @@ def admin_user() -> User:
         created_at=datetime.now(UTC),
         last_login=datetime.now(UTC),
         is_active=True,
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
 
 

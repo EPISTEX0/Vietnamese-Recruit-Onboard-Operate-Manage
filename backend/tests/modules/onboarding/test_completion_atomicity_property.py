@@ -314,7 +314,7 @@ def _build_world(
         email=actor_email,
         name="HR Admin",
         google_sub=f"sub-{actor_email}",
-        role=UserRole.ADMIN,
+        role=UserRole.HR,
     )
     audit_repo = FakeAuditRepo(fail_on)
     session = FakeSession(tasks, process, employee, audit_repo)

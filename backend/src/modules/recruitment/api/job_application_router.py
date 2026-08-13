@@ -51,13 +51,14 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 
-def _require_hr(current_user: User) -> None:
-    """Guard: require HR role for job application operations."""
-    if current_user.role != UserRole.ADMIN:
+async def require_hr(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Verify the current user has the HR role."""
+    if current_user.role != UserRole.HR:
         raise HTTPException(
             status_code=403,
             detail="Chỉ HR mới có quyền quản lý Job Application",
         )
+    return current_user
 
 
 async def _build_service(
@@ -77,6 +78,7 @@ async def _build_service(
 # ---------------------------------------------------------------------------
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+HRUserDep = Annotated[User, Depends(require_hr)]
 ServiceDep = Annotated[JobApplicationDecisionService, Depends(_build_service)]
 
 
@@ -92,11 +94,10 @@ ServiceDep = Annotated[JobApplicationDecisionService, Depends(_build_service)]
 async def correct_job_application_source(
     job_application_id: UUID,
     body: CorrectJobApplicationSourceRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     service: ServiceDep,
 ) -> JobApplicationSourceResponse:
     """Correct the source classification with an HR audit trail."""
-    _require_hr(current_user)
     application = await service.correct_source(
         job_application_id, body.source, user_id=current_user.id
     )
@@ -110,7 +111,7 @@ async def correct_job_application_source(
 async def assign_job_application(
     job_application_id: UUID,
     body: AssignJobApplicationRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     service: ServiceDep,
 ) -> JobApplicationAssignmentResponse:
     """Assign or unassign a Job Application to/from a Job Opening.
@@ -132,7 +133,6 @@ async def assign_job_application(
         404: If Job Application not found.
         409: If assignment is blocked or Job Opening not open.
     """
-    _require_hr(current_user)
 
     try:
         result = await service.assign_to_job_opening(
@@ -160,7 +160,7 @@ async def assign_job_application(
 async def promote_job_application(
     job_application_id: UUID,
     body: PromoteJobApplicationRequest,
-    current_user: CurrentUserDep,
+    current_user: HRUserDep,
     service: ServiceDep,
 ) -> JobApplicationPromoteResponse:
     """Promote a valid Job Application to exactly one Candidate.
@@ -183,7 +183,6 @@ async def promote_job_application(
         404: If Job Application not found.
         409: If promotion is blocked (dismissed, missing fields).
     """
-    _require_hr(current_user)
 
     try:
         app, candidate = await service.promote_to_candidate(

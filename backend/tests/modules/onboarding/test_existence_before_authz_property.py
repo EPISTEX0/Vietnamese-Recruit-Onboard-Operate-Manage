@@ -46,7 +46,7 @@ from src.modules.onboarding.domain.exceptions import (
 # property must hold for any non-admin actor; Hypothesis varies the actor's
 # role across this set so the existence check is proven to precede the role
 # check regardless of which non-admin role makes the request.
-_NON_ADMIN_ROLES = [role for role in UserRole if role != UserRole.ADMIN]
+_NON_ADMIN_ROLES = [role for role in UserRole if role != UserRole.HR]
 
 
 # ---------------------------------------------------------------------------
@@ -223,4 +223,4 @@ def test_task_existence_is_evaluated_before_authorization(
 def test_non_admin_roles_strategy_excludes_admin() -> None:
     """Guard: the non-admin role set is non-empty and never includes admin."""
     assert _NON_ADMIN_ROLES, "expected at least one non-admin role to vary over"
-    assert UserRole.ADMIN not in _NON_ADMIN_ROLES
+    assert UserRole.HR not in _NON_ADMIN_ROLES

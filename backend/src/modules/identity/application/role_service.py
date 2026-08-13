@@ -1,8 +1,9 @@
 """RoleService for managing user role assignments.
 
-Provides methods to promote users to admin, demote admins to regular users,
-and bootstrap the super admin at application startup. Includes protection
-against demoting the last admin or the super admin.
+Moves users between the three roles of ADR-0009 (SYSTEM_ADMIN, HR, USER) and
+bootstraps the super admin at application startup. Every transition runs
+through :meth:`RoleService.change_role`, which refuses changes that would
+lock the deployment out of its own system-admin namespace.
 """
 
 from __future__ import annotations
@@ -21,16 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 class LastAdminError(AuthError):
-    """Cannot demote the last remaining administrator.
+    """Cannot remove the SYSTEM_ADMIN role from the last system admin.
 
-    Raised when an attempt is made to remove admin role from the only
-    user with admin privileges, which would leave the system without
-    any administrator.
+    Raised when a role change would leave the deployment with zero
+    SYSTEM_ADMIN accounts. There is no in-app recovery from that state --
+    creating a system admin itself requires a system admin -- so it is
+    refused at the service boundary.
     """
 
     status_code = 400
     error_code = "ADMIN_LAST_ADMIN"
-    message = "Cannot remove the last administrator"
+    message = "Cannot remove the last system administrator"
 
 
 class SuperAdminProtectedError(AuthError):
@@ -72,9 +74,10 @@ class UserNotFoundError(AuthError):
 class RoleService:
     """Manages user role assignments with safety protections.
 
-    Coordinates role changes (promote/demote) while enforcing invariants:
-    - The super admin cannot be demoted.
-    - The last remaining admin cannot be demoted.
+    Coordinates role changes while enforcing invariants:
+    - An admin cannot change their own role.
+    - The configured super admin's role cannot be changed.
+    - The last remaining SYSTEM_ADMIN cannot lose that role.
 
     Args:
         session: Async database session for user queries and updates.
@@ -93,72 +96,84 @@ class RoleService:
         self._session = session
         self._super_admin_email = super_admin_email.lower() if super_admin_email else None
 
-    async def promote_to_system_admin(self, target_user_id: UUID, admin_user: User) -> User:
-        """Promote a user to the system_admin role.
+    async def change_role(
+        self, target_user_id: UUID, new_role: UserRole, admin_user: User
+    ) -> tuple[User, UserRole]:
+        """Assign ``new_role`` to a user, enforcing every lockout guard.
 
-        Changes the target user's role to SYSTEM_ADMIN.
+        This is the single entry point for role transitions; the named
+        ``promote_*``/``demote_*`` helpers delegate here so no transition can
+        bypass a guard. Guards apply uniformly in both directions -- demoting
+        the last system admin to HR strands a deployment exactly as demoting
+        them to USER does.
+
+        Args:
+            target_user_id: The user whose role is changing.
+            new_role: The role to assign.
+            admin_user: The system admin performing the change.
+
+        Returns:
+            A tuple of (updated user, the role held before the change). The
+            previous role is returned so callers can write an accurate audit
+            entry without re-reading the row.
+
+        Raises:
+            UserNotFoundError: The target user does not exist.
+            SelfDemotionError: The actor is the target.
+            SuperAdminProtectedError: The target is the configured super admin.
+            LastAdminError: The change would leave zero system admins.
         """
-        user = await self._user_repository.get_by_id(target_user_id)
+        user = await self._get_user_by_id(target_user_id)
         if user is None:
             raise UserNotFoundError(f"User with ID {target_user_id} not found")
 
-        if user.role == UserRole.SYSTEM_ADMIN:
-            return user
+        previous_role = user.role
+        if previous_role == new_role:
+            return user, previous_role
 
-        user.role = UserRole.SYSTEM_ADMIN
-        self._session.add(user)
-        await self._session.flush()
-        return user
-
-    async def promote_to_hr(self, target_user_id: UUID, admin_user: User) -> User:
-        """Promote a user to the hr role.
-
-        Changes the target user's role to HR.
-        """
-        user = await self._user_repository.get_by_id(target_user_id)
-        if user is None:
-            raise UserNotFoundError(f"User with ID {target_user_id} not found")
-
-        if user.role == UserRole.HR:
-            return user
-
-        user.role = UserRole.HR
-        self._session.add(user)
-        await self._session.flush()
-        return user
-
-    async def demote_to_user(self, target_user_id: UUID, admin_user: User) -> User:
-        """Demote a user to regular user role.
-
-        Changes the target user's role to USER. Enforces protection against
-        demoting the super admin or the last remaining system admin.
-        """
-        user = await self._user_repository.get_by_id(target_user_id)
-        if user is None:
-            raise UserNotFoundError(f"User with ID {target_user_id} not found")
-
-        if user.role == UserRole.USER:
-            return user
-
-        # Prevent self-demotion
+        # An admin changing their own role can lock themselves out of the
+        # namespace they need in order to undo it.
         if user.id == admin_user.id:
             raise SelfDemotionError()
 
-        # Prevent demoting super admin
-        if self._super_admin_email and user.email.lower() == self._super_admin_email.lower():
+        if self._super_admin_email and user.email.lower() == self._super_admin_email:
             raise SuperAdminProtectedError()
 
-        # Prevent demoting the last system_admin
-        if user.role == UserRole.SYSTEM_ADMIN:
-            admin_count = await self._count_system_admins()
-            if admin_count <= 1:
-                raise LastAdminError()
+        if previous_role == UserRole.SYSTEM_ADMIN and await self._count_system_admins() <= 1:
+            raise LastAdminError()
 
-        user.role = UserRole.USER
+        user.role = new_role
         self._session.add(user)
         await self._session.flush()
-        logger.info("User %s demoted to user by %s", user.email, admin_user.email)
+        logger.info(
+            "User %s role changed %s -> %s by %s",
+            user.email,
+            previous_role.value,
+            new_role.value,
+            admin_user.email,
+        )
+        return user, previous_role
+
+    async def promote_to_system_admin(self, target_user_id: UUID, admin_user: User) -> User:
+        """Assign the SYSTEM_ADMIN role to a user."""
+        user, _ = await self.change_role(target_user_id, UserRole.SYSTEM_ADMIN, admin_user)
         return user
+
+    async def promote_to_hr(self, target_user_id: UUID, admin_user: User) -> User:
+        """Assign the HR role to a user."""
+        user, _ = await self.change_role(target_user_id, UserRole.HR, admin_user)
+        return user
+
+    async def demote_to_user(self, target_user_id: UUID, admin_user: User) -> User:
+        """Assign the self-service USER role to a user."""
+        user, _ = await self.change_role(target_user_id, UserRole.USER, admin_user)
+        return user
+
+    async def _get_user_by_id(self, user_id: UUID) -> User | None:
+        """Load a user by primary key, or None when absent."""
+        statement = select(User).where(User.id == user_id)
+        result = await self._session.execute(statement)
+        return result.scalars().first()
 
     async def ensure_super_admin(self, email: str) -> None:
         """Ensure the super admin email has the SYSTEM_ADMIN role."""

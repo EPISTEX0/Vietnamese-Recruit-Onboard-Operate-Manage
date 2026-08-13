@@ -91,7 +91,7 @@ async def list_payslips(
     page_size = min(max(1, page_size), 100)
 
     payslips, total = await service.list_payslips(
-        admin=admin_user,
+        admin=hr_user,
         page=page,
         page_size=page_size,
         employee_id=emp_id,
@@ -126,7 +126,7 @@ async def create_payslip(
 
     try:
         payslip = await service.create_draft(
-            admin=admin_user,
+            admin=hr_user,
             employee_id=request.employee_id,
             period_month=normalized_period,
             gross_salary=request.gross_salary,
@@ -162,7 +162,7 @@ async def get_payslip(
 
     try:
         payslip = await service.get_payslip_by_id(
-            admin=admin_user,
+            admin=hr_user,
             payslip_id=pid,
         )
     except PayslipNotFoundError:
@@ -194,7 +194,7 @@ async def update_payslip(
 
     try:
         payslip = await service.update_draft(
-            admin=admin_user,
+            admin=hr_user,
             payslip_id=pid,
             gross_salary=request.gross_salary,
             deductions=request.deductions,
@@ -235,7 +235,7 @@ async def publish_payslip(
 
     try:
         payslip = await service.publish(
-            admin=admin_user,
+            admin=hr_user,
             payslip_id=pid,
         )
     except PayslipNotFoundError:
@@ -268,7 +268,7 @@ async def delete_payslip(
 
     try:
         await service.delete(
-            admin=admin_user,
+            admin=hr_user,
             payslip_id=pid,
         )
     except PayslipNotFoundError:

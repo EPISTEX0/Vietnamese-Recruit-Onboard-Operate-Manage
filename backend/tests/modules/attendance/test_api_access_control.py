@@ -44,7 +44,7 @@ class FakeAdminUser:
 
     def __init__(self) -> None:
         self.id = "admin-uuid"
-        self.role = UserRole.ADMIN
+        self.role = UserRole.HR
         self.email = "admin@example.com"
 
 

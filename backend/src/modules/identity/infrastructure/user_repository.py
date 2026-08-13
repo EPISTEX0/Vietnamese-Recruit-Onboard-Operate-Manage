@@ -67,9 +67,14 @@ class UserRepository:
         result = await self.session.execute(statement)
         return int(result.scalar_one())
 
-    async def count_admins(self) -> int:
-        """Count HR accounts in the system."""
-        statement = select(func.count()).select_from(User).where(User.role == UserRole.ADMIN)
+    async def count_system_admins(self) -> int:
+        """Count SYSTEM_ADMIN accounts in the system.
+
+        This is the first-run setup gate: ``setup_first_run`` creates a
+        SYSTEM_ADMIN as the very first account (ADR-0009 section 3), so a
+        non-zero count means the organization has already been bootstrapped.
+        """
+        statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
         result = await self.session.execute(statement)
         return int(result.scalar_one())
 

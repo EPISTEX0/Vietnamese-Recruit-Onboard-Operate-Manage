@@ -44,7 +44,7 @@ class TestIncomingMessageSchema:
 
     def test_rejects_invalid_role(self) -> None:
         with pytest.raises(ValidationError, match="role"):
-            IncomingMessageSchema(role="admin", content="test")
+            IncomingMessageSchema(role="hr", content="test")
 
     def test_rejects_empty_content(self) -> None:
         with pytest.raises(ValidationError, match="content"):

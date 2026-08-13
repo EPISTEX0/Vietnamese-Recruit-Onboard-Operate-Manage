@@ -49,7 +49,7 @@ def _service() -> tuple[OrganizationAIConfigService, FakeRepository]:
 @pytest.mark.asyncio
 async def test_full_rollout_is_blocked_until_release_gates_pass() -> None:
     service, repository = _service()
-    admin = User(id=uuid4(), email="hr@example.com", role="admin")
+    admin = User(id=uuid4(), email="hr@example.com", role="system_admin")
     candidate = ClassificationRolloutCandidate(
         mode=RolloutMode.FULL,
         business_policy=BusinessPolicy.RECALL_FIRST,
@@ -79,7 +79,7 @@ async def test_full_rollout_is_blocked_until_release_gates_pass() -> None:
 @pytest.mark.asyncio
 async def test_operational_guardrail_failure_auto_rolls_back_active_candidate() -> None:
     service, repository = _service()
-    admin = User(id=uuid4(), email="hr@example.com", role="admin")
+    admin = User(id=uuid4(), email="hr@example.com", role="system_admin")
     repository.config.candidate_classifier_version = "classifier-v2"
     repository.config.candidate_classification_policy = BusinessPolicy.RECALL_FIRST.value
     repository.config.candidate_classification_policy_version = "recall-first-v2"
@@ -110,7 +110,7 @@ async def test_operational_guardrail_failure_auto_rolls_back_active_candidate() 
 @pytest.mark.asyncio
 async def test_rollback_restores_stable_versions_and_audits_policy() -> None:
     service, repository = _service()
-    admin = User(id=uuid4(), email="hr@example.com", role="admin")
+    admin = User(id=uuid4(), email="hr@example.com", role="system_admin")
     repository.config.candidate_classifier_version = "classifier-v2"
     repository.config.candidate_classification_policy = BusinessPolicy.RECALL_FIRST.value
     repository.config.candidate_classification_policy_version = "recall-first-v2"
