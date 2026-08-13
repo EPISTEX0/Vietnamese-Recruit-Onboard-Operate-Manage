@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import uuid
 from io import BytesIO
 
@@ -29,6 +30,39 @@ logger = logging.getLogger(__name__)
 # GPT-style tokenizers average ~4 chars/token for Vietnamese; we use a slightly
 # conservative ratio for the simple character-based chunker.
 CHARS_PER_TOKEN = 4
+
+# The embedding service rejects a request carrying more than this many texts
+# (``EmbedRequest.texts`` max_length in vroom-embedding/app.py). A staff
+# handbook chunks into several hundred pieces at the default 512-token chunk
+# size, so anything above this has to be split before it is sent.
+EMBEDDING_SERVICE_MAX_TEXTS = 100
+
+# How many chunks we put in one request. Sized from the embedding service's
+# worst case rather than its hard cap: at its default configuration it forwards
+# to the provider in batches of 10, sequentially, each batch costing up to
+# EMBEDDING_TIMEOUT 12s * 2 attempts + 0.5s backoff ≈ 24.5s. Four provider
+# batches is ~98s, which fits inside EMBEDDING_REQUEST_TIMEOUT below; a full
+# batch of 100 would not, turning a fast 422 into a slow client timeout.
+#
+# Those service-side numbers are operator-tunable (EMBEDDING_TIMEOUT,
+# EMBEDDING_MAX_RETRIES, EMBEDDING_BATCH_SIZE in .env), so this only holds for
+# the shipped defaults. Raising EMBEDDING_TIMEOUT without raising
+# EMBEDDING_REQUEST_TIMEOUT here just moves the failure from the service's
+# 422 to our own read timeout — EMBEDDING_TOTAL_TIMEOUT still bounds the
+# document either way, so a misconfigured pair costs a failed ingest, not a
+# pinned worker.
+EMBEDDING_REQUEST_BATCH_SIZE = 40
+
+# Per-request read timeout. Sized against EMBEDDING_REQUEST_BATCH_SIZE above.
+EMBEDDING_REQUEST_TIMEOUT = 120.0
+
+# Ceiling on the embedding phase for one document, across all its batches.
+# Below ARQ's default 300s job_timeout on purpose: hitting our own budget
+# raises inside the try block, so the document is marked 'error' with a
+# readable reason, whereas letting ARQ cancel the job leaves it stuck in
+# 'processing' forever. Raise both together if very large documents need
+# longer.
+EMBEDDING_TOTAL_TIMEOUT = 240.0
 
 
 def _extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -194,29 +228,82 @@ def estimate_token_count(text: str) -> int:
 async def call_embedding_service(
     texts: list[str],
     embedding_url: str,
-    timeout: float = 120.0,
+    timeout: float = EMBEDDING_REQUEST_TIMEOUT,
+    batch_size: int = EMBEDDING_REQUEST_BATCH_SIZE,
+    total_timeout: float | None = EMBEDDING_TOTAL_TIMEOUT,
 ) -> list[list[float]]:
-    """Call the vroom-embedding service to get embeddings for a batch of texts.
+    """Call the vroom-embedding service to get embeddings for a list of texts.
+
+    Splits the input into requests of at most ``batch_size`` texts, because the
+    service rejects anything larger than ``EMBEDDING_SERVICE_MAX_TEXTS`` with a
+    422. Batching lives here rather than at the call sites so that every caller
+    — ingestion and retrieval alike — is covered by one implementation.
+
+    Batches are sent sequentially and their vectors concatenated in order, so
+    the result is aligned index-for-index with ``texts``. Each batch's length is
+    checked on arrival: a provider that returns the wrong count fails the call
+    instead of silently shifting every later chunk onto the wrong vector.
 
     Args:
         texts: List of text strings to embed.
         embedding_url: URL of the embedding service (e.g., http://vroom-embedding:8080).
-        timeout: Request timeout in seconds.
+        timeout: Per-request timeout in seconds.
+        batch_size: Maximum texts per request. Must not exceed the service's
+            own limit.
+        total_timeout: Overall budget across every batch, so one oversized
+            document cannot occupy a worker indefinitely. ``None`` disables it.
 
     Returns:
-        List of embedding vectors (each is a list of 768 floats).
+        List of embedding vectors, one per input text, in input order.
 
     Raises:
-        httpx.HTTPError: If the embedding service call fails.
+        ValueError: If ``batch_size`` is unusable, or a batch comes back with a
+            different number of vectors than it had texts.
+        TimeoutError: If ``total_timeout`` is exhausted before every batch is done.
+        httpx.HTTPError: If any embedding service call fails.
     """
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            f"{embedding_url}/embed",
-            json={"texts": texts},
+    if batch_size <= 0 or batch_size > EMBEDDING_SERVICE_MAX_TEXTS:
+        raise ValueError(
+            f"batch_size phải nằm trong khoảng 1..{EMBEDDING_SERVICE_MAX_TEXTS}, "
+            f"nhận được {batch_size}."
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["embeddings"]
+    if not texts:
+        return []
+
+    deadline = None if total_timeout is None else time.monotonic() + total_timeout
+    embeddings: list[list[float]] = []
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+
+            request_timeout = timeout
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"Vượt ngân sách thời gian embedding ({total_timeout}s) sau "
+                        f"{len(embeddings)}/{len(texts)} đoạn văn bản."
+                    )
+                # Never let a single request outlive the document's budget.
+                request_timeout = min(timeout, remaining)
+
+            response = await client.post(
+                f"{embedding_url}/embed",
+                json={"texts": batch},
+                timeout=request_timeout,
+            )
+            response.raise_for_status()
+            batch_embeddings = response.json()["embeddings"]
+
+            if len(batch_embeddings) != len(batch):
+                raise ValueError(
+                    f"Số lượng embedding ({len(batch_embeddings)}) không khớp số "
+                    f"lượng văn bản ({len(batch)}) trong một lô."
+                )
+            embeddings.extend(batch_embeddings)
+
+    return embeddings
 
 
 class IngestionService:
@@ -283,10 +370,16 @@ class IngestionService:
             if not chunks:
                 raise ValueError("Không thể tạo chunk từ văn bản.")
 
-            # Step 5: Embed all chunks (batch call)
+            # Step 5: Embed all chunks. call_embedding_service splits this into
+            # requests the embedding service will accept and reassembles them
+            # in order, so a document of any size is one call from here.
             embedding_url = self._settings.embedding_service_url
             embeddings = await call_embedding_service(chunks, embedding_url)
 
+            # Belt and braces: call_embedding_service already checks each batch,
+            # so this only fires if that contract is ever broken. Cheap enough
+            # to keep as the guard against chunk/vector misalignment reaching
+            # pgvector, where it would be silent and permanent.
             if len(embeddings) != len(chunks):
                 raise ValueError(
                     f"Số lượng embedding ({len(embeddings)}) không khớp "
