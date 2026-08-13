@@ -368,7 +368,19 @@ class PasswordResetToken(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     token_hash: str = Field(nullable=False, unique=True, index=True)
-    expires_at: datetime = Field(nullable=False)
-    used_at: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
+    # These three are ``timestamptz`` on the real table. Declared as a bare
+    # ``datetime`` the model renders naive ``TIMESTAMP``, and autogenerate
+    # would strip the zone off a column that decides when a password reset
+    # token dies — too long is a security hole, too short breaks the feature.
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
     created_by_ip: str | None = Field(default=None)
