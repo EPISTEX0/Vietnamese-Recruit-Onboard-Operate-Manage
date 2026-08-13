@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Text
+from sqlalchemy import Column, DateTime, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from src.shared.sql_types import EnumAsString
@@ -88,6 +88,8 @@ class AttendanceRecord(SQLModel, table=True):
     )
 
     __table_args__ = (
-        # Unique constraint: one record per employee per work date
-        # Use index for query performance
+        # One record per employee per work date. The comment describing this
+        # sat here for a while over an empty tuple while the real constraint
+        # only existed in the migration.
+        UniqueConstraint("employee_id", "work_date", name="uq_attendance_employee_date"),
     )

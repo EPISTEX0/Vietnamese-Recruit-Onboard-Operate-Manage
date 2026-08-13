@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
@@ -169,6 +169,13 @@ class OAuthConfig(SQLModel, table=True):
     """
 
     __tablename__ = "oauth_configs"
+    __table_args__ = (
+        # At most one active config per provider. Unlike the five other
+        # UNIQUE diffs in the drift report, nothing replaces this one — drop it
+        # and two configs can be active for the same provider at once, leaving
+        # the pick undefined.
+        UniqueConstraint("provider", "is_active", name="uq_oauth_config_provider_active"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     provider: str = Field(default="google", max_length=50, nullable=False)
