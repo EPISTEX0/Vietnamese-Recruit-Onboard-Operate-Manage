@@ -154,7 +154,12 @@ class CVDocument(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     candidate_id: UUID | None = Field(default=None, foreign_key="candidates.id", index=True)
-    gmail_message_id: str = Field(max_length=255, nullable=False, unique=True, index=True)
+    # Deliberately not unique, unlike ``RecruitmentInboxItem.gmail_message_id``
+    # above: one email can carry several CV attachments, and
+    # ``process_cv_from_email`` writes one row per attachment under the same
+    # message id. ``CVDocumentRepository.get_by_gmail_message_id`` returns a
+    # list for exactly that reason.
+    gmail_message_id: str = Field(max_length=255, nullable=False, index=True)
     original_filename: str = Field(max_length=255, nullable=False)
     mime_type: str = Field(max_length=100, nullable=False)
     size_bytes: int = Field(nullable=False)
