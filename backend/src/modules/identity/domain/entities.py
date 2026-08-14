@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
@@ -85,6 +85,13 @@ class WhitelistEntry(SQLModel, table=True):
     """
 
     __tablename__ = "whitelist_entries"
+    __table_args__ = (
+        # Declared here, not as ``index=True`` on the field: 011 named the index
+        # after the concept ("type") while the column is ``entry_type``, so the
+        # generated name would be ``ix_whitelist_entries_entry_type`` and
+        # autogenerate would drop the real index to build a renamed twin.
+        Index("ix_whitelist_entries_type", "entry_type"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     value: str = Field(max_length=255, unique=True, nullable=False, index=True)
@@ -351,13 +358,18 @@ class AuditLog(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     admin_user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     admin_email: str = Field(max_length=255, nullable=False)
+    # Both indexes live on the ``Column`` rather than the ``Field``: a field
+    # carrying ``sa_column`` ignores ``index=True``, so declaring it there would
+    # look right and silently produce nothing. 013 created both — audit_logs is
+    # append-only and grows forever, and every read of it filters by action type
+    # or orders by time, so losing either turns the audit screen into a seq scan.
     action_type: AuditActionType = Field(
-        sa_column=Column(EnumAsString(AuditActionType, 50), nullable=False),
+        sa_column=Column(EnumAsString(AuditActionType, 50), nullable=False, index=True),
     )
     details: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
     )
 
 

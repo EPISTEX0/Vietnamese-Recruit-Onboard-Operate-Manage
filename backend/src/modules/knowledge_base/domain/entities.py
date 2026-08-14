@@ -6,8 +6,21 @@ import uuid
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Column, DateTime, Text
+from sqlalchemy import BigInteger, Column, DateTime, Index, Text
 from sqlmodel import Field, SQLModel
+
+# The six ``ix_kb_*`` / ``ix_emp_kb_*`` indexes below are all declared through
+# ``__table_args__`` rather than ``Field(index=True)``. Their names predate the
+# tables' current names — 078/079 created them as ``ix_kb_chunks_*`` while the
+# tables are ``hr_knowledge_base_chunks`` — so ``index=True`` would render
+# ``ix_hr_knowledge_base_chunks_document_id`` instead, and autogenerate would
+# propose dropping the real index to create a differently-named twin.
+#
+# There is deliberately no index on either ``embedding`` column: the database
+# has none (checked with ``pg_am`` — the schema holds zero non-btree indexes),
+# so the model matching it is the correct state. Whether these tables *should*
+# carry an ivfflat/hnsw index is a real performance question, but it is a new
+# index on the database side, not model drift, and is out of this ticket.
 
 
 class KnowledgeBaseDocument(SQLModel, table=True):
@@ -19,6 +32,10 @@ class KnowledgeBaseDocument(SQLModel, table=True):
     """
 
     __tablename__ = "hr_knowledge_base_documents"
+    __table_args__ = (
+        Index("ix_kb_documents_kb_type", "kb_type"),
+        Index("ix_kb_documents_status", "status"),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     display_name: str = Field(max_length=500)
@@ -54,6 +71,7 @@ class KnowledgeBaseChunk(SQLModel, table=True):
     """
 
     __tablename__ = "hr_knowledge_base_chunks"
+    __table_args__ = (Index("ix_kb_chunks_document_id", "document_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(
@@ -84,6 +102,10 @@ class EmployeeKnowledgeBaseDocument(SQLModel, table=True):
     """
 
     __tablename__ = "employee_knowledge_base_documents"
+    __table_args__ = (
+        Index("ix_emp_kb_documents_kb_type", "kb_type"),
+        Index("ix_emp_kb_documents_status", "status"),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     display_name: str = Field(max_length=500)
@@ -119,6 +141,7 @@ class EmployeeKnowledgeBaseChunk(SQLModel, table=True):
     """
 
     __tablename__ = "employee_knowledge_base_chunks"
+    __table_args__ = (Index("ix_emp_kb_chunks_document_id", "document_id"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(

@@ -12,7 +12,7 @@ from decimal import Decimal
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, Column, DateTime, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from src.shared.sql_types import EnumAsString
@@ -103,6 +103,12 @@ class Payslip(SQLModel, table=True):
     )
 
     __table_args__ = (
+        # Composite, and the column order is the point: 042 built it as
+        # ``(employee_id, status)`` so "this employee's published payslips" —
+        # the only read an employee ever performs — is one index scan. Flipped
+        # to ``(status, employee_id)`` it would still be a valid index and
+        # still return correct rows, just useless for that query.
+        Index("ix_payslips_employee_status", "employee_id", "status"),
         UniqueConstraint(
             "employee_id",
             "period_month",

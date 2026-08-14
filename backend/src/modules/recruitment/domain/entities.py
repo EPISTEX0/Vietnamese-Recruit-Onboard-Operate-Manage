@@ -305,7 +305,11 @@ class JobOpening(SQLModel, table=True):
 
     __tablename__ = "job_openings"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    # ``ix_job_openings_id`` duplicates the primary key's own index and buys
+    # nothing, but 035 created it and the database has it. Declaring it keeps
+    # autogenerate quiet; dropping it is a separate, deliberate decision with a
+    # migration behind it, not something a model edit should do by omission.
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
     title: str = Field(max_length=255, nullable=False, index=True)
     description: str = Field(default="", max_length=5000)
     position_id: UUID = Field(foreign_key="positions.id", nullable=False, index=True)
@@ -314,9 +318,12 @@ class JobOpening(SQLModel, table=True):
     opened_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     closed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     cancelled_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    # On the ``Column``, not the ``Field`` — ``index=True`` is ignored whenever
+    # ``sa_column`` is given. 035 created this for the default "newest openings
+    # first" ordering.
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

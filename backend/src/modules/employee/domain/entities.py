@@ -66,8 +66,11 @@ class Employee(SQLModel, table=True):
     date_of_birth: date | None = Field(default=None)
     gender: str | None = Field(default=None, max_length=10)
     address: str | None = Field(default=None)
-    department_id: UUID | None = Field(default=None, foreign_key="departments.id")
-    position_id: UUID | None = Field(default=None, foreign_key="positions.id")
+    # 006 indexed both FKs; the model never said so. These carry the "who is in
+    # this department / this position" reads across the app, and a missing index
+    # on an FK only shows up as the employee list getting slower.
+    department_id: UUID | None = Field(default=None, foreign_key="departments.id", index=True)
+    position_id: UUID | None = Field(default=None, foreign_key="positions.id", index=True)
     manager_id: UUID | None = Field(default=None, foreign_key="employees.id")
     start_date: date | None = Field(default=None)
     id_number: str | None = Field(default=None, max_length=20)
