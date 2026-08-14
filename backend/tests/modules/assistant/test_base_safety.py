@@ -1,7 +1,8 @@
 """Base safety test for all AI Assistant tools.
 
 Every tool must pass 4 safety tests:
-1. Read-only: Handler must not call any write method (ADR-0006).
+1. Read-only: Handler must not call any write method
+   (CONTEXT.md § "Nội bộ AI Assistant", entry **Tool**).
 2. Scope: Tool must respect data scope — org-wide for HR, employee-scoped for Employee.
 3. Missing entity: Tool must return clear error (not crash) when entity not found.
 4. Invalid input: Tool must handle invalid UUIDs, missing params, etc.
@@ -91,7 +92,7 @@ class BaseToolSafetyTest(ABC):
         raise NotImplementedError
 
     # ------------------------------------------------------------------
-    # Test 1: Read-only — structural safety (ADR-0006)
+    # Test 1: Read-only — structural safety (CONTEXT.md § "Nội bộ AI Assistant")
     # ------------------------------------------------------------------
 
     def test_tool_is_read_only(self) -> None:

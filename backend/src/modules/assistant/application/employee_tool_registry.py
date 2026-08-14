@@ -3,11 +3,13 @@
 Every Read-Tool is hard-wired to the employee_id provided at construction time.
 The LLM never receives employee_id as a parameter; it is injected from the
 authenticated session. This is the structural safety that enforces "assistant
-only reads the Employee's own data" (ADR-0013).
+only reads the Employee's own data" — see `CONTEXT.md` § "Ngôn ngữ domain",
+entry **Employee Assistant**.
 
 Draft-Tools return a Draft Action — they never write to the database.
 The employee reviews the draft; on confirm, the frontend calls the real
-write endpoint directly (human-in-the-loop, ADR-0006).
+write endpoint directly (human-in-the-loop — `CONTEXT.md`
+§ "Nội bộ AI Assistant", entry **Draft Action**).
 """
 
 from __future__ import annotations

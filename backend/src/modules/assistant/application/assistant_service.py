@@ -104,7 +104,7 @@ class AssistantService:
     """Orchestrates the AI Assistant conversation loop.
 
     Args:
-        llm_client: The assistant's own LLM client (ADR-0007).
+        llm_client: The assistant's own LLM client.
         tool_registry: Tool executor for Read-Tools and Draft-Tools.
         settings: Assistant settings with max_history, etc.
     """

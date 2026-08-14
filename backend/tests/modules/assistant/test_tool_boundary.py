@@ -1,6 +1,6 @@
 """Test that the AI Assistant has NO write-capable tools.
 
-This is the core safety invariant (ADR-0006, CONTEXT.md):
+This is the core safety invariant (CONTEXT.md § "Nội bộ AI Assistant", entry **Tool**):
 "The LLM is never given a tool that writes to the database —
 that safety boundary is structural, not a convention."
 
@@ -28,7 +28,7 @@ class TestToolBoundary:
         for tool in TOOL_DEFINITIONS:
             assert tool.kind in (ToolKind.READ, ToolKind.DRAFT), (
                 f"Tool '{tool.name}' has unexpected kind '{tool.kind}'. "
-                f"Only 'read' and 'draft' are allowed (ADR-0006)."
+                f"Only 'read' and 'draft' are allowed — CONTEXT.md, entry Tool."
             )
 
     def test_no_write_tools_exist(self) -> None:
@@ -37,7 +37,7 @@ class TestToolBoundary:
         for tool in TOOL_DEFINITIONS:
             assert tool.kind.value not in write_kinds, (
                 f"Tool '{tool.name}' has write-capable kind '{tool.kind}'. "
-                f"This violates ADR-0006 (structural safety boundary)."
+                f"This violates the structural safety boundary in CONTEXT.md."
             )
 
     def test_known_tool_names(self) -> None:

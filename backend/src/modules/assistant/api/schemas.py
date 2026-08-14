@@ -16,7 +16,8 @@ class IncomingMessageSchema(BaseModel):
     """Incoming message from the client.
 
     Only user and assistant roles are accepted. Tool messages are created
-    server-side and must never come from the client (ADR-0006).
+    server-side and must never come from the client (`CONTEXT.md`
+    § "Nội bộ AI Assistant", entry **Tool**).
     """
 
     role: Literal["user", "assistant"] = Field(

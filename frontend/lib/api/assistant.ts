@@ -219,7 +219,8 @@ export async function sendChatMessage(
   sessionId?: string,
 ): Promise<ChatResponse> {
   // Filter out tool messages and assistant-only tool-call placeholders.
-  // Backend accepts only user/assistant text history (ADR-0006).
+  // Backend accepts only user/assistant text history — tool messages are
+  // created server-side (CONTEXT.md § "Nội bộ AI Assistant").
   const sanitized: ChatRequestMessage[] = messages.flatMap((message) => {
     if (message.role === "tool") {
       return [];
@@ -258,7 +259,8 @@ export async function sendChatMessage(
 
 /**
  * Confirm a Draft Action by calling the real endpoint directly.
- * The LLM is never involved in the write (ADR-0006, human-in-the-loop).
+ * The LLM is never involved in the write — human-in-the-loop.
+ * Contract: CONTEXT.md § "Nội bộ AI Assistant" (Draft Action).
  */
 export async function confirmDraftAction(
   draft: DraftAction,

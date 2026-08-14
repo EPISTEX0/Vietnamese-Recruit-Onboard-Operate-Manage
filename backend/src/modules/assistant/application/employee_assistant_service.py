@@ -2,7 +2,7 @@
 
 Shares the AssistantLLMClient singleton with the HR Assistant, but uses its
 own system prompt and tool set (employee-scoped). The tool-calling loop is
-identical to the HR Assistant (see ADR-0003 for architecture rationale).
+identical to the HR Assistant (see `assistant_service.py`).
 
 This service is created per-request with the authenticated employee_id,
 ensuring every tool call is scoped to that employee.
@@ -78,7 +78,7 @@ class EmployeeAssistantService:
     """Orchestrates the Employee AI Assistant conversation loop.
 
     Created per-request with the authenticated employee_id. Uses the shared
-    AssistantLLMClient singleton (ADR-0007) and its own tool set.
+    AssistantLLMClient singleton and its own tool set.
 
     Args:
         llm_client: The assistant's own LLM client (shared singleton).
@@ -275,7 +275,7 @@ class EmployeeAssistantService:
         even if it were internally consistent.
 
         The tool registry is built per call with the authenticated employee's
-        id, exactly as :meth:`chat` builds it: ADR-0013 scoping does not weaken
+        id, exactly as :meth:`chat` builds it: employee scoping does not weaken
         because the transport changed.
 
         Args:

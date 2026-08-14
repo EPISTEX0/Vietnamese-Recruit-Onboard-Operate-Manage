@@ -4,11 +4,12 @@ Backend executes all tools directly (grill decision: "Backend tự execute
 tool, không qua LLM function calling"). The LLM only defines WHAT to call;
 the backend runs the actual logic.
 
-Read-Tools call into recruitment/onboarding services (ADR-0004: one-way
-dependency from assistant → other modules' services).
+Read-Tools call into recruitment/onboarding services. The dependency is one-way:
+assistant → other modules' services, never the reverse.
 
-Draft-Tools do NOT execute a write. They return a structured Draft Action
-(ADR-0006). HR reviews it; on confirm, the frontend calls the real endpoint.
+Draft-Tools do NOT execute a write. They return a structured Draft Action (see
+`CONTEXT.md` § "Nội bộ AI Assistant", entry **Draft Action**). HR reviews it; on
+confirm, the frontend calls the real endpoint.
 """
 
 from __future__ import annotations
@@ -43,7 +44,8 @@ class ToolRegistry:
     """Executes tools and returns results for the LLM.
 
     Injects CandidateLifecycleService and OnboardingService (read-only usage).
-    No write capabilities — structural safety per ADR-0006.
+    No write capabilities — structural safety per `CONTEXT.md`
+    § "Nội bộ AI Assistant" (entry **Tool**).
 
     Args:
         candidate_service: Recruitment CandidateLifecycleService for read operations.

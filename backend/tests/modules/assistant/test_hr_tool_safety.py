@@ -430,7 +430,7 @@ class TestGetOnboardingTaskDetailsSafety(BaseToolSafetyTest):
 
 
 # =========================================================================
-# Draft-Tools — human-in-the-loop (ADR-0006)
+# Draft-Tools — human-in-the-loop (CONTEXT.md, entry Draft Action)
 # =========================================================================
 
 

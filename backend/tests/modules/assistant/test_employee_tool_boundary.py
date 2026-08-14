@@ -1,8 +1,10 @@
 """Test the Employee Assistant safety boundary — data isolation AND draft-only.
 
 Core invariants verified:
-1. Employee tools are Read-Tool or Draft-Tool only (structural safety per ADR-0006)
-2. No tool accepts employee_id as a parameter (injected from auth — ADR-0013)
+1. Employee tools are Read-Tool or Draft-Tool only — structural safety per
+   CONTEXT.md § "Nội bộ AI Assistant", entry **Tool**
+2. No tool accepts employee_id as a parameter (injected from auth) — CONTEXT.md
+   § "Ngôn ngữ domain", entry **Employee Assistant**
 3. Employee tool registry always scopes queries to authenticated employee
 4. Draft-Tools return DraftAction — they never write to the database
 5. Tools use additionalProperties: false + format patterns

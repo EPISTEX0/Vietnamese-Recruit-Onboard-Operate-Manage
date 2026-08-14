@@ -1,6 +1,6 @@
 """Test the Employee Assistant NEVER writes — structural safety verification.
 
-Core invariants verified (ADR-0006, CONTEXT.md):
+Core invariants verified (CONTEXT.md § "Nội bộ AI Assistant"):
 1. EmployeeToolRegistry has NO handlers that call DB write methods
 2. EmployeeAssistantService returns draft_action in response — never auto-confirms
 3. The chat loop never calls any write/confirm endpoint

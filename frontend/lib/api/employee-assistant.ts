@@ -78,7 +78,8 @@
         throw new Error("Last message must be from user");
       }
       // Filter out tool messages and assistant-only tool-call placeholders.
-      // Backend accepts only user/assistant text history (ADR-0006).
+      // Backend accepts only user/assistant text history — tool messages are
+      // created server-side (CONTEXT.md § "Nội bộ AI Assistant").
       const sanitized: { role: "user" | "assistant"; content: string }[] =
         messages.flatMap((message) => {
           if (message.role === "tool") return [];

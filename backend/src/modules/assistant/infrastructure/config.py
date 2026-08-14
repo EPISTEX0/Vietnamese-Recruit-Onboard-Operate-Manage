@@ -1,6 +1,6 @@
 """Configuration for the AI Assistant module.
 
-Loads ASSISTANT_LLM_* environment variables (ADR-0007).
+Loads ASSISTANT_LLM_* environment variables.
 Shares only configuration with recruitment's LLMAdapter — not code.
 """
 

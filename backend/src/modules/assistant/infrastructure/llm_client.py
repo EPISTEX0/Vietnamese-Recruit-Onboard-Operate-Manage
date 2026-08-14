@@ -1,6 +1,6 @@
 """LLM Client for the AI Assistant module.
 
-Own AsyncOpenAI client built for tool-calling (ADR-0007).
+Own AsyncOpenAI client built for tool-calling.
 Shares only configuration (endpoint, API key, model) with recruitment's
 LLMAdapter — not code. The two clients are intentionally separate.
 

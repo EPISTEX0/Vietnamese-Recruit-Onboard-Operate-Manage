@@ -7,7 +7,8 @@ exposed dưới dạng tham số.
 
 Draft-Tool trả về Draft Action — chúng không bao giờ ghi vào database.
 Nhân viên xem xét bản nháp; khi xác nhận, frontend gọi endpoint write thực tế
-trực tiếp (human-in-the-loop, ADR-0006).
+trực tiếp (human-in-the-loop — xem `CONTEXT.md` § "Nội bộ AI Assistant",
+mục **Draft-Tool** và **Draft Action**).
 
 Danh sách tool:
 - Read-Tool:    get_my_profile

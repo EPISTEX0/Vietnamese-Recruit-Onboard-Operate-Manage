@@ -96,7 +96,7 @@ async def chat(
     enabled_tool_names = await tool_config_repo.get_enabled_tool_names()
 
     # Convert schema to domain messages (only role + content — tool fields are
-    # never accepted from the client, per ADR-0006)
+    # never accepted from the client — CONTEXT.md § "Nội bộ AI Assistant")
     domain_messages = [
         ChatMessage(
             role=m.role,

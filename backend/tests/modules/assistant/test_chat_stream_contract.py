@@ -390,8 +390,9 @@ class TestEmployeeScoping:
         """``EmployeeToolRegistry`` receives the id from the service, not the LLM.
 
         Deliberately not parametrised over both assistants: this is the ESS-only
-        half of ADR-0013, and it asserts the streaming path injects the employee
-        id the same way the non-streaming path does.
+        half of the Employee Assistant scoping rule (CONTEXT.md § "Ngôn ngữ
+        domain"), and it asserts the streaming path injects the employee id the
+        same way the non-streaming path does.
         """
         captured: dict[str, Any] = {}
         registry = FakeRegistry({"a_tool": "{}"})

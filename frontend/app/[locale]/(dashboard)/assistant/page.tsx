@@ -19,7 +19,8 @@ import { Sparkles } from 'lucide-react';
  *
  * The LLM only reads data or returns a Draft Action. Confirming a draft fires
  * the real write endpoint directly (e.g. create interview / accept candidate),
- * never through the LLM — human-in-the-loop (ADR-0006).
+ * never through the LLM — human-in-the-loop.
+ * Contract: CONTEXT.md § "Nội bộ AI Assistant" (Draft-Tool, Draft Action).
  */
 const hrAssistantApi: AiChatApi = {
   sendMessage: sendChatMessage,

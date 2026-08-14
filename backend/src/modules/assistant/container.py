@@ -1,11 +1,11 @@
 """Dependency injection container for the AI Assistant module.
 
 Wires together the AssistantService with its dependencies:
-- AssistantLLMClient (own client, ADR-0007)
+- AssistantLLMClient (own client, separate from recruitment's LLMAdapter)
 - ToolRegistry (reads from recruitment + onboarding services)
 - AssistantSettings (ASSISTANT_LLM_* env vars)
 
-Dependency direction is one-way (ADR-0004):
+Dependency direction is one-way:
 assistant/ depends on recruitment/ and onboarding/ services,
 but no module depends on assistant/.
 """
@@ -58,7 +58,7 @@ def get_assistant_settings() -> AssistantSettings:
 
 @lru_cache
 def get_assistant_llm_client() -> AssistantLLMClient:
-    """Create and cache the assistant's own LLM client (ADR-0007)."""
+    """Create and cache the assistant's own LLM client."""
     settings = get_assistant_settings()
     return AssistantLLMClient(settings)
 
@@ -76,7 +76,7 @@ async def get_tool_registry(
 ) -> ToolRegistry:
     """Provide a ToolRegistry wired to recruitment + onboarding + employee services.
 
-    Read-only dependency on other modules' services (ADR-0004).
+    Read-only dependency on other modules' services.
     """
     return ToolRegistry(
         candidate_service=candidate_service,

@@ -12,7 +12,8 @@
 - Draft-Tool: draft_interview_invitation
 - Draft-Tool: draft_congratulations_email
 
-LLM KHÔNG BAO GIỜ được cấp tool ghi vào database (ADR-0006).
+LLM KHÔNG BAO GIỜ được cấp tool ghi vào database
+(xem `CONTEXT.md` § "Nội bộ AI Assistant", mục **Tool**).
 Backend thực thi tool trực tiếp — LLM chỉ định nghĩa tool cần gọi.
 """
 

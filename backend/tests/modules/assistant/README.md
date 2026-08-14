@@ -5,28 +5,48 @@ tool (HR or Employee) must pass before being considered production-safe.
 
 ## Architecture
 
+Read-Tool safety classes inherit `BaseToolSafetyTest` directly. Draft-Tools go
+through one more layer: a shared `_Base*DraftToolSafety` that pre-sets the entity
+class variables and neutralises the two tests that do not apply to a tool which
+only builds a proposal.
+
 ```
 BaseToolSafetyTest  (test_base_safety.py)   ← abstract, 4 safety tests
     │
-    ├── TestCountCandidatesByStatusSafety    (test_hr_tool_safety.py)
-    ├── TestListInProgressOnboardingSafety   (test_hr_tool_safety.py)
-    ├── TestSearchCandidatesSafety           (test_hr_tool_safety.py)
-    ├── TestGetCandidateParsedCVSafety       (test_hr_tool_safety.py)
-    ├── TestListInterviewsForCandidateSafety (test_hr_tool_safety.py)
-    ├── TestGetOnboardingTaskDetailsSafety   (test_hr_tool_safety.py)
-    ├── TestDraftInterviewInvitationSafety   (test_hr_tool_safety.py)
-    ├── TestDraftCongratulationsEmailSafety  (test_hr_tool_safety.py)
+    ├── Read-Tools, HR Assistant             (test_hr_tool_safety.py)
+    │     ├── TestCountCandidatesByStatusSafety
+    │     ├── TestListInProgressOnboardingSafety
+    │     ├── TestSearchCandidatesSafety
+    │     ├── TestGetCandidateParsedCVSafety
+    │     ├── TestListInterviewsForCandidateSafety
+    │     └── TestGetOnboardingTaskDetailsSafety
     │
-    ├── TestGetMyProfileSafety               (test_employee_tool_safety.py)
-    ├── TestListMyDocumentsSafety            (test_employee_tool_safety.py)
-    ├── TestGetTodayAttendanceSafety         (test_employee_tool_safety.py)
-    ├── TestListMyAttendanceRecordsSafety    (test_employee_tool_safety.py)
-    ├── TestListMyEmployeeRequestsSafety     (test_employee_tool_safety.py)
-    ├── TestGetMyLeaveBalanceSafety          (test_employee_tool_safety.py)
-    ├── TestListMyPayslipsSafety             (test_employee_tool_safety.py)
-    ├── TestDraftLeaveRequestSafety          (test_employee_tool_safety.py)
-    ├── TestDraftOvertimeRequestSafety       (test_employee_tool_safety.py)
+    ├── _BaseDraftToolSafety                 (test_hr_tool_safety.py)
+    │     │   HAS_ENTITY_LOOKUP = True, ENTITY_ID_PARAM = "candidate_id",
+    │     │   shared `registry` fixture with a mocked candidate service
+    │     ├── TestDraftInterviewInvitationSafety
+    │     └── TestDraftCongratulationsEmailSafety
+    │
+    ├── Read-Tools, Employee Assistant       (test_employee_tool_safety.py)
+    │     ├── TestGetMyProfileSafety
+    │     ├── TestListMyDocumentsSafety
+    │     ├── TestGetTodayAttendanceSafety
+    │     ├── TestListMyAttendanceRecordsSafety
+    │     ├── TestListMyEmployeeRequestsSafety
+    │     ├── TestGetMyLeaveBalanceSafety
+    │     └── TestListMyPayslipsSafety
+    │
+    └── _BaseEmployeeDraftToolSafety         (test_employee_tool_safety.py)
+          │   HAS_ENTITY_LOOKUP = False; `test_tool_respects_scope` is a no-op
+          │   (scope is covered structurally by `test_tool_is_read_only`) and
+          │   `test_tool_handles_missing_entity` skips — these draft tools
+          │   validate parameters, they do not look up an entity
+          ├── TestDraftLeaveRequestSafety
+          └── TestDraftOvertimeRequestSafety
 ```
+
+The two indented labels above (`Read-Tools, …`) are grouping headers, not
+classes — those test classes subclass `BaseToolSafetyTest` directly.
 
 ## The 4 Safety Tests (BaseToolSafetyTest)
 
@@ -46,8 +66,9 @@ method's source code. Searches for forbidden patterns:
 This is a **structural** check — it catches violations before the code can ever
 execute. No mocking needed.
 
-**Why:** ADR-0006 mandates that the LLM is never given write-capable tools.
-All tools are Read-Tool or Draft-Tool only.
+**Why:** `CONTEXT.md` § "Nội bộ AI Assistant" (entry **Tool**) makes it a
+structural boundary that the LLM is never given a database-write tool. There are
+exactly two kinds of tool: **Read-Tool** and **Draft-Tool**.
 
 ### 2. `test_tool_respects_scope`
 
@@ -62,8 +83,10 @@ Each concrete test implements this by calling the tool and verifying:
 - HR tools: Query spans all records (no employee filter)
 - Employee tools: Service calls use the injected `employee_id`, not a parameter
 
-**Why:** ADR-0013 mandates Employee Assistant tools are hard-wired to the
-authenticated employee. The LLM cannot ask for another employee's data.
+**Why:** `CONTEXT.md` § "Ngôn ngữ domain" (entry **Employee Assistant**) scopes
+the Employee Assistant to the data of that one Employee. The tools are therefore
+hard-wired to the authenticated employee — the LLM cannot ask for another
+employee's data.
 
 ### 3. `test_tool_handles_missing_entity`
 
@@ -188,12 +211,12 @@ class TestMyEntityToolSafety(BaseToolSafetyTest):
 ```bash
 # Run all safety tests
 cd backend
-python -m pytest tests/modules/assistant/test_base_safety.py -v
-python -m pytest tests/modules/assistant/test_hr_tool_safety.py -v
-python -m pytest tests/modules/assistant/test_employee_tool_safety.py -v
+uv run pytest tests/modules/assistant/test_base_safety.py -v
+uv run pytest tests/modules/assistant/test_hr_tool_safety.py -v
+uv run pytest tests/modules/assistant/test_employee_tool_safety.py -v
 
 # Run a single tool's safety tests
-python -m pytest tests/modules/assistant/test_hr_tool_safety.py::TestMyNewToolSafety -v
+uv run pytest tests/modules/assistant/test_hr_tool_safety.py::TestMyNewToolSafety -v
 ```
 
 ## Class Variables Reference
@@ -221,9 +244,14 @@ python -m pytest tests/modules/assistant/test_hr_tool_safety.py::TestMyNewToolSa
 | `execute_tool(registry, args)` | Executes `registry.execute(TOOL_NAME, args)` and returns parsed result |
 | `assert_error(result)` | Asserts `result` contains a non-empty `"error"` key |
 
-## Related ADRs
+## Where the contract lives
 
-- **ADR-0006:** LLM is never given write-capable tools; human-in-the-loop for
-  Draft-Tools.
-- **ADR-0013:** Employee Assistant tools are scoped to authenticated employee;
-  employee_id is injected from session, never exposed as a parameter.
+The canonical owner of the Read-Tool / Draft-Tool contract is [`CONTEXT.md`](../../../../CONTEXT.md):
+
+- § "Nội bộ AI Assistant" — **Tool**, **Read-Tool**, **Draft-Tool**, **Draft
+  Action**: the LLM is never given a write-capable tool, and a confirmed Draft
+  Action is written by the frontend calling the real endpoint, never by the LLM
+  (human-in-the-loop).
+- § "Ngôn ngữ domain" — **Employee Assistant**: reads only that Employee's own
+  data. `employee_id` is injected from the auth session and is never exposed as
+  a tool parameter.
