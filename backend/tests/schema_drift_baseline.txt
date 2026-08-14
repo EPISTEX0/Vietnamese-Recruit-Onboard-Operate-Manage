@@ -18,11 +18,6 @@
 # Adding a line means "I looked at this diff and it is not a landmine". Removing lines
 # is always safe. Measured at head 085, 2026-08-14: 64 diffs, 48 tables in metadata.
 
-add_constraint departments unnamed(name)                                                              # (name)
-add_constraint employees unnamed(employee_code)                                                       # (employee_code)
-add_constraint positions unnamed(name)                                                                # (name)
-add_index email_messages ix_email_messages_gmail_message_id                                           # (gmail_message_id) unique
-add_index evaluation_sets ix_evaluation_sets_version                                                  # (version) unique
 add_index interview_participants ix_interview_participants_employee_id                                # (employee_id)
 add_index interview_participants ix_interview_participants_type                                       # (type)
 add_index interviews ix_interviews_calendar_id                                                        # (calendar_id)
@@ -30,8 +25,6 @@ add_index interviews ix_interviews_status                                       
 add_index job_application_link_proposals ix_job_application_link_proposals_recruitment_inbox_item_id  # (recruitment_inbox_item_id)
 add_index job_application_link_proposals ix_job_application_link_proposals_status                     # (status)
 add_index job_application_link_proposals ix_job_application_link_proposals_target_job_application_id  # (target_job_application_id)
-add_index users ix_users_employee_id                                                                  # (employee_id) unique
-add_index whitelist_entries ix_whitelist_entries_value                                                # (value) unique
 modify_comment employee_knowledge_base_documents kb_type                                              # employee — the type of knowledge base this doc belongs to -> None
 modify_comment employee_knowledge_base_documents status                                               # pending | processing | ready | error -> None
 modify_comment hr_knowledge_base_documents kb_type                                                    # hr (default) — the type of knowledge base this doc belongs to -> None
@@ -43,18 +36,7 @@ modify_type recruitment_inbox_items attachments_metadata JSON -> JSONB
 modify_type recruitment_inbox_items correction_history JSON -> JSONB
 modify_type recruitment_inbox_items evidence JSON -> JSONB
 modify_type recruitment_inbox_items source_hints JSON -> JSONB
-remove_constraint email_messages email_messages_gmail_message_id_key                                  # (gmail_message_id)
-remove_constraint evaluation_sets evaluation_sets_version_key                                         # (version)
-remove_constraint outbound_emails uq_outbound_emails_idempotency_key                                  # (idempotency_key)
-remove_constraint users uq_users_employee_id                                                          # (employee_id)
-remove_constraint whitelist_entries uq_whitelist_value                                                # (value)
-remove_index departments ix_departments_name                                                          # (name) unique
-remove_index email_messages ix_email_messages_gmail_message_id                                        # (gmail_message_id)
-remove_index employees ix_employees_employee_code                                                     # (employee_code) unique
-remove_index evaluation_sets ix_evaluation_sets_version                                               # (version)
 remove_index job_application_link_proposals ix_link_proposals_inbox_item_id                           # (recruitment_inbox_item_id)
 remove_index job_application_link_proposals ix_link_proposals_status                                  # (status)
 remove_index job_application_link_proposals ix_link_proposals_target_application_id                   # (target_job_application_id)
-remove_index positions ix_positions_name                                                              # (name) unique
-remove_index whitelist_entries ix_whitelist_entries_value                                             # (value)
 remove_table_comment onboarding_audit_logs -                                                          # table comment

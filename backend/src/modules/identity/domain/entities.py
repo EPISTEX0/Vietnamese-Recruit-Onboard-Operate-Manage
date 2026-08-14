@@ -45,14 +45,20 @@ class User(SQLModel, table=True):
     """
 
     __tablename__ = "users"
+    __table_args__ = (
+        # 021 enforced this with a *named constraint* and no index; the field
+        # said ``unique=True, index=True``, which renders a unique index called
+        # ``ix_users_employee_id`` instead. Same guarantee, two different objects
+        # -- autogenerate would drop the real constraint and create the index.
+        # Named here so the model names the object the database actually has.
+        UniqueConstraint("employee_id", name="uq_users_employee_id"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(max_length=255, unique=True, nullable=False, index=True)
     name: str = Field(max_length=255, nullable=False)
     avatar_url: str | None = Field(default=None, sa_type=Text)
-    employee_id: UUID | None = Field(
-        default=None, foreign_key="employees.id", unique=True, index=True
-    )
+    employee_id: UUID | None = Field(default=None, foreign_key="employees.id")
     password_hash: str = Field(default="", max_length=255, nullable=False)
     must_change_password: bool = Field(default=False, nullable=False)
     google_sub: str | None = Field(default=None, max_length=255, unique=True, index=True)
@@ -97,10 +103,15 @@ class WhitelistEntry(SQLModel, table=True):
         # generated name would be ``ix_whitelist_entries_entry_type`` and
         # autogenerate would drop the real index to build a renamed twin.
         Index("ix_whitelist_entries_type", "entry_type"),
+        # Uniqueness on ``value`` lives in a named constraint on the database,
+        # next to a *non-unique* index of the same name the field would generate.
+        # ``unique=True`` on the field collapses the two into one unique index,
+        # so autogenerate proposes dropping both real objects. Keep them apart.
+        UniqueConstraint("value", name="uq_whitelist_value"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    value: str = Field(max_length=255, unique=True, nullable=False, index=True)
+    value: str = Field(max_length=255, nullable=False, index=True)
     entry_type: WhitelistEntryType = Field(
         sa_column=Column(EnumAsString(WhitelistEntryType, 20), nullable=False),
     )

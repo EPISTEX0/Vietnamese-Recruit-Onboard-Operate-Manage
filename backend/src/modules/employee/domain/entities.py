@@ -28,7 +28,11 @@ class Department(SQLModel, table=True):
     __tablename__ = "departments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(max_length=100, unique=True, nullable=False)
+    # ``index=True`` alongside ``unique=True`` is what makes SQLAlchemy render a
+    # unique *index* named ``ix_{table}_{column}`` instead of an unnamed UNIQUE
+    # constraint. The database has the index (ix_departments_name); without ``index=True``
+    # autogenerate proposes dropping it and adding a constraint in its place.
+    name: str = Field(max_length=100, unique=True, nullable=False, index=True)
     description: str | None = Field(default=None, sa_type=Text)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
@@ -46,7 +50,11 @@ class Position(SQLModel, table=True):
     __tablename__ = "positions"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(max_length=100, unique=True, nullable=False)
+    # ``index=True`` alongside ``unique=True`` is what makes SQLAlchemy render a
+    # unique *index* named ``ix_{table}_{column}`` instead of an unnamed UNIQUE
+    # constraint. The database has the index (ix_positions_name); without ``index=True``
+    # autogenerate proposes dropping it and adding a constraint in its place.
+    name: str = Field(max_length=100, unique=True, nullable=False, index=True)
     department_id: UUID | None = Field(default=None, foreign_key="departments.id")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
@@ -65,7 +73,11 @@ class Employee(SQLModel, table=True):
     __tablename__ = "employees"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    employee_code: str = Field(max_length=20, unique=True, nullable=False)
+    # ``index=True`` alongside ``unique=True`` is what makes SQLAlchemy render a
+    # unique *index* named ``ix_{table}_{column}`` instead of an unnamed UNIQUE
+    # constraint. The database has the index (ix_employees_employee_code); without ``index=True``
+    # autogenerate proposes dropping it and adding a constraint in its place.
+    employee_code: str = Field(max_length=20, unique=True, nullable=False, index=True)
     full_name: str = Field(max_length=255, nullable=False)
     email: str = Field(max_length=255, unique=True, nullable=False, index=True)
     phone: str | None = Field(default=None, max_length=20)

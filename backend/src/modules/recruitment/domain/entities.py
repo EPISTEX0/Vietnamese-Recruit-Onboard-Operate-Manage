@@ -610,9 +610,16 @@ class EvaluationSet(SQLModel, table=True):
     """
 
     __tablename__ = "evaluation_sets"
+    __table_args__ = (
+        # 064 created the column with an inline UNIQUE (PostgreSQL named it
+        # ``evaluation_sets_version_key``) and a separate non-unique index.
+        # ``unique=True`` on the field would collapse both into one unique
+        # index that the database does not have.
+        UniqueConstraint("version", name="evaluation_sets_version_key"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    version: str = Field(max_length=30, nullable=False, unique=True, index=True)
+    version: str = Field(max_length=30, nullable=False, index=True)
     description: str = Field(default="", max_length=500)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

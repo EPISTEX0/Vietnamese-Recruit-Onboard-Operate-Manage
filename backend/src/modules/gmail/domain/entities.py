@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Text
+from sqlalchemy import Column, DateTime, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -30,10 +30,18 @@ class EmailMessage(SQLModel, table=True):
     """
 
     __tablename__ = "email_messages"
+    __table_args__ = (
+        # 008 created the column with an inline UNIQUE (PostgreSQL named it
+        # ``email_messages_gmail_message_id_key``) *and* a separate non-unique
+        # index. ``unique=True`` on the field renders one unique index instead,
+        # which is why autogenerate wanted to drop both real objects and add a
+        # third. Two objects on the database, two declarations here.
+        UniqueConstraint("gmail_message_id", name="email_messages_gmail_message_id_key"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
-    gmail_message_id: str = Field(max_length=255, unique=True, nullable=False, index=True)
+    gmail_message_id: str = Field(max_length=255, nullable=False, index=True)
     gmail_thread_id: str = Field(max_length=255, nullable=False, index=True)
     subject: str = Field(default="", max_length=998, nullable=False)
     sender_email: str = Field(default="", max_length=255, nullable=False)
@@ -180,6 +188,13 @@ class OutboundEmail(SQLModel, table=True):
     """
 
     __tablename__ = "outbound_emails"
+    __table_args__ = (
+        # 048 wrote both a unique index and a named unique constraint on this
+        # column. The field renders the index; the constraint had no counterpart
+        # in the model, so autogenerate proposed dropping it. Redundant on the
+        # database, but dropping it is a change this model must not ask for.
+        UniqueConstraint("idempotency_key", name="uq_outbound_emails_idempotency_key"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     idempotency_key: str = Field(max_length=64, unique=True, nullable=False, index=True)
