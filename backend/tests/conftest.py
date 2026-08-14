@@ -10,9 +10,17 @@ from pathlib import Path
 
 import pytest
 
+from tests.env_isolation import isolate_environment
 from tests.minio_support import start_kb_object_storage
 from tests.postgres_support import PGVECTOR_IMAGE as _PGVECTOR_IMAGE
 from tests.postgres_support import make_postgres_container
+
+# Must run before anything imports ``src`` and before any test module executes
+# its own ``os.environ.setdefault(...)``, which is why it sits at conftest import
+# time rather than in a fixture. See ``tests/env_isolation.py`` for what leaks
+# and why the fix cannot live in ``src``. The imports above are safe to precede
+# it: neither support module imports ``src``.
+STRIPPED_AMBIENT_ENV = isolate_environment()
 
 # backend/ -- the directory holding alembic.ini and the alembic/ package.
 BACKEND_DIR = Path(__file__).resolve().parents[1]
