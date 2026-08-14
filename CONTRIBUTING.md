@@ -68,6 +68,14 @@ Or bring up the full stack (backend, frontend, workers, embedding service):
 docker compose up -d
 ```
 
+The stack above runs the code baked into the images. To get hot-reload (source
+bind-mounted into `backend` and `frontend`), pass the dev overrides explicitly —
+Compose does **not** pick `docker-compose.dev.yml` up on its own:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
 | Service   | Endpoint                              | Notes                          |
 | --------- | ------------------------------------- | ------------------------------ |
 | PostgreSQL | `localhost:5432` (`postgres/postgres`, db `vroom_hr`) | pgvector-enabled              |
@@ -254,7 +262,7 @@ Also confirm:
 
 **Any change that affects the system architecture — data model boundaries, module seams, cross-module flows, security posture, or public interfaces — requires an Architecture Decision Record.**
 
-1. Add a new ADR under `docs/adr/` using the next numeric prefix (e.g. `0012-my-decision.md`).
+1. Add a new ADR under `docs/adr/` using the next numeric prefix (e.g. `0013-my-decision.md`).
 2. Follow the ADR format of existing records: **context → decision → consequences** (and consider alternatives).
 3. Reference the ADR from your PR description and commit message.
 

@@ -223,7 +223,7 @@ sequenceDiagram
 
 - **Next.js 15, React 19, TypeScript, Tailwind CSS v4**, TanStack Query for server state, `next-intl` for i18n (Vietnamese-first), `lucide-react` icons.
 - Talks to the backend exclusively over REST/JSON (`NEXT_PUBLIC_API_URL`). Authentication is cookie-based (`HttpOnly` JWT) via `middleware.ts`.
-- Design system: **AI Studio** (slate + single indigo accent, Inter/JetBrains Mono). See `DESIGN.md`.
+- Design system: **AI Studio** (slate + single indigo accent, Be Vietnam Pro/JetBrains Mono). See `DESIGN.md`.
 
 ### 4.2 API Layer (FastAPI Backend)
 

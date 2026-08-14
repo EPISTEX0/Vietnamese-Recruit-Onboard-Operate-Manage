@@ -2,72 +2,70 @@
 
 ## Stack
 
-- Python 3.11+, FastAPI, SQLModel, PostgreSQL 15 (asyncpg), Redis 7
+- Python 3.11+ (`requires-python = ">=3.11"`), FastAPI, SQLModel, PostgreSQL 15 + pgvector (asyncpg), Redis
 - Alembic migrations, MinIO storage, arq task queue
-- Ruff (line-length=100, select E/F/I/N/W/UP), MyPy strict
+- Ruff (line-length=100, select E/F/I/N/W/UP), MyPy (`python_version = "3.11"`)
 - pytest + pytest-asyncio, Hypothesis, respx, testcontainers
+
+Môi trường là **uv-only**. Mọi lệnh Python chạy qua `uv run`, không `pip install`, không venv thủ công.
 
 ---
 
-## Database Migrations Map
+## Database Migrations
 
-Alembic migrations trong `alembic/versions/`, chạy theo thứ tự số:
+Migrations nằm ở `alembic/versions/`, đặt tên `NNN_<slug>.py` và chạy theo thứ tự số.
 
-### Identity Module
+Đây là thư mục thay đổi mỗi tuần — **đừng chép danh sách migration vào doc**, hỏi thẳng repo:
 
-| Migration | Tables Created/Modified                         |
-| --------- | ----------------------------------------------- |
-| 001       | `users` — bảng users cơ bản                     |
-| 002       | `oauth_grants` — OAuth authorization codes      |
-| 003       | `refresh_tokens` — JWT refresh tokens           |
-| 010       | `users` — thêm cột `role`                       |
-| 011       | `whitelist_entries` — email whitelist cho login |
-| 012       | `oauth_configs` — OAuth provider configs        |
-| 013       | `audit_logs` — audit log cho mọi action         |
+```bash
+# Migration mới nhất trên đĩa
+ls alembic/versions/ | sort | tail -5
 
-### Employee Module
+# Head revision theo Alembic (nguồn sự thật khi có nhiều nhánh)
+uv run alembic heads
 
-| Migration | Tables Created/Modified                                        |
-| --------- | -------------------------------------------------------------- |
-| 004       | `departments` — phòng ban                                      |
-| 005       | `positions` — chức vụ                                          |
-| 006       | `employees` — nhân viên (liên kết departments, positions)      |
-| 007       | `employee_documents` — tài liệu nhân viên (hợp đồng, CMND,...) |
+# Revision DB hiện đang ở
+uv run alembic current
 
-### Gmail Module
+# Toàn bộ lịch sử kèm quan hệ down_revision
+uv run alembic history
+```
 
-| Migration | Tables Created/Modified                                          |
-| --------- | ---------------------------------------------------------------- |
-| 008       | `gmail_credentials`, `gmail_labels` — lưu OAuth tokens và labels |
+Muốn biết một bảng được tạo/sửa ở đâu thì `rg '<tên_bảng>' alembic/versions/` — nhanh và luôn đúng
+hơn bảng tra tay.
 
-### Recruitment Module
+### Luật migration
 
-| Migration | Tables Created/Modified                                          |
-| --------- | ---------------------------------------------------------------- |
-| 009       | `candidates`, `candidate_statuses`, `candidate_notes` — ứng viên |
+1. Một migration cho một thay đổi schema, đánh số tuần tự tiếp theo số lớn nhất đang có.
+2. Autogenerate hiện **sạch**: drift đã đóng 113 → 0 (xem
+   [`../docs/schema-drift-audit.md`](../docs/schema-drift-audit.md)), nên `alembic revision --autogenerate`
+   không sinh ra gì trên schema đúng. Vì thế **mọi diff nó sinh ra đều là tín hiệu thật** — drift mới, hoặc
+   ai đó đổi model mà quên viết migration. Vẫn không apply mù: đọc diff, xác định bên nào sai (model hay
+   DB), rồi mới quyết.
+3. Không sửa migration đã merge. Thay đổi bằng migration mới.
 
-### Attendance Module
+---
 
-| Migration | Tables Created/Modified                                  |
-| --------- | -------------------------------------------------------- |
-| 014       | `leave_types` — loại nghỉ phép (annual, sick, unpaid...) |
-| 015       | `leave_balances` — số ngày phép còn lại                  |
-| 016       | `leave_requests` — đơn xin nghỉ                          |
-| 017       | `work_schedules` — ca làm việc                           |
-| 018       | `attendance_records` — chấm công (check-in/out)          |
-| 019       | `overtime_requests` — đơn xin OT                         |
-| 020       | `holidays` — ngày lễ                                     |
+## Modules
 
-### Payroll Module
+`src/modules/` có đúng 10 module:
 
-| Migration | Tables Created/Modified                       |
-| --------- | --------------------------------------------- |
-| 021       | `salary_configs` — cấu hình lương cơ bản      |
-| 022       | `allowances` — phụ cấp (xăng, điện thoại,...) |
-| 023       | `dependents` — người phụ thuộc                |
-| 024       | `payroll_periods` — kỳ lương (tháng/năm)      |
-| 025       | `payslips` — bảng lương                       |
-| 026       | `position_salaries` — lương theo chức vụ      |
+| Module             | Prefix                                                                                                                                                          | Mô tả                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `identity`         | `/api/auth`, `/api/system-admin`                                                                                                                                  | Local auth, JWT, roles, whitelist, audit log     |
+| `employee`         | `/api/employees`, `/api/departments`, `/api/positions`, `/api/documents`                                                                                          | CRUD, Excel import, document vault               |
+| `recruitment`      | `/api/recruitment`, `/api/recruitment/candidates`, `/api/recruitment/job-openings`, `/api/recruitment/job-applications`, `/api/recruitment/cv-review`, `/api/recruitment/evaluation`, `/api/recruitment/inbox`, `/api/recruitment/calendar-conflicts`, `/api/system-admin/runtime` | Candidate pipeline, CV parsing, job openings     |
+| `gmail`            | `/api/gmail`, `/api/outbound-emails`                                                                                                                              | Gmail API integration, outbound email            |
+| `attendance`       | `/api/attendance`                                                                                                                                                 | Check-in/out, leave, overtime, work schedules    |
+| `onboarding`       | `/api/onboarding`                                                                                                                                                 | Onboarding flow (có `worker.py` chạy nền)        |
+| `payslip`          | `/api/payslips`, `/api/hr/payslips`                                                                                                                               | Payslip lưu trữ và phát hành cho nhân viên       |
+| `employee_request` | `/api/employee-requests`, `/api/hr/employee-requests`                                                                                                             | Nhân viên gửi yêu cầu, HR duyệt                  |
+| `assistant`        | `/api/assistant`, `/api/ess/assistant`                                                                                                                            | Trợ lý LLM cho HR và cho nhân viên               |
+| `knowledge_base`   | `/api/knowledge-base`                                                                                                                                             | RAG knowledge base (có `worker.py` chạy nền)     |
+
+Không có module `payroll` và không có module `self_service`. Việc tính lương không nằm trong backend
+(xem §Domain reference), phần self-service của nhân viên nằm ở `employee_request`, `payslip`
+và `/api/ess/assistant`.
 
 ---
 
@@ -80,29 +78,27 @@ Gmail Incoming Email → Gmail Module → Recruitment Pipeline
                                                     ↓
                               promote_candidate() → Employee (new)
                                                     ↓
-                                         Employee Module
+                                         Employee Module → Onboarding
                                                     ↓
                                          Attendance Module
                                                     ↓
-                                         Payroll Module
-                                                    ↓
-                                         Payslip Email → Gmail Outbound
+                                    Payslip (HR nhập số) → Outbound Email
 ```
 
 ### Key Flows
 
-1. **Recruitment → Employee**: `recruitment_service.promote_candidate()` tạo employee từ candidate được hire
+1. **Recruitment → Employee**: `recruitment_service.promote_candidate()` tạo employee từ candidate
+   được hire.
 
-2. **Attendance → Payroll**:
-   - `attendance_records` (check-in/out) → tính work hours
-   - `overtime_requests` (đã approve) → tính OT hours
-   - `leave_requests` (đã approve) → trừ leave balance
+2. **Attendance**: `attendance_records` (check-in/out), `overtime_requests` (đã approve),
+   `leave_requests` (đã approve, trừ leave balance).
 
-3. **Employee → Self-Service**: ESS đọc employee data (profile, leave balance, payslips)
+3. **Employee self-service**: nhân viên đọc payslip của mình qua `/api/payslips`, gửi đơn qua
+   `/api/employee-requests`, hỏi trợ lý qua `/api/ess/assistant`.
 
 4. **Gmail Integration**:
-   - Inbound: Sync email labels → recruitment pipeline
-   - Outbound: Gửi payslip, thông báo nghỉ phép
+   - Inbound: sync email labels → recruitment pipeline.
+   - Outbound: gửi email tuyển dụng, thông báo.
 
 ---
 
@@ -110,202 +106,139 @@ Gmail Incoming Email → Gmail Module → Recruitment Pipeline
 
 ### Database Session
 
+Session async là FastAPI dependency, sống ở `src/modules/identity/container.py` và được mọi module
+import lại:
+
 ```python
-# Sync session (dùng trong migrations, seed scripts)
-from src.database import get_session, engine
+from src.modules.identity.container import get_db_session
 
-# Async session (dùng trong API services)
-from src.modules.common.database import get_db_session
-
-# Cách dùng trong service:
-async def my_service(db: AsyncSession = Depends(get_db_session)):
-    result = await db.execute(select(Employee).where(...))
+# Trong container.py của module:
+async def get_employee_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> EmployeeRepository:
+    return EmployeeRepository(session)
 ```
+
+`get_db_session` commit khi thoát sạch, rollback khi có exception.
+
+`src/database.py` có một `get_session()` **sync** (SQLModel `Session`) cho script/tooling chạy ngoài
+request cycle. Không dùng nó trong đường API.
 
 ### MinIO Client
 
+Không có MinIO client dùng chung — mỗi module có client riêng, cấu hình theo settings của module đó:
+
+- `src/modules/employee/infrastructure/minio_client.py`
+- `src/modules/recruitment/infrastructure/minio_client.py`
+
 ```python
-from src.infrastructure.minio_client import minio_client
+from src.modules.employee.infrastructure.minio_client import MinIOClient
 
-# Upload file
-await minio_client.upload(
-    bucket="employees",
-    object_name=f"documents/{employee_id}/{filename}",
-    content=file_content,
-    content_type="application/pdf"
-)
-
-# Download file
-content = await minio_client.download(
-    bucket="employees",
-    object_name=f"documents/{employee_id}/{filename}"
-)
-
-# Presigned URL (download)
-url = await minio_client.get_presigned_url(
-    bucket="employees",
-    object_name=f"documents/{employee_id}/{filename}",
-    expires=3600
-)
+client = MinIOClient(settings)
+url = await client.upload_file(path, file_data, content_type)
+data = await client.download_file(path)
+link = await client.generate_presigned_url(path, expires_seconds=900)
+await client.delete_file(path)
 ```
+
+Lấy instance qua `container.py` của module, đừng tự dựng trong router.
 
 ### Redis (Cache & Rate Limit)
 
 ```python
-from src.infrastructure.redis_client import redis_client
-
-# Cache
-await redis_client.set("key", "value", expire=3600)
-value = await redis_client.get("key")
-
-# Rate limit
-from src.modules.identity.application.rate_limiter import RateLimiter
-limiter = RateLimiter(redis_client)
-await limiter.check_rate_limit(user_id, "login", max_attempts=5, window=300)
+from src.modules.identity.container import get_redis_client
+from src.modules.identity.infrastructure.rate_limiter import RateLimiter
 ```
+
+`RateLimiter` được wire sẵn trong `src/modules/identity/container.py` (Redis client + rate limit settings) —
+lấy qua DI thay vì tự khởi tạo.
 
 ### Dependency Injection
 
-```python
-# container.py trong mỗi module
-from src.modules.<module>.container import router
+Mỗi module có `container.py` khai các provider `Depends()`. Router import provider từ container,
+không tự instantiate service.
 
-# Trong main.py, đăng ký:
-app.include_router(router, prefix="/api/<module>")
+Router **không** được export từ `container.py`. `main.py` import từng router object theo tên và
+include trực tiếp — 24 lời gọi `app.include_router(...)`, prefix đã nằm sẵn trên chính `APIRouter`:
+
+```python
+# src/main.py
+from src.modules.identity.api.router import router as auth_router
+
+app.include_router(auth_router)
 ```
 
 ### Error Handling Pattern
 
+FastAPI đăng ký exception handler trên **app**, không trên router (`APIRouter` không có
+`exception_handler`). Mỗi module export một hàm `register_<module>_error_handlers(app)`:
+
 ```python
-# 1. Domain exception (trong domain/exceptions.py)
-class EmployeeNotFoundError(Exception):
+# 1. Domain exception (domain/exceptions.py) — kế thừa base error của module.
+#    Base nhận đúng một tham số: message override tuỳ chọn.
+class EmployeeNotFoundError(EmployeeError):
     status_code = 404
     error_code = "EMPLOYEE_NOT_FOUND"
     message = "Employee not found"
 
-# 2. Service raise exception
-raise EmployeeNotFoundError(employee_id=id)
+# 2. Service raise domain exception, không raise HTTPException.
+#    Không truyền kwargs ngữ cảnh — exception chỉ mang code + message.
+raise EmployeeNotFoundError()
 
-# 3. API layer catch và convert (trong api/error_handler.py)
-@router.exception_handler(EmployeeNotFoundError)
-async def handle_employee_not_found(request: Request, exc: EmployeeNotFoundError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error_code": exc.error_code, "message": exc.message}
-    )
+# 3. api/error_handler.py bắt base class, trả JSON đồng nhất
+def register_employee_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(EmployeeError)
+    async def _employee_error_handler(request: Request, exc: EmployeeError) -> JSONResponse:
+        lang = get_request_language(request)
+        log_domain_exception(exc, module="employee")
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.error_code, "message": resolve_error_message(exc, lang)}},
+        )
+
+# 4. main.py gọi hàm đăng ký
+register_employee_error_handlers(app)
 ```
+
+Body lỗi luôn có dạng `{"error": {"code": ..., "message": ...}}`.
 
 ---
 
-## Error Codes Registry
+## Error Codes & Messages
 
-### Identity Module (Auth)
+Toàn bộ message hướng tới người dùng nằm **tập trung** ở `src/shared/messages.py` — một dict
+`MESSAGES` map error code → `{"vi": ..., "en": ...}`. Không có registry per-module;
+`src/modules/<module>/domain/exceptions.py` chỉ khai `error_code` trỏ vào catalog này.
 
-| Error Code                | HTTP | Message                                |
-| ------------------------- | ---- | -------------------------------------- |
-| `AUTH_ERROR`              | 500  | An authentication error occurred       |
-| `AUTH_INVALID_STATE`      | 400  | Invalid authentication state           |
-| `AUTH_GOOGLE_ERROR`       | 502  | Failed to authenticate with Google     |
-| `AUTH_ACCESS_DENIED`      | 403  | Access denied. Contact administrator.  |
-| `AUTH_INSUFFICIENT_SCOPE` | 400  | Please grant all requested permissions |
-| `AUTH_INVALID_TOKEN`      | 401  | Invalid or expired token               |
-| `AUTH_INVALID_RESET_TOKEN` | 400  | Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn |
-| `AUTH_RATE_LIMITED`       | 429  | Too many login attempts                |
+```python
+from src.shared.messages import get_message
 
-### Employee Module
+get_message("AUTH_INVALID_CREDENTIALS")            # tiếng Việt (mặc định)
+get_message("AUTH_INVALID_CREDENTIALS", lang="en") # fallback tiếng Anh
+```
 
-| Error Code                 | HTTP | Message                                        |
-| -------------------------- | ---- | ---------------------------------------------- |
-| `EMPLOYEE_ERROR`           | 500  | An employee module error occurred              |
-| `EMPLOYEE_DUPLICATE_EMAIL` | 409  | Employee with this email already exists        |
-| `EMPLOYEE_NOT_FOUND`       | 404  | Employee not found                             |
-| `DEPARTMENT_NOT_FOUND`     | 404  | Department not found                           |
-| `POSITION_NOT_FOUND`       | 404  | Position not found                             |
-| `DEPARTMENT_HAS_EMPLOYEES` | 409  | Cannot delete department with active employees |
-| `POSITION_HAS_EMPLOYEES`   | 409  | Cannot delete position with active employees   |
-| `FILE_TOO_LARGE`           | 413  | File exceeds maximum size of 10MB              |
-| `UNSUPPORTED_FILE_TYPE`    | 415  | File type not supported                        |
+Thêm error code mới = thêm entry vào `MESSAGES` (cả `vi` và `en`) rồi trỏ `error_code` của exception
+vào đó. Danh sách code hiện có đọc thẳng từ file, đừng chép ra doc:
 
-### Recruitment Module
+```bash
+rg -o '"[A-Z][A-Z0-9_]+":' src/shared/messages.py | sort -u
+```
 
-| Error Code                    | HTTP | Message                             |
-| ----------------------------- | ---- | ----------------------------------- |
-| `RECRUITMENT_ERROR`           | 500  | A recruitment module error occurred |
-| `CANDIDATE_NOT_FOUND`         | 404  | Candidate not found                 |
-| `CV_DOCUMENT_NOT_FOUND`       | 404  | CV document not found               |
-| `INVALID_STATUS_TRANSITION`   | 409  | Invalid status transition           |
-| `CV_FILE_MISSING`             | 404  | CV file not found in storage        |
-| `STORAGE_SERVICE_UNAVAILABLE` | 502  | Storage service is unavailable      |
-| `GMAIL_NOT_CONNECTED`         | 409  | Gmail is not connected              |
-| `PIPELINE_TIMEOUT`            | 504  | CV processing pipeline timed out    |
-| `OCR_EXTRACTION_FAILED`       | 502  | OCR text extraction failed          |
-| `LLM_PARSE_FAILED`            | 502  | LLM CV parsing failed               |
-
-### Attendance Module
-
-| Error Code                        | HTTP | Message                                      |
-| --------------------------------- | ---- | -------------------------------------------- |
-| `ATTENDANCE_ERROR`                | 500  | An attendance module error occurred          |
-| `LEAVE_TYPE_NOT_FOUND`            | 404  | Leave type not found                         |
-| `LEAVE_REQUEST_NOT_FOUND`         | 404  | Leave request not found                      |
-| `INSUFFICIENT_LEAVE_BALANCE`      | 400  | Insufficient leave balance                   |
-| `LEAVE_OVERLAP`                   | 409  | Leave request overlaps with existing request |
-| `INVALID_LEAVE_STATUS_TRANSITION` | 400  | Invalid leave status transition              |
-| `LEAVE_DATE_IN_PAST`              | 400  | Cannot cancel leave that has already started |
-| `ALREADY_CHECKED_IN`              | 400  | Already checked in today                     |
-| `NOT_CHECKED_IN`                  | 400  | Not checked in today                         |
-| `ALREADY_CHECKED_OUT`             | 400  | Already checked out today                    |
-| `ATTENDANCE_RECORD_NOT_FOUND`     | 404  | Attendance record not found                  |
-| `OVERTIME_REQUEST_NOT_FOUND`      | 404  | Overtime request not found                   |
-| `OVERTIME_LIMIT_EXCEEDED`         | 400  | Overtime limit exceeded                      |
-| `SCHEDULE_NOT_FOUND`              | 404  | Work schedule not found                      |
-
-### Gmail Module
-
-| Error Code                  | HTTP | Message                                   |
-| --------------------------- | ---- | ----------------------------------------- |
-| `GMAIL_ERROR`               | 500  | A Gmail module error occurred             |
-| `UNAUTHORIZED`              | 401  | Missing or invalid authentication session |
-| `GMAIL_NOT_CONNECTED`       | 403  | Gmail is not connected                    |
-| `GMAIL_CONNECT_FAILED`      | 400  | Gmail connection failed                   |
-| `LABEL_NAMESPACE_VIOLATION` | 400  | Label must be within VroomHR/ namespace   |
-| `GMAIL_FETCH_ERROR`         | 502  | Failed to fetch data from Gmail API       |
-| `MESSAGE_NOT_FOUND`         | 404  | Gmail message not found                   |
-| `GMAIL_LABEL_REMOVE_FAILED` | 502  | Failed to remove label                    |
-| `GMAIL_SEND_FAILED`         | 502  | Failed to send email                      |
-| `RATE_LIMITED`              | 429  | Rate limit exceeded                       |
-
-### Payroll Module
-
-| Error Code               | HTTP | Message                              |
-| ------------------------ | ---- | ------------------------------------ |
-| `PAYROLL_ERROR`          | 500  | A payroll module error occurred      |
-| `PERIOD_NOT_FOUND`       | 404  | Payroll period not found             |
-| `PERIOD_ALREADY_CLOSED`  | 409  | Payroll period already closed        |
-| `EMPLOYEE_NOT_IN_PERIOD` | 404  | Employee not found in payroll period |
-| `SALARY_NOT_CONFIGURED`  | 400  | Salary not configured for employee   |
-| `TAX_CALCULATION_ERROR`  | 500  | Tax calculation failed               |
-
-### Self-Service Module
-
-| Error Code      | HTTP | Message                     |
-| --------------- | ---- | --------------------------- |
-| `ESS_ERROR`     | 500  | An ESS error occurred       |
-| `ESS_FORBIDDEN` | 403  | Cannot access this resource |
-| `ESS_NOT_FOUND` | 404  | Resource not found          |
+`resolve_error_message` + `get_request_language` (cùng file) là thứ error handler dùng để chọn ngôn
+ngữ theo request.
 
 ---
 
 ## Module Structure (MANDATORY)
 
-Every module in `src/modules/` MUST follow:
+Mọi module trong `src/modules/` PHẢI theo:
 
 ```
 src/modules/<name>/
 ├── api/
-│   ├── router.py          # FastAPI router with prefix /api/<name>
+│   ├── router.py          # APIRouter, prefix khai ngay tại đây
 │   ├── schemas.py         # Pydantic request/response models
-│   └── error_handler.py   # Domain exception → HTTPException mapping
+│   └── error_handler.py   # register_<name>_error_handlers(app)
 ├── application/
 │   └── <name>_service.py  # Business logic (no framework deps)
 ├── domain/
@@ -313,61 +246,63 @@ src/modules/<name>/
 │   ├── enums.py           # str Enums
 │   └── exceptions.py      # Domain-specific exceptions (not HTTP)
 ├── infrastructure/
-│   ├── config.py          # pydantic-settings with env prefix
+│   ├── config.py          # pydantic-settings với env prefix
 │   └── <name>_repository.py  # Async DB operations
 └── container.py           # FastAPI Depends() wiring
 ```
 
+Module có tác vụ nền (`gmail`, `knowledge_base`, `onboarding`) thêm `worker.py` ở gốc module.
+Module có nhiều bề mặt API tách thêm router file (`admin_router.py`, `employee_router.py`, …) —
+vẫn trong `api/`.
+
 ## Key Rules
 
-1. **Async-first:** All DB operations use `AsyncSession`
-2. **DI via container.py:** Never instantiate services in routers directly
-3. **Domain exceptions:** Raise domain exceptions in services, map to HTTP in error_handler
-4. **No raw SQL in services:** Use repository pattern
-5. **Auth:** Import `get_current_user` from `src.modules.identity.container`
-6. **Schemas:** Use Pydantic v2 models with `model_config = {"from_attributes": True}`
-7. **Migrations:** One migration per table/change, numbered sequentially (001, 002...)
+1. **Async-first:** mọi thao tác DB trong đường API dùng `AsyncSession`.
+2. **DI via container.py:** không instantiate service trong router.
+3. **Domain exceptions:** service raise domain exception, `error_handler` map sang HTTP.
+4. **No raw SQL in services:** dùng repository.
+5. **Auth:** import `get_current_user` từ `src.modules.identity.container`.
+6. **Schemas:** Pydantic v2, `model_config = {"from_attributes": True}`.
+7. **Messages:** mọi chuỗi hướng người dùng đi qua `src/shared/messages.py`.
 
 ## Commands
 
+Chạy từ `backend/`:
+
 ```bash
 # Run server
-uvicorn src.main:app --reload --port 8000
+uv run uvicorn src.main:app --reload --port 8000
 
 # Migrations
-alembic upgrade head
-alembic revision --autogenerate -m "description"
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "description"
 
 # Lint & format
-ruff check src/ tests/
-ruff format src/ tests/
+uv run ruff check src/ tests/
+uv run ruff format src/ tests/
 
 # Type check
-mypy src/
+uv run mypy src/
 
 # Test
-pytest tests/
-pytest tests/modules/payroll/ -q  # specific module
+uv run pytest tests/
+uv run pytest tests/modules/payslip/ -q   # một module
+
+# Smoke import (Gate 1 của CI)
+uv run python -c "import src.main"
 ```
 
-## Existing Modules
+## Domain reference — Vietnamese HR
 
-| Module       | Prefix                                           | Description                                 |
-| ------------ | ------------------------------------------------ | ------------------------------------------- |
-| identity     | /api/auth                                        | Local auth, JWT, roles, whitelist, audit    |
-| employee     | /api/employees, /api/departments, /api/positions | CRUD, import, documents                     |
-| gmail        | /api/gmail                                       | Gmail API integration                       |
-| recruitment  | /api/recruitment                                 | Candidate pipeline, CV parsing              |
-| attendance   | /api/attendance                                  | Check-in/out, leave, overtime, schedules    |
-| payroll      | /api/payroll, /api/salary                        | Salary config, payslips, tax                |
-| self_service | /api/ess                                         | Employee self-service portal                |
+Các hằng số dưới đây là **tham chiếu nghiệp vụ**, không phải mô tả code: backend hiện **không** tính
+lương. `payslip` lưu các số HR nhập vào (`gross_salary`, `deductions`, `insurance_employee`,
+`taxable_income`, `pit_amount`, `net_salary` — đều `Decimal`) và không suy ra chúng từ công thức nào.
+Nếu sau này có module tính lương, đây là luật nó phải theo:
 
-## Business Rules (Vietnamese HR)
-
-- Personal tax deduction: 11,000,000 VND/month
-- Dependent deduction: 4,400,000 VND/person/month
+- Personal tax deduction: 11,000,000 VND/tháng
+- Dependent deduction: 4,400,000 VND/người/tháng
 - Insurance (employee): BHXH 8% + BHYT 1.5% + BHTN 1% = 10.5%
 - Insurance (employer): BHXH 17.5% + BHYT 3% + BHTN 1% = 21.5%
-- Work days per month: 26 (for daily rate calculation)
-- Progressive tax: 7 brackets (5%, 10%, 15%, 20%, 25%, 30%, 35%)
-- OT rates: weekday 150%, weekend 200%, holiday 300%
+- Work days per month: 26 (dùng cho daily rate)
+- Progressive tax: 7 bậc (5%, 10%, 15%, 20%, 25%, 30%, 35%)
+- OT rates: ngày thường 150%, cuối tuần 200%, ngày lễ 300%

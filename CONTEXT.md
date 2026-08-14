@@ -98,7 +98,7 @@ Không gian làm việc thống nhất để HR xử lý email tuyển dụng v�
 _Avoid_: AI Error Queue, Classification Queue, Gmail Inbox
 
 **Candidate**:
-Một người đã được đưa vào quy trình tuyển dụng, được tạo từ Job Application đủ điều kiện hoặc do HR tạo thủ công. Candidate đi qua pipeline: new → reviewing → interview*scheduled → accepted/rejected/archived. Candidate CHƯA phải Employee. Candidate có thể chưa được gán hoặc được gán vào đúng một Job Opening; việc gán có thể thay đổi cho đến trước khi Candidate đạt accepted/rejected/archived.
+Một người đã được đưa vào quy trình tuyển dụng, được tạo từ Job Application đủ điều kiện hoặc do HR tạo thủ công. Candidate đi qua pipeline: new → reviewing → `interview_scheduled` → accepted/rejected/archived. Candidate CHƯA phải Employee. Candidate có thể chưa được gán hoặc được gán vào đúng một Job Opening; việc gán có thể thay đổi cho đến trước khi Candidate đạt accepted/rejected/archived.
 _Avoid_: Applicant, Employee (Employee chỉ tồn tại sau onboarding)
 
 **Interview**: Một buổi phỏng vấn cụ thể của một Candidate. Một Candidate có thể có nhiều Interview để biểu diễn nhiều vòng hoặc lần lên lịch lại mà không ghi đè lịch sử phỏng vấn. Vòng đời: scheduled → completed/cancelled. Việc đổi lịch giữ nguyên Interview; nếu hủy buổi cũ và tạo buổi thay thế thì tạo Interview mới. Interview không tự động thay đổi Candidate pipeline.
@@ -135,23 +135,23 @@ _Avoid_: Query (dành riêng cho command/query layer)
 Tool KHÔNG thực hiện write. Tool trả về một proposal có cấu trúc — gồm action type, parameters và preview dễ đọc (ví dụ email mời phỏng vấn đã soạn). LLM chỉ có thể đề xuất, không thể thực thi.
 _Avoid_: Write-tool, Action-tool
 
-     **Draft Action**:
-     Proposal có cấu trúc do Draft-Tool trả về. HR review proposal và khi confirm, frontend gọi trực tiếp write endpoint thật hiện có (không gọi thông qua LLM). Đây là cơ chế giữ AI Assistant trong mô hình human-in-the-loop.
-     _Avoid_: Auto-action, Command
-     
-     **AI Policy Preset**:
-     Mức chính sách tự động hóa được Organization chọn cho AI Automation, chẳng hạn conservative, balanced hoặc high-recall. Preset không phải raw confidence threshold và không cho phép Organization tự định nghĩa ngưỡng chưa được đánh giá.
-     _Avoid_: AI threshold, Confidence setting, AI mode
-     
-     **AI Evaluation Set**:
-     Tập mẫu email hoặc CV đã được chọn, gán nhãn và redaction để đo chất lượng AI theo model, prompt và policy version. Đây là nguồn đánh giá có kiểm soát, không phải dữ liệu để hệ thống tự động học trực tuyến.
-     _Avoid_: Training set, Online learning data, AI history
-     
-     **Field Provenance**:
-     Dấu vết chỉ ra field được AI trích xuất từ phần nào của email hoặc CV và mức độ cần HR xác nhận. Field Provenance phân biệt dữ liệu nguồn với structured draft do AI đề xuất.
-     _Avoid_: AI explanation, Chain-of-thought, Confidence note
-     
-     ## Google Integration
+**Draft Action**:
+Proposal có cấu trúc do Draft-Tool trả về. HR review proposal và khi confirm, frontend gọi trực tiếp write endpoint thật hiện có (không gọi thông qua LLM). Đây là cơ chế giữ AI Assistant trong mô hình human-in-the-loop.
+_Avoid_: Auto-action, Command
+
+**AI Policy Preset**:
+Mức chính sách tự động hóa được Organization chọn cho AI Automation, chẳng hạn conservative, balanced hoặc high-recall. Preset không phải raw confidence threshold và không cho phép Organization tự định nghĩa ngưỡng chưa được đánh giá.
+_Avoid_: AI threshold, Confidence setting, AI mode
+
+**AI Evaluation Set**:
+Tập mẫu email hoặc CV đã được chọn, gán nhãn và redaction để đo chất lượng AI theo model, prompt và policy version. Đây là nguồn đánh giá có kiểm soát, không phải dữ liệu để hệ thống tự động học trực tuyến.
+_Avoid_: Training set, Online learning data, AI history
+
+**Field Provenance**:
+Dấu vết chỉ ra field được AI trích xuất từ phần nào của email hoặc CV và mức độ cần HR xác nhận. Field Provenance phân biệt dữ liệu nguồn với structured draft do AI đề xuất.
+_Avoid_: AI explanation, Chain-of-thought, Confidence note
+
+## Google Integration
 
 **Organization Google Connection**: Kết nối Google Workspace dùng chung của Organization, được HR thiết lập để phục vụ các tác vụ Gmail và Calendar của Organization. Kết nối này không thuộc về một Employee cụ thể, dù HR là người thực hiện cấp quyền. Mỗi Organization chỉ có một kết nối hoạt động.
 _Avoid_: HR Google Account, Employee Google Connection, Personal Google Connection

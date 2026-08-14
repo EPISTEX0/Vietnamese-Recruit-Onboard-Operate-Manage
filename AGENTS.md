@@ -1,6 +1,8 @@
 # Vroom HR
 
-Vroom HR (Vietnamese Recruit-Onboard-Operate-Manage) là nền tảng HR tự host, mã nguồn mở, cho doanh nghiệp Việt Nam. Mỗi công ty chạy một triển khai riêng, một DB riêng, một server riêng. Một triển khai chỉ phục vụ đúng một công ty. Mục lục này chốt nghĩa chuẩn của thuật ngữ domain để team dùng 1 từ cho 1 khái niệm trong spec, code, và docs.
+Vroom HR (Vietnamese Recruit-Onboard-Operate-Manage) là nền tảng HR tự host, mã nguồn mở, cho doanh nghiệp Việt Nam. Mỗi công ty chạy một triển khai riêng, một DB riêng, một server riêng. Một triển khai chỉ phục vụ đúng một công ty.
+
+File này là doc **điều hướng** cho agent: tìm gì ở đâu, chạy lệnh nào. Nghĩa chuẩn của thuật ngữ domain do [`CONTEXT.md`](./CONTEXT.md) chốt — đó là glossary canonical của repo, dùng 1 từ cho 1 khái niệm trong spec, code và docs.
 
 ## Agent skills
 
@@ -8,41 +10,7 @@ IMPORTANT: When applicable, prefer using intellij-index MCP tools for code navig
 
 ## Code Search
 
-Use `semble search` to find code by describing what it does or naming a symbol/identifier, instead of grep:
-
-```bash
-semble search "authentication flow" ./my-project --max-snippet-lines 10  # first 10 lines only, concise
-semble search "save_pretrained" ./my-project                          # full chunk content
-semble search "save model to disk" ./my-project --top-k 10           # more results
-```
-
-The index is built on first run (and cached for subsequent runs) and invalidated automatically when files change.
-
-Use `--content docs` to search documentation and prose, `--content config` for config files (yaml, toml, etc.), or `--content all` to search code, docs, and config:
-
-```bash
-semble search "deployment guide" ./my-project --content docs
-semble search "database host port" ./my-project --content config
-semble search "authentication" ./my-project --content all
-```
-
-Use `semble find-related` to discover code similar to a known location (pass `file_path` and `line` from a prior search result):
-
-```bash
-semble find-related src/auth.py 42 ./my-project
-```
-
-`path` defaults to the current directory when omitted; git URLs are accepted.
-
-If `semble` is not on `$PATH`, use `uvx --from "semble[mcp]" semble` in its place.
-
-### Workflow
-
-1. Start with `semble search` to find relevant chunks. The index is built and cached automatically.
-2. Use `--content docs` for documentation, `--content config` for config files, or `--content all` for everything.
-3. Navigate directly to the returned file and line — do not re-search or grep for the same content.
-4. Optionally use `semble find-related` with a promising result's `file_path` and `line` to discover related implementations.
-5. Use grep only when you need every occurrence of a literal string across the whole repo (e.g., all callers of a renamed function).
+Tìm code theo mô tả hoặc theo symbol bằng `semble search <query> <path>`; cần *mọi* occurrence của một chuỗi literal (đổi tên hàm, gỡ field) thì dùng `rg`.
 
 ### Issue tracker
 
@@ -54,7 +22,11 @@ Issue và PRD của repo này sống trong GitHub Issues. PR ngoài không phả
 
 ### Domain docs
 
-Repo single-context. Đọc `CONTEXT.md` ở root và `docs/adr/` cho quyết định kiến trúc. Xem `docs/agents/domain.md`.
+Repo single-context: một [`CONTEXT.md`](./CONTEXT.md) ở root, một [`docs/adr/`](./docs/adr/) cho toàn hệ thống. Không có `CONTEXT-MAP.md`, không có ADR theo từng context.
+
+- Dùng đúng vocab của `CONTEXT.md` khi viết issue title, tên test, đề xuất refactor — đừng trôi sang synonym mà glossary đã liệt ở `_Avoid_`. Khái niệm cần dùng chưa có trong glossary là tín hiệu: hoặc đang bịa ngôn ngữ repo không dùng, hoặc có gap thật cần ghi lại.
+- **Đọc `docs/adr/` trước khi đổi một quyết định kiến trúc.** ADR là bất biến: không sửa ADR đã merge, muốn đổi thì viết ADR mới supersede ADR cũ (xem ADR-0007 → ADR-0012 làm mẫu).
+- Nếu việc đang làm mâu thuẫn với một ADR hiện có, nói thẳng ra thay vì âm thầm ghi đè.
 
 ## Môi trường phát triển cục bộ
 
@@ -76,7 +48,7 @@ Services chạy qua `docker compose up -d`:
 
 Để reset mật khẩu trong DB:
 ```bash
-cd backend && python3 -c "
+cd backend && uv run python -c "
 from src.modules.identity.infrastructure.password_utils import hash_password
 print(hash_password('NEW_PASSWORD'))
 "
@@ -101,5 +73,5 @@ cd backend && uv run alembic upgrade head
 
 ### Test cases
 
-Test case AI testing nằm ở `docs/ai-testing/`. Mỗi thư mục là một module, mỗi file là một test case cụ thể.
-Pytest backend: `cd backend && python -m pytest tests/ -v`.
+Test backend nằm ở `backend/tests/`, soi theo module: `cd backend && uv run pytest tests/ -v`.
+Chạy một module: `cd backend && uv run pytest tests/modules/<module>/ -q`.
