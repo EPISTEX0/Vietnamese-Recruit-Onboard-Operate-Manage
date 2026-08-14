@@ -1,6 +1,0 @@
-{
-  "name": "Vroom HR",
-  "description": "Nền tảng HR self-host dành cho doanh nghiệp Việt Nam tích hợp trợ lý AI thông minh.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

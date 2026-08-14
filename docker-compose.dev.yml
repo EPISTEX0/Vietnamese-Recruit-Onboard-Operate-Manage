@@ -1,4 +1,9 @@
-# Development overrides — auto-merged by Docker Compose.
+# Development overrides — NOT auto-merged. Compose only auto-loads
+# docker-compose.override.yml / compose.override.yaml, and this repo has neither.
+# Pass this file explicitly or the bind mounts below never apply:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
 # Enables hot-reload for both frontend and backend without rebuilding.
 services:
   frontend:
