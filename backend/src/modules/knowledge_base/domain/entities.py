@@ -21,6 +21,12 @@ from sqlmodel import Field, SQLModel
 # so the model matching it is the correct state. Whether these tables *should*
 # carry an ivfflat/hnsw index is a real performance question, but it is a new
 # index on the database side, not model drift, and is out of this ticket.
+#
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class KnowledgeBaseDocument(SQLModel, table=True):
@@ -48,7 +54,7 @@ class KnowledgeBaseDocument(SQLModel, table=True):
         default="pending",
         max_length=20,
     )
-    error_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, sa_type=Text)
     chunk_count: int = Field(default=0)
     description: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     kb_type: str = Field(default="hr", max_length=20)
@@ -118,7 +124,7 @@ class EmployeeKnowledgeBaseDocument(SQLModel, table=True):
         default="pending",
         max_length=20,
     )
-    error_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, sa_type=Text)
     chunk_count: int = Field(default=0)
     description: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     kb_type: str = Field(default="employee", max_length=20)

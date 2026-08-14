@@ -9,10 +9,16 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlmodel import Field, SQLModel
 
 from src.shared.sql_types import EnumAsString
+
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class AssistantType(str, Enum):
@@ -55,7 +61,7 @@ class AssistantChatSession(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     message_count: int = Field(default=0, nullable=False)
-    last_error: str | None = Field(default=None)
+    last_error: str | None = Field(default=None, sa_type=Text)
 
 
 class AssistantFeedbackEvent(SQLModel, table=True):
@@ -78,7 +84,7 @@ class AssistantFeedbackEvent(SQLModel, table=True):
     feedback_type: FeedbackType = Field(
         sa_column=Column(EnumAsString(FeedbackType, 4), nullable=False),
     )
-    optional_text: str | None = Field(default=None)
+    optional_text: str | None = Field(default=None, sa_type=Text)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -104,7 +110,7 @@ class AssistantToolCallEvent(SQLModel, table=True):
     tool_name: str = Field(nullable=False)
     arguments_hash: str | None = Field(default=None)
     success: bool = Field(nullable=False)
-    error_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, sa_type=Text)
     duration_ms: int = Field(nullable=False)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

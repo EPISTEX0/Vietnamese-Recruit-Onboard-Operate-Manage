@@ -9,11 +9,17 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Index, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
 from src.shared.sql_types import EnumAsString
+
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class UserRole(str, Enum):
@@ -43,7 +49,7 @@ class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     email: str = Field(max_length=255, unique=True, nullable=False, index=True)
     name: str = Field(max_length=255, nullable=False)
-    avatar_url: str | None = Field(default=None)
+    avatar_url: str | None = Field(default=None, sa_type=Text)
     employee_id: UUID | None = Field(
         default=None, foreign_key="employees.id", unique=True, index=True
     )
@@ -118,8 +124,8 @@ class OAuthGrant(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", nullable=False, index=True)
     provider: str = Field(default="google", max_length=50, nullable=False)
-    access_token_enc: str = Field(nullable=False)
-    refresh_token_enc: str = Field(nullable=False)
+    access_token_enc: str = Field(nullable=False, sa_type=Text)
+    refresh_token_enc: str = Field(nullable=False, sa_type=Text)
     scopes: list[str] = Field(sa_column=Column(ARRAY(String), nullable=False))
     token_expires_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -159,7 +165,7 @@ class RefreshToken(SQLModel, table=True):
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
-    user_agent: str | None = Field(default=None)
+    user_agent: str | None = Field(default=None, sa_type=Text)
 
 
 class OAuthConfig(SQLModel, table=True):
@@ -183,7 +189,7 @@ class OAuthConfig(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     provider: str = Field(default="google", max_length=50, nullable=False)
     client_id: str = Field(max_length=255, nullable=False)
-    client_secret_enc: str = Field(nullable=False)
+    client_secret_enc: str = Field(nullable=False, sa_type=Text)
     redirect_uri: str = Field(max_length=500, nullable=False)
     is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
@@ -213,9 +219,9 @@ class OrganizationGoogleConnection(SQLModel, table=True):
     selected_calendar_id: str | None = Field(default=None, max_length=255)
     credential_format_version: int = Field(default=1, nullable=False)
     credential_key_version: int = Field(default=1, nullable=False)
-    access_token_enc: str | None = Field(default=None)
-    refresh_token_enc: str | None = Field(default=None)
-    client_secret_enc: str | None = Field(default=None)
+    access_token_enc: str | None = Field(default=None, sa_type=Text)
+    refresh_token_enc: str | None = Field(default=None, sa_type=Text)
+    client_secret_enc: str | None = Field(default=None, sa_type=Text)
     oauth_state_hash: str | None = Field(default=None, max_length=128, index=True)
     oauth_state_nonce: str | None = Field(default=None, max_length=128)
     oauth_state_session_id: str | None = Field(default=None, max_length=128, index=True)
@@ -255,7 +261,7 @@ class OrganizationAIConfiguration(SQLModel, table=True):
     provider: str = Field(max_length=100, nullable=False)
     base_url: str = Field(max_length=500, nullable=False)
     model: str = Field(max_length=255, nullable=False)
-    api_key_enc: str = Field(nullable=False, default="")
+    api_key_enc: str = Field(nullable=False, default="", sa_type=Text)
     credential_source: str = Field(
         default=CredentialSource.ORG_API_KEY.value,
         max_length=32,
@@ -277,7 +283,7 @@ class OrganizationAIConfiguration(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     data_policy_accepted_by_user_id: UUID | None = Field(foreign_key="users.id", nullable=True)
-    data_policy_version: str | None = Field(default=None, nullable=True)
+    data_policy_version: str | None = Field(default=None, nullable=True, sa_type=Text)
 
     # Independent capability toggles
     ai_automation_enabled: bool = Field(default=False, nullable=False)

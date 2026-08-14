@@ -8,8 +8,14 @@ management.
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlmodel import Field, SQLModel
+
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class Department(SQLModel, table=True):
@@ -23,7 +29,7 @@ class Department(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(max_length=100, unique=True, nullable=False)
-    description: str | None = Field(default=None)
+    description: str | None = Field(default=None, sa_type=Text)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -65,7 +71,7 @@ class Employee(SQLModel, table=True):
     phone: str | None = Field(default=None, max_length=20)
     date_of_birth: date | None = Field(default=None)
     gender: str | None = Field(default=None, max_length=10)
-    address: str | None = Field(default=None)
+    address: str | None = Field(default=None, sa_type=Text)
     # 006 indexed both FKs; the model never said so. These carry the "who is in
     # this department / this position" reads across the app, and a missing index
     # on an FK only shows up as the employee list getting slower.
@@ -102,10 +108,10 @@ class EmployeeDocument(SQLModel, table=True):
     employee_id: UUID = Field(foreign_key="employees.id", nullable=False, index=True)
     document_type: str = Field(max_length=50, nullable=False)
     file_name: str = Field(max_length=255, nullable=False)
-    storage_path: str = Field(nullable=False)
+    storage_path: str = Field(nullable=False, sa_type=Text)
     file_size: int = Field(nullable=False)
     mime_type: str = Field(max_length=100, nullable=False)
-    description: str | None = Field(default=None)
+    description: str | None = Field(default=None, sa_type=Text)
     uploaded_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),

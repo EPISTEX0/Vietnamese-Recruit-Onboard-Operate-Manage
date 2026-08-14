@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
@@ -20,6 +20,12 @@ from src.modules.recruitment.domain.enums import (
     JobApplicationStatus,
     LinkProposalStatus,
 )
+
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class Candidate(SQLModel, table=True):
@@ -165,7 +171,7 @@ class CVDocument(SQLModel, table=True):
     size_bytes: int = Field(nullable=False)
     file_path: str = Field(max_length=500, nullable=False)
     checksum: str | None = Field(default=None, max_length=64, index=True)
-    ocr_output: str | None = Field(default=None)
+    ocr_output: str | None = Field(default=None, sa_type=Text)
     parsed_cv_data: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     field_provenance: dict[str, Any] | None = Field(default=None, sa_column=Column(JSONB))
     confirmed_fields: list[str] = Field(

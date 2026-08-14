@@ -10,9 +10,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+# ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
+# ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
+# ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
+# every such column. The migrations wrote ``sa.Text()`` and the database has
+# ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
 
 
 class EmailMessage(SQLModel, table=True):
@@ -40,7 +46,7 @@ class EmailMessage(SQLModel, table=True):
     snippet: str = Field(default="", max_length=200, nullable=False)
     label_ids: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
     has_attachments: bool = Field(default=False, nullable=False)
-    raw_payload_enc: str | None = Field(default=None)
+    raw_payload_enc: str | None = Field(default=None, sa_type=Text)
     processing_status: str = Field(default="unprocessed", max_length=30, nullable=False)
     category: str | None = Field(default=None, max_length=20)
     retry_count: int = Field(default=0, nullable=False)
@@ -179,15 +185,16 @@ class OutboundEmail(SQLModel, table=True):
     idempotency_key: str = Field(max_length=64, unique=True, nullable=False, index=True)
     candidate_id: UUID | None = Field(default=None, foreign_key="candidates.id", nullable=True)
     subject: str = Field(max_length=998, nullable=False)
-    body_html: str = Field(nullable=False)
-    cc_recipients: str | None = Field(default=None, nullable=True)  # noqa: E501  # JSON array of CC email addresses
+    body_html: str = Field(nullable=False, sa_type=Text)
+    # JSON array of CC email addresses.
+    cc_recipients: str | None = Field(default=None, nullable=True, sa_type=Text)
     reply_to_message_id: str | None = Field(default=None, max_length=255, nullable=True)
     recipient_email: str = Field(max_length=255, nullable=False)
     sender_email: str | None = Field(default=None, max_length=255)
     status: str = Field(default="pending", max_length=20, nullable=False, index=True)
     gmail_message_id: str | None = Field(default=None, max_length=255)
     gmail_thread_id: str | None = Field(default=None, max_length=255)
-    error_message: str | None = Field(default=None)
+    error_message: str | None = Field(default=None, sa_type=Text)
     retry_count: int = Field(default=0, nullable=False)
     max_retries: int = Field(default=3, nullable=False)
     last_retry_at: datetime | None = Field(

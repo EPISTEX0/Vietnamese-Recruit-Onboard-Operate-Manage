@@ -36,37 +36,13 @@ modify_comment employee_knowledge_base_documents kb_type                        
 modify_comment employee_knowledge_base_documents status                                               # pending | processing | ready | error -> None
 modify_comment hr_knowledge_base_documents kb_type                                                    # hr (default) — the type of knowledge base this doc belongs to -> None
 modify_comment hr_knowledge_base_documents status                                                     # pending | processing | ready | error -> None
-modify_type assistant_chat_sessions last_error TEXT -> VARCHAR
-modify_type assistant_feedback_events optional_text TEXT -> VARCHAR
-modify_type assistant_tool_call_events error_message TEXT -> VARCHAR
 modify_type cv_documents confirmed_fields JSON -> JSONB
 modify_type cv_documents field_provenance JSON -> JSONB
-modify_type cv_documents ocr_output TEXT -> VARCHAR
-modify_type departments description TEXT -> VARCHAR
 modify_type email_messages processing_status VARCHAR(20) -> VARCHAR(30)
-modify_type email_messages raw_payload_enc TEXT -> VARCHAR
-modify_type employee_documents description TEXT -> VARCHAR
-modify_type employee_documents storage_path TEXT -> VARCHAR
-modify_type employee_knowledge_base_documents error_message TEXT -> VARCHAR
-modify_type employees address TEXT -> VARCHAR
-modify_type hr_knowledge_base_documents error_message TEXT -> VARCHAR
-modify_type oauth_configs client_secret_enc TEXT -> VARCHAR
-modify_type oauth_grants access_token_enc TEXT -> VARCHAR
-modify_type oauth_grants refresh_token_enc TEXT -> VARCHAR
-modify_type organization_ai_configurations api_key_enc TEXT -> VARCHAR
-modify_type organization_ai_configurations data_policy_version TEXT -> VARCHAR
-modify_type organization_google_connections access_token_enc TEXT -> VARCHAR
-modify_type organization_google_connections client_secret_enc TEXT -> VARCHAR
-modify_type organization_google_connections refresh_token_enc TEXT -> VARCHAR
-modify_type outbound_emails body_html TEXT -> VARCHAR
-modify_type outbound_emails cc_recipients TEXT -> VARCHAR
-modify_type outbound_emails error_message TEXT -> VARCHAR
 modify_type recruitment_inbox_items attachments_metadata JSON -> JSONB
 modify_type recruitment_inbox_items correction_history JSON -> JSONB
 modify_type recruitment_inbox_items evidence JSON -> JSONB
 modify_type recruitment_inbox_items source_hints JSON -> JSONB
-modify_type refresh_tokens user_agent TEXT -> VARCHAR
-modify_type users avatar_url TEXT -> VARCHAR
 remove_constraint email_messages email_messages_gmail_message_id_key                                  # (gmail_message_id)
 remove_constraint evaluation_sets evaluation_sets_version_key                                         # (version)
 remove_constraint outbound_emails uq_outbound_emails_idempotency_key                                  # (idempotency_key)
