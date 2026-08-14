@@ -1,24 +1,31 @@
 # Báo cáo drift giữa model SQLModel và schema thật
 
-**Đo lần đầu:** 2026-08-14 (head `084`, **113 diff**) · **Đo lại:** 2026-08-14 sau khi dọn
-(head `085`, **64 diff**) · **Phạm vi:** toàn bộ `backend/src/modules/*/domain/entities.py`
+**Đo lần đầu:** 2026-08-14 (head `084`, **113 diff**) · **Đo lại:** 2026-08-14 (head `085`, **64 diff**)
+· **Đo lần cuối:** 2026-08-14 (head `087`, **0 diff**) · **Phạm vi:** toàn bộ
+`backend/src/modules/*/domain/entities.py`
 
-> ## Trạng thái: P0, P1, P2 đã đóng. P3 còn 6 diff JSONB. Còn P4.
+> ## Trạng thái: đóng. 113 → 0 diff. `autogenerate` không sinh ra gì nữa.
 >
-> | Mức | Lúc báo cáo | Hiện tại | |
-> |---|---:|---:|---|
-> | **P0** | 9 | **0** | ✅ đóng |
-> | **P1** | 13 | **0** | ✅ đóng (+1 diff mới lộ ra cũng đã đóng) |
-> | **P2** | 3 | **0** | ✅ đóng |
-> | **P3** | 20 | 6 | 14 index đã khai vào model; còn 6 `JSON → JSONB` |
-> | **P4** | 68 | 58 | chưa làm |
-> | | **113** | **64** | |
+> | Mức | Lúc báo cáo | Sau đợt 1 | Hiện tại | |
+> |---|---:|---:|---:|---|
+> | **P0** | 9 | 0 | **0** | ✅ đóng |
+> | **P1** | 13 | 0 | **0** | ✅ đóng (+1 diff mới lộ ra cũng đã đóng) |
+> | **P2** | 3 | 0 | **0** | ✅ đóng |
+> | **P3** | 20 | 6 | **0** | 14 index vào model; 6 `JSON → JSONB` bằng migration `087` |
+> | **P4** | 68 | 58 | **0** | dọn nốt — bảng theo nhóm ở [§5.6](#56-đợt-cuối-64--0--nhóm-nào-sai-ở-bên-nào) |
+> | | **113** | **64** | **0** | |
 >
-> **Số quả mìn còn lại: 0.** 64 diff còn lại đều không gây mất dữ liệu và không mất ràng buộc toàn vẹn —
-> chứng minh ở [§5.4](#54-p3--20-diff--6--hiệu-năng-và-rewrite) và [§5.5](#55-p4--58-diff--vô-hại).
+> **Không phải mọi nhóm đều được dọn vì "cho đẹp số".** Mỗi nhóm được hỏi *bên nào sai* trước khi quyết, và
+> một nhóm đi ngược chiều mặc định: 4 `index=True` bị **gỡ khỏi model** chứ không thêm migration, vì bốn
+> index đó chưa từng tồn tại trên bất kỳ DB nào. Chi tiết ở [§5.6](#56-đợt-cuối-64--0--nhóm-nào-sai-ở-bên-nào).
 >
-> Khuyến nghị "không chạy autogenerate rồi apply thẳng" ở [§7](#7-khuyến-nghị-vận-hành) **vẫn còn hiệu lực**,
-> chỉ là lý do đã đổi: giờ là vì nhiễu, không còn vì nguy hiểm.
+> **Đợt này tìm ra một quả mìn P4 xếp nhầm hạng.** `email_messages.processing_status` được §5.5 ghi là
+> "nới rộng, an toàn" kèm ghi chú *đáng kiểm tra riêng*. Kiểm rồi: cột đang là `VARCHAR(20)` còn ứng dụng
+> ghi `"classification_failed"` — 21 ký tự — nên **mọi lần đánh dấu email phân loại thất bại đều fail từ
+> 2026-05-20**. Xem [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+>
+> Khuyến nghị "không chạy autogenerate rồi apply thẳng" ở [§7](#7-khuyến-nghị-vận-hành) **đã hết hiệu lực
+> theo nghĩa cũ** — autogenerate bây giờ sinh ra một migration rỗng. Xem [§7.2](#72-khuyến-nghị-sau-khi-drift--0).
 
 Bản gốc của tài liệu này chỉ **liệt kê và phân loại**, không sửa gì ngoài một FK trỏ sai tên bảng
 (mục [Điều kiện tiên quyết](#điều-kiện-tiên-quyết-một-fk-trỏ-sai-tên-bảng)). Các mục §5.1–§5.3 bên dưới
@@ -139,9 +146,9 @@ và hậu quả chỉ lộ ra hàng tuần sau — nên P1 **nguy hiểm hơn P2
 | **P0** | **9** | DROP 3 bảng (+6 index của chúng) | ✅ đóng |
 | **P1** | **13** (+1) | 9 FK mất `ON DELETE CASCADE`, 1 mất UNIQUE, 3 cột mất timezone | ✅ đóng |
 | **P2** | **3** | 1 `NOT NULL`, 1 UNIQUE mới, 1 FK mới | ✅ đóng |
-| **P3** | **20** → 6 | ~~14 mất index hiệu năng~~ ✅, 6 rewrite JSON→JSONB còn | một phần |
-| **P4** | **68** → 58 | Vô hại (chi tiết §5.5) | còn |
-| | **113** → **64** | | |
+| **P3** | **20** → 6 → 0 | ~~14 mất index hiệu năng~~ ✅, ~~6 rewrite JSON→JSONB~~ ✅ (migration `087`) | ✅ đóng |
+| **P4** | **68** → 58 → 0 | Vô hại **trừ một cái** — xem §5.6.g | ✅ đóng |
+| | **113** → **64** → **0** | | |
 
 **Số quả mìn = 25** (P0 + P1 + P2) — tức khoảng **22%** số diff sẽ gây hại nếu autogenerate được apply.
 **Hiện tại con số đó là 0.**
@@ -358,10 +365,10 @@ sử hội thoại thật, và cột vốn nullable theo thiết kế. Tạo FK 
 - ~~**14 index hiệu năng bị mất.**~~ **✅ Đã xử lý.** DB có, model không khai. **DB đúng** — index được
   thêm có chủ đích qua migration, model chỉ đơn giản không mô tả chúng. Mất index không mất dữ liệu, nhưng
   `audit_logs` và `payslips` là bảng lớn dần theo thời gian, mất index ở đó là truy vấn tụt thành seq scan.
-- **6 cột JSON → JSONB.** `cv_documents.{confirmed_fields, field_provenance}` và
-  `recruitment_inbox_items.{attachments_metadata, evidence, source_hints, correction_history}`. Ở đây
-  **model đúng** — JSONB là kiểu nên dùng. Nhưng chuyển kiểu là **rewrite toàn bảng**, khoá bảng theo kích
-  thước dữ liệu. Không mất dữ liệu; xếp P3 vì chi phí vận hành, không vì rủi ro.
+- ~~**6 cột JSON → JSONB.**~~ **✅ Đã xử lý bằng migration `087`** — nhóm P3 duy nhất mà **DB là bên sai**,
+  nên là migration chứ không phải sửa model. `cv_documents.{confirmed_fields, field_provenance}` và
+  `recruitment_inbox_items.{attachments_metadata, evidence, source_hints, correction_history}`. Chi tiết
+  bằng chứng ở [§5.6.f](#f-6-json--jsonb--p3-db-sai-migration-087).
 
 #### ✅ Đã xử lý — 14 index, sửa model chứ không thêm migration
 
@@ -415,6 +422,11 @@ phải thứ mà một sửa đổi model làm bằng cách im lặng.
 
 ### 5.5 P4 — 58 diff — vô hại
 
+> **✅ Đã đóng hết ở [§5.6](#56-đợt-cuối-64--0--nhóm-nào-sai-ở-bên-nào), và một mục dưới đây sai.**
+> Mục cuối (`email_messages.processing_status`) tự nó ghi *"Đáng kiểm tra riêng"* — kiểm rồi, và nó
+> **không vô hại**: cột đang chặn một giá trị ứng dụng ghi thật, hỏng từ 2026-05-20. Giữ nguyên văn bên
+> dưới thay vì sửa lén, vì chỗ sai là chỗ đáng đọc: xem [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+
 Ghi lại để không ai phải điều tra lại nhóm này. Con số tụt từ 68 xuống 58 vì **9 `add_fk`** (vế "recreate"
 của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 được đóng — không phải vì có gì mới được dọn ở
 đây.
@@ -437,6 +449,153 @@ của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 đư�
 - **1 nới rộng cột** — `email_messages.processing_status` `VARCHAR(20)` → `VARCHAR(30)`. Nới rộng an toàn.
   Model nhiều khả năng đúng: có giá trị status đang dài quá 20 ký tự thì đây chính là `users.role` tập hai,
   chỉ khác là lần này model đã đi trước. **Đáng kiểm tra riêng.**
+  → **Đã kiểm: đúng là có.** `classification_failed` dài 21 ký tự. Migration `086`. [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+
+### 5.6 Đợt cuối: 64 → 0 — nhóm nào sai ở bên nào
+
+Đợt này **không** đặt mục tiêu "baseline về 0". Mỗi nhóm bị hỏi ba câu trước khi quyết: *model sai hay DB
+sai*, *sửa model có làm nó tệ đi không*, và *nếu giữ thì baseline ghi lý do gì*. Kết quả là 0, nhưng một
+nhóm đi ngược chiều mặc định và một nhóm hoá ra bị xếp nhầm hạng.
+
+| # | Nhóm | Số diff | Bên sai | Quyết định | Căn cứ |
+|---|---|---:|---|---|---|
+| a | `TEXT → VARCHAR` | 24 | **Model** | Sửa model (`sa_type=Text`) | Cả 24 field đều **không có `max_length`** — tác giả muốn nói "chuỗi không giới hạn", SQLModel render thành `VARCHAR`. Mọi migration viết `sa.Text()`. |
+| b | Đổi cách biểu diễn UNIQUE | 18 | **Model** | Sửa model | DB có object cụ thể (index có tên / constraint có tên); model khai object *tương đương* nhưng khác loại. |
+| c | Đổi tên index | 6 | **Model** | Sửa model (`__table_args__`) | 063 đặt tên `ix_link_proposals_*`; `index=True` suy tên từ bảng+cột nên ra tên khác. |
+| d | Comment | 5 | **Model** | Sửa model | DB có, model không → autogenerate đề nghị **xoá** cả năm. |
+| e | Index thêm mới | 4 | **Model** | **Gỡ khỏi model, không thêm migration** | Xem (e) bên dưới — nhóm duy nhất đi ngược chiều. |
+| f | `JSON → JSONB` | 6 | **DB** | **Migration `087`** | Model khai `JSONB` từ chính commit tạo bảng; migration cùng commit viết `sa.JSON()`. |
+| g | Nới rộng `VARCHAR(20→30)` | 1 | **DB** | **Migration `086`** | Không phải P4. Cột đang chặn một giá trị ứng dụng ghi thật. |
+| | | **64** | | | |
+
+#### a) 24 `TEXT → VARCHAR` — model sai, nhưng câu hỏi thật là "sửa có đáng không"
+
+Hai kiểu **tương đương hoàn toàn về hành vi** trong PostgreSQL (§5.5 đã chứng minh bằng chuỗi 100 000 ký
+tự). Nên câu hỏi không phải "model có sai không" — có — mà **"cái giá của việc sửa là bao nhiêu"**.
+
+Nếu giá là đổi 24 field từ `Field(...)` sang `sa_column=Column(Text, nullable=..., index=...)` thì **không
+đáng**: mỗi field phải khai lại `nullable`/`default`/`index` bằng tay, tức mở ra 24 chỗ có thể lệch mới —
+đúng cái bẫy `sa_column` đã ghi ở §5.4 ("`Field(index=True)` bị bỏ qua khi có `sa_column`").
+
+Giá thật là **một keyword**: `Field(default=None, sa_type=Text)`. `sa_type` không đụng gì tới các tham số
+khác của `Field`. Repo đã dùng nó sẵn (`file_size: int = Field(sa_type=BigInteger)`). Với giá đó thì đáng,
+vì nhóm này chiếm 38% số dòng nhiễu mà autogenerate sinh ra.
+
+Bằng chứng không có tác dụng phụ: sau khi sửa, 24 dòng `modify_type` biến mất và **không** diff mới nào
+(`modify_nullable`, `modify_default`) xuất hiện thay chỗ.
+
+#### b) 18 diff UNIQUE — "tương đương" không có nghĩa là bỏ qua được
+
+Tính duy nhất được giữ ở cả hai bên; model chỉ cất nó vào loại object khác. Nhưng 5 trong 18 dòng là
+`remove_constraint` — **đúng hình dạng** mà `oauth_configs` (§5.2.b) đã dùng để giấu một mất mát thật. Một
+nhóm mà "đọc kỹ từng cái mới phân biệt được an toàn với nguy hiểm" là nhóm nên dọn, không phải nhóm nên ghi
+chú.
+
+Ba chiều lệch khác nhau, không phải một:
+
+- `departments.name`, `positions.name`, `employees.employee_code`: DB là **unique index**; model khai
+  `unique=True` trần → constraint không tên. Thêm `index=True` là đủ.
+- `users.employee_id`: DB là **constraint có tên** `uq_users_employee_id`, không có index; model khai
+  `unique=True, index=True` → unique index. Bỏ cả hai, khai `UniqueConstraint` đúng tên.
+- `email_messages.gmail_message_id`, `evaluation_sets.version`, `whitelist_entries.value`: DB có **hai**
+  object (index non-unique + constraint có tên), model gộp thành một. Tách lại đúng hai.
+  `outbound_emails.idempotency_key` cũng có hai, model đã có index, thiếu mỗi constraint.
+
+#### e) 4 index thêm mới — nhóm duy nhất **model là bên đòi thêm**
+
+Đây là nhóm mà mặc định "sửa model cho khớp DB" phải được biện minh chứ không được áp dụng máy móc, vì
+hướng ngược lại (viết migration tạo 4 index) cũng hợp lệ. Chọn gỡ khỏi model, căn cứ:
+
+- **046 và 072 viết tay và *có* index** `candidate_id`, `calendar_event_id`, `interview_id`. Tức "cột nào
+  cần index" là quyết định đã được cân nhắc, và bốn cột này nằm ngoài nó — không phải quên.
+- **Không chỗ nào trong code lọc theo bốn cột đó.** `Interview.status` chỉ xuất hiện trong `EXISTS` tương
+  quan ở `retention_job.py`, đã được neo bằng `ix_interviews_candidate_id` nên chỉ lọc trên vài dòng index
+  đó trả về. `Interview.calendar_id` không bao giờ là `WHERE` — `CalendarSyncCursor.calendar_id` mới là cột
+  được tra, bảng khác, và 073 đã index nó. `InterviewParticipant.{type, employee_id}` chỉ được ghi lúc
+  insert rồi đọc lại từ row đã fetch.
+- `status` và `type` đều là cột **cardinality thấp** (3 giá trị), btree gần như vô dụng kể cả khi có ai lọc.
+
+Điểm quyết định: **bốn index này chưa từng tồn tại trên bất kỳ DB nào.** Gỡ `index=True` không xoá index nào
+— không mất gì. Tạo chúng là một quyết định hiệu năng mới, cần đo đạc riêng, không phải việc của một ticket
+dọn drift.
+
+#### f) 6 `JSON → JSONB` — P3, DB sai, migration `087`
+
+Chiều lệch truy được chứ không phải phán đoán:
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Model nói gì | `Column(JSONB)` — từ **chính commit tạo bảng** (`c9db11a`, PR #184) |
+| Migration cùng commit nói gì | `sa.JSON()` (061), và 069 lặp lại cho hai cột `cv_documents` |
+| Có tiền lệ ngược không | **Có.** 064 — ba revision sau 061 — tạo `correction_records.{evidence, source_hints}`, *cùng hai khái niệm cùng module*, viết thẳng `JSONB()` |
+| Phần schema còn lại | Trong 33 cột json-ish ở head, đúng 6 cột này là `json`. `cv_documents` chứa cả hai loại **cạnh nhau**: `parsed_cv_data`/`validation_errors` là jsonb |
+
+Không thiết kế nào chọn hai kiểu cạnh nhau trong cùng một bảng có chủ ý. `sa.JSON()` là tay trượt trong
+migration.
+
+**Vì sao đáng làm dù phải rewrite bảng.** `json` lưu văn bản và reparse mỗi lần đọc, **không có toán tử so
+sánh bằng** nên `GROUP BY`/`DISTINCT` trên cột fail thẳng, không có `@>`/`?`, và không nhận index GIN. Đã
+kiểm trên DB: sau `087`, `evidence @> '[...]'` chạy được — trước đó toán tử đó không tồn tại cho kiểu này.
+
+**Chi phí, ghi rõ để người deploy xếp lịch.** Rewrite toàn bảng `cv_documents` và `recruitment_inbox_items`,
+giữ `ACCESS EXCLUSIVE` suốt thời gian đó, tỷ lệ với số dòng. Dev trống cả hai bảng. PostgreSQL 15 không có
+đường online cho đổi kiểu kiểu này. Đã chạy thật với dữ liệu có thật (JSON lồng, tiếng Việt, unicode):
+`upgrade head` → `downgrade -1` → `upgrade head`, giá trị nguyên vẹn cả hai chiều. Một khác biệt đã ghi vào
+docstring của migration thay vì để người sau phát hiện: **jsonb chuẩn hoá thứ tự key**.
+
+#### g) 1 nới rộng `VARCHAR(20 → 30)` — quả mìn P4 xếp nhầm hạng
+
+§5.5 ghi nhóm này là "nới rộng an toàn" kèm ghi chú **"Đáng kiểm tra riêng"**, và dự đoán đúng cơ chế:
+*"có giá trị status đang dài quá 20 ký tự thì đây chính là `users.role` tập hai"*. Đã kiểm, và đúng là có.
+
+Ứng dụng ghi **8** giá trị vào `email_messages.processing_status`. Một cái không vừa:
+
+| Giá trị | Độ dài | Vừa `VARCHAR(20)`? |
+|---|---:|---|
+| `classification_failed` | **21** | ❌ |
+| `needs_classification` | 20 | ✅ (sát mép) |
+| `permanently_failed` | 18 | ✅ |
+| `ai_unavailable` | 14 | ✅ |
+| `cv_processing` | 13 | ✅ |
+| `needs_review` | 12 | ✅ |
+| `unprocessed` | 11 | ✅ |
+| `classified` | 10 | ✅ |
+
+> Hai giá trị cuối cùng được thêm vào bảng này ở vòng review, và **cách chúng bị bỏ sót lúc đầu chính là
+> nội dung của bài học.** Chúng được ghi bằng một ternary xuống dòng trong `classification_service.py`:
+> `email.processing_status = (\n "ai_unavailable" if ... else "permanently_failed"\n)`. Bản đầu của hàng
+> rào quét `src/` bằng regex đòi dấu nháy ngay sau `=`, nên **không nhìn thấy dạng đó** — tức là một phép
+> đếm bằng mắt và một phép quét tự động cùng mù ở đúng một chỗ, và cái thứ hai báo xanh trên tập giá trị
+> mà nó tình cờ hiểu được. Đã thay bằng duyệt AST (thấy mọi dạng gán, kể cả ternary và keyword argument),
+> cộng một test đối chiếu hai nửa với nhau. Một scan im lặng bỏ sót dạng cú pháp còn tệ hơn không scan.
+
+PostgreSQL **không cắt cụt** `varchar(n)`, nó raise. Qua đúng đường ORM mà production đi:
+
+```
+asyncpg.exceptions.StringDataRightTruncationError: value too long for type character varying(20)
+```
+
+**Vì sao 3 tháng không ai thấy.** Nơi ghi là `IntentClassifier._mark_classification_failed()` — handler chạy
+khi PII redaction fail hoặc LLM bỏ cuộc — và toàn thân nó nằm trong `except Exception: logger.error(...)`.
+Handler lỗi nuốt lỗi của chính nó. Email giữ nguyên `'unprocessed'` rồi quay lại vòng phân loại, nên triệu
+chứng là *"vài email bị xử lý lại mãi"*, cách xa nguyên nhân. 008 tạo cột `String(length=20)` ngày
+2026-05-20; commit recruitment **cùng ngày** bắt đầu ghi `"classification_failed"`.
+
+Bài học đáng ghi cạnh bài học của §5: **"vô hại" nói về việc apply diff, không nói về trạng thái diff đó
+đang mô tả.** Một `modify_type` nới rộng luôn an toàn để apply — và chính vì thế nó có thể đang che một cột
+đã hỏng từ lâu. Nhóm P4 nên được đọc theo *cả hai chiều*, không chỉ chiều "autogenerate sẽ làm gì".
+
+Migration `086` nới cột. **Không backfill**: những dòng lẽ ra được đánh dấu thì chưa từng được ghi, và
+migration không thể biết chúng là dòng nào — xử lý lại là việc vận hành, không phải việc của schema.
+`backend/tests/modules/gmail/test_email_processing_status_width.py` giữ ba đầu: round-trip qua DB thật (đỏ
+nếu ai thu cột lại), duyệt AST toàn bộ `src/` tìm mọi chuỗi gán vào một `processing_status` (đỏ nếu ai thêm
+status mới không vừa — đúng cái sai đã xảy ra, thứ mà round-trip trên các giá trị đã biết không thấy được),
+và kiểm mọi member của enum `ProcessingStatus` — tập giá trị của `cv_documents.processing_status`, được ghi
+bằng member chứ không bằng chuỗi nên phép quét không bao giờ thấy chúng.
+
+Đã mutation-test: đổi `"ai_unavailable"` **bên trong cái ternary xuống dòng đó** thành một chuỗi 38 ký tự →
+hàng rào đỏ và gọi đúng tên, độ dài, và file: `{'ai_provider_unavailable_awaiting_retry': 38}` tại
+`modules/gmail/application/classification_service.py`.
 
 ---
 
@@ -452,9 +611,9 @@ của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 đư�
 | **P1.c** | 3 field → `Column(DateTime(timezone=True))` | 0.5 giờ | ✅ xong |
 | **P2** | 3 quyết định nghiệp vụ + backfill nếu cần | 0.5 ngày | ✅ xong (migration `085`) |
 | **P3** (index) | Khai 14 index vào model | 1 ngày | ✅ xong |
-| **P3** (JSONB) | Migration đổi kiểu 6 cột `JSON → JSONB` | 0.5 ngày | còn |
-| **P4** | 24 cột → `Column(Text)`; đồng bộ tên index/constraint | 1–1.5 ngày | còn |
-| | **Còn lại** | **1.5–2 ngày** | |
+| **P3** (JSONB) | Migration đổi kiểu 6 cột `JSON → JSONB` | 0.5 ngày | ✅ xong (migration `087`) |
+| **P4** | 24 cột → `sa_type=Text`; đồng bộ tên index/constraint/comment | 1–1.5 ngày | ✅ xong |
+| | **Còn lại** | **0** | |
 
 **P4 tuy vô hại nhưng nên dọn cuối cùng** vì nó chiếm 91% số diff còn lại. Còn 58 dòng nhiễu thì không ai
 đọc nổi output autogenerate để phát hiện mìn thật mới xuất hiện.
@@ -469,6 +628,9 @@ kiểu cột thật — rewrite toàn bảng, khoá theo kích thước dữ li�
 
 > **Không chạy `alembic revision --autogenerate` rồi apply thẳng trên repo này.**
 > Viết migration bằng tay, hoặc nếu dùng autogenerate thì phải đọc lại từng dòng và đối chiếu với §5.
+
+> **Hết hiệu lực từ head `087`.** Xem [§7.2](#72-khuyến-nghị-sau-khi-drift--0). Hai đoạn dưới giữ nguyên vì
+> chúng ghi lại *vì sao* khuyến nghị từng tồn tại — đó mới là thứ đáng đọc lại nếu drift quay lại.
 
 **Khuyến nghị này giữ nguyên, nhưng lý do đã đổi.** Trước đây apply thẳng là mất dữ liệu; giờ 64 diff còn lại
 không cái nào làm mất dữ liệu hay mất ràng buộc toàn vẹn. Rủi ro bây giờ là **nhiễu**: một migration
@@ -493,8 +655,8 @@ và mọi thay đổi ngoài ý muốn đều lộ ngay.
 ### 7.1. Hàng rào đã dựng: tập diff được chấp nhận, không phải con số
 
 Đề xuất ở trên là một **con số trần**. Cái đã làm là một **tập fingerprint**:
-`backend/tests/schema_drift_baseline.txt` liệt kê từng diff trong 64 diff dưới dạng
-`operation table object`. Cùng chi phí chạy, nhưng con số không nói được điều gì cả — "65 > 64" bắt người
+`backend/tests/schema_drift_baseline.txt` liệt kê từng diff dưới dạng `operation table object` — hồi dựng
+là 64 dòng, **nay là 0** (xem [§7.2](#72-khuyến-nghị-sau-khi-drift--0)). Cùng chi phí chạy, nhưng con số không nói được điều gì cả — "65 > 64" bắt người
 đọc tự dựng lại harness mới biết cái gì vừa trôi — còn tập thì gọi đúng tên. Và con số đỏ y hệt nhau khi ai
 đó **dọn** drift, thứ mà cả tài liệu này đang cố khuyến khích.
 
@@ -513,7 +675,7 @@ import của `env.py`, nên hai bên không thể lệch nhau âm thầm. Contai
 
 Với `modify_*`, fingerprint mang theo cả **giá trị cũ và mới** chứ không chỉ tên cột. Nếu chỉ khoá theo cột
 thì `users.avatar_url` vốn đã là `TEXT -> VARCHAR` được chấp nhận, nên thu model về `VARCHAR(10)` — một
-`ALTER` cắt cụt dữ liệu thật — sẽ rơi trúng dòng baseline cũ và **lọt**. 35 trong 64 dòng là `modify_*` nên
+`ALTER` cắt cụt dữ liệu thật — sẽ rơi trúng dòng baseline cũ và **lọt**. 35 trong 64 dòng lúc đó là `modify_*` nên
 đây không phải trường hợp hiếm. Ngoại lệ duy nhất là `modify_comment`: đổi cách nào cũng vô hại, và văn bản
 tự do thì sẽ làm baseline nhiễu mỗi lần sửa chữ.
 
@@ -526,17 +688,55 @@ báo `success` cho PR làm mất index. `838a525` đã gỡ cờ đó khỏi 4a/
 giờ chặn merge thật. Job riêng vẫn giữ, vì hai lý do không phụ thuộc vào cờ đó. Nó cần container pgvector
 riêng (xem đoạn trên) chứ không dùng chung `postgres_async_url`. Và nó là gate duy nhất đo drift: gộp vào 4b
 thì tín hiệu nằm sau ~2500 test không liên quan và đọc ra thành "suite backend đỏ" thay vì "model đã drift",
-trong khi tách ra thì ~6s là biết. Gate 6 chưa phải required status check — đó là quyết định của owner và
-của ruleset.
+trong khi tách ra thì ~6s là biết. Gate 6 giờ **là** required status check, cùng 7 gate còn lại.
 
-Đã mutation-test: xoá `index=True` của `employees.department_id` → toàn bộ 2574 test còn lại vẫn xanh, chỉ
+Đã mutation-test (chạy lại sau khi baseline co về 0 — [§7.2](#72-khuyến-nghị-sau-khi-drift--0)): xoá
+`index=True` của `employees.department_id` → toàn bộ test còn lại vẫn xanh, chỉ
 `test_no_new_drift_between_models_and_migrated_schema` đỏ, và nó nêu đúng
 `remove_index employees ix_employees_department_id`. Đó là bằng chứng cho khẳng định ở đoạn trên: trước hàng
 rào này, không có gì trong repo giữ nhóm 14 index đó.
 
-Một chỗ hở còn lại, ghi ra thay vì giấu: từ lúc drift được dọn đến lúc dòng baseline tương ứng bị xoá, tái
-tạo đúng diff đó là miễn phí. Không phép đo đơn lẻ nào phân biệt được "đã dọn, chưa cập nhật baseline" với
+Một chỗ hở, ghi ra thay vì giấu — **và nay đã đóng vì baseline rỗng**: từ lúc drift được dọn đến lúc dòng
+baseline tương ứng bị xoá, tái tạo đúng diff đó là miễn phí. Không phép đo đơn lẻ nào phân biệt được "đã dọn, chưa cập nhật baseline" với
 "dọn rồi lại làm hỏng"; chặn merge lúc dọn là đánh đổi tệ hơn. Warning nêu đúng dòng cần xoá, xoá là đóng.
+
+### 7.2. Khuyến nghị sau khi drift = 0
+
+Cảnh báo ở đầu §7 **hết hiệu lực từ head `087`**: `alembic revision --autogenerate` bây giờ sinh ra một
+migration rỗng, nên không còn "một đống rác 64 dòng" để một quả mìn trốn trong đó. Thay bằng ba câu:
+
+1. **Autogenerate giờ dùng được như một công cụ chẩn đoán.** Chạy nó trên nhánh sạch mà ra bất kỳ dòng nào,
+   dòng đó **là** drift — không cần đối chiếu với danh sách chấp nhận nữa. Đây là thứ mà 113 dòng nhiễu đã
+   lấy đi và giờ trả lại.
+2. **Vẫn đọc lại migration nó sinh ra trước khi apply.** Autogenerate không biết thứ tự cột của composite
+   index có ý nghĩa gì, không biết cột nào đang có dữ liệu, và không phân biệt "nới rộng" với "thu hẹp".
+   Lý do bây giờ là *giới hạn của công cụ*, không còn là *nhiễu của repo*.
+3. **`schema_drift_baseline.txt` rỗng là trạng thái pass, và là mức chặt nhất hàng rào từng có.** Thêm một
+   dòng vào đó là nới lỏng hàng rào — vẫn được phép, nhưng bar cao hơn hẳn so với hồi file có 64 dòng, vì
+   một vấn đề thật không còn đám đông nhiễu để lẫn vào.
+
+**Một assert trong hàng rào đã phải sửa, và nó không phải nới lỏng.**
+`test_baseline_file_is_readable` từng assert `len(accepted) > 1` với lý lẽ "baseline rỗng làm hàng rào vô
+nghĩa". Lý lẽ đó đảo chiều khi dòng cuối cùng được đóng: baseline rỗng là mức **chặt nhất**, vì mọi diff
+probe tìm thấy đều là drift mới — xoá rỗng file không làm gì pass được, nó làm mọi thứ fail. Giữ assert lại
+thì *"model khớp migration chain hoàn toàn"* trở thành trạng thái duy nhất hàng rào từ chối. Rủi ro vacuous
+mà nó nhắm tới là thật và vẫn được bắt đúng chỗ: `test_probe_sees_the_whole_model` fail nếu phép đo trả về
+metadata gần rỗng (ngưỡng 40 bảng), và đó mới là con đường duy nhất mà một màu xanh ở đây không có nghĩa gì.
+
+**Mutation-test lại sau khi baseline co về 0**, hai chiều — vì baseline nhỏ đi mà hàng rào mất răng thì tệ
+hơn không dọn:
+
+- gỡ `index=True` của `employees.department_id` → đỏ, gọi đúng
+  `remove_index employees ix_employees_department_id` kèm `would DROP this index -- silent performance loss`;
+- gỡ `UniqueConstraint` vừa khai cho `users.employee_id` → đỏ, gọi đúng
+  `remove_constraint users uq_users_employee_id` kèm `would DROP this constraint -- integrity loss`.
+
+Chiều thứ hai là chiều đáng chạy hơn: nó chứng minh **những gì vừa khai trong đợt này** cũng được giữ, chứ
+không chỉ những gì đã được giữ từ đợt trước.
+
+Còn một việc treo lại từ §5.1, không đổi: **`gmail_label_mappings`** vẫn nằm trong `UNMANAGED_TABLES` của
+`alembic/env.py`. Nó không tính vào con số 0 ở trên vì bị loại khỏi phạm vi so sánh, chứ không phải vì đã
+được giải quyết. Owner xác nhận bảng trên DB triển khai cũng trống là viết được migration drop và bỏ entry.
 
 ---
 
@@ -587,4 +787,13 @@ container.
 - `backend/src/shared/model_registry.py` — quét AST tìm mọi class `table=True` trong `src/`
 - `backend/tests/test_alembic_metadata_complete.py` — bất biến chặn tái diễn P0
 - `backend/alembic/versions/008_create_gmail_tables.py` — nơi `gmail_label_mappings` ra đời;
-  commit `76e9143` là nơi model của nó biến mất mà bảng thì không
+  commit `76e9143` là nơi model của nó biến mất mà bảng thì không. **Cũng là nơi
+  `email_messages.processing_status` ra đời với `String(length=20)`** — §5.6.g
+- `backend/alembic/versions/086_widen_email_processing_status.py` — quả mìn P4 xếp nhầm hạng
+- `backend/alembic/versions/087_json_to_jsonb.py` — nhóm P3 cuối, DB là bên sai
+- `backend/alembic/versions/061_create_recruitment_inbox_items.py` và `069_*` — nơi `sa.JSON()` được viết
+  trong khi model cùng commit viết `JSONB`; `064_*` là tiền lệ ngược trong cùng module
+- `backend/src/modules/recruitment/application/intent_classifier.py` — `_mark_classification_failed()`,
+  handler lỗi nuốt lỗi của chính nó
+- `backend/tests/schema_drift_baseline.txt` — nay rỗng; đầu file giải thích vì sao rỗng là trạng thái pass
+- `backend/tests/modules/gmail/test_email_processing_status_width.py` — hàng rào cho §5.6.g

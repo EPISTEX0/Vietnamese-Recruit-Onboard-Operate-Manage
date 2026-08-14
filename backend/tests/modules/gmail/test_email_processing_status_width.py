@@ -30,7 +30,7 @@ Two assertions, because they fail on different mistakes:
 
 from __future__ import annotations
 
-import re
+import ast
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,13 +44,17 @@ from sqlmodel import select
 
 from src.modules.gmail.domain.entities import EmailMessage
 from src.modules.identity.domain.entities import User, UserRole
+from src.modules.recruitment.domain.entities import CVDocument
+from src.modules.recruitment.domain.enums import ProcessingStatus
 
 SRC_DIR = Path(__file__).resolve().parents[3] / "src"
 
-# Every value assigned to ``processing_status`` anywhere in the application.
-# Listed rather than derived so that a status disappearing from the code is a
-# visible edit here too; ``test_every_status_literal_in_src_fits_the_column``
-# is the half that reads ``src/`` and would catch a new one.
+ATTRIBUTE = "processing_status"
+
+# Every value written to ``email_messages.processing_status``. Listed rather
+# than derived so that a status disappearing from the code is a visible edit
+# here too; ``test_every_status_literal_in_src_fits_the_column`` is the half
+# that reads ``src/`` and catches one being added.
 STATUS_VALUES = [
     "unprocessed",
     "classified",
@@ -58,7 +62,54 @@ STATUS_VALUES = [
     "cv_processing",
     "needs_classification",
     "classification_failed",
+    # Written by ``ClassificationService`` when the provider is unavailable --
+    # a ternary spanning three lines, which is precisely the form the first
+    # version of the scan below (a regex) could not see.
+    "ai_unavailable",
+    "permanently_failed",
 ]
+
+
+def _status_string_literals() -> dict[str, set[str]]:
+    """Map every string literal written to a ``processing_status`` to its files.
+
+    Walks the AST rather than matching text. The regex this replaced required a
+    quote immediately after ``=`` and so was blind to::
+
+        email.processing_status = (
+            "ai_unavailable" if retry_count < _MAX else "permanently_failed"
+        )
+
+    which is a live assignment in ``gmail/application/classification_service.py``.
+    A scan that silently misses forms is worse than no scan: it reports green
+    over the values it happens to understand.
+
+    Both assignment shapes count -- ``x.processing_status = ...`` and
+    ``Model(processing_status=...)`` -- and every string constant anywhere in
+    the assigned expression is collected, so ternaries and tuples are covered.
+    """
+    found: dict[str, set[str]] = {}
+
+    for path in sorted(SRC_DIR.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            values: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                if any(
+                    isinstance(t, ast.Attribute | ast.Name)
+                    and (t.attr if isinstance(t, ast.Attribute) else t.id) == ATTRIBUTE
+                    for t in node.targets
+                ):
+                    values.append(node.value)
+            elif isinstance(node, ast.Call):
+                values += [kw.value for kw in node.keywords if kw.arg == ATTRIBUTE]
+
+            for value in values:
+                for inner in ast.walk(value):
+                    if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                        found.setdefault(inner.value, set()).add(str(path.relative_to(SRC_DIR)))
+
+    return found
 
 
 @pytest_asyncio.fixture
@@ -118,28 +169,73 @@ async def test_every_status_the_code_writes_survives_a_round_trip(
 
 
 def test_every_status_literal_in_src_fits_the_column() -> None:
-    """No assignment to ``processing_status`` in ``src/`` may exceed the column.
+    """No string written to a ``processing_status`` in ``src/`` may exceed the column.
 
     Reads the source rather than the enumerated list above on purpose: the bug
     this file exists for was a *new* literal outgrowing an old column, which a
     test over the values already known cannot see.
+
+    Two tables carry a ``processing_status``: ``email_messages`` and
+    ``cv_documents``. The scan cannot tell which one a given literal is destined
+    for without resolving types, so it checks every literal against the narrower
+    of the two. That is conservative -- it can only ever over-report -- and
+    over-reporting on a column-width check costs one line of thought, while
+    under-reporting costs three months of silently unmarked emails.
     """
-    width = EmailMessage.__table__.c.processing_status.type.length
-    assert width is not None, "processing_status lost its length; the check below is vacuous"
-
-    pattern = re.compile(r"""processing_status\s*=\s*["']([a-z_]+)["']""")
-    found: dict[str, list[str]] = {}
-    for path in SRC_DIR.rglob("*.py"):
-        for literal in pattern.findall(path.read_text(encoding="utf-8")):
-            found.setdefault(literal, []).append(str(path.relative_to(SRC_DIR)))
-
-    assert found, "found no processing_status assignments in src/ -- the scan is broken"
-
-    too_long = {
-        literal: sorted(set(files)) for literal, files in found.items() if len(literal) > width
+    widths = {
+        "email_messages": EmailMessage.__table__.c.processing_status.type.length,
+        "cv_documents": CVDocument.__table__.c.processing_status.type.length,
     }
+    assert all(w is not None for w in widths.values()), (
+        f"a processing_status column lost its length ({widths}); the check below is vacuous"
+    )
+    width = min(widths.values())
+
+    found = _status_string_literals()
+    assert found, "found no processing_status assignments in src/ -- the scan is broken"
+    assert "classification_failed" in found, (
+        "the scan no longer sees `classification_failed`, the literal this whole "
+        "file exists for. It is assigned in intent_classifier.py; if that is still "
+        "true, the AST walk is broken rather than the code."
+    )
+
+    too_long = {literal: sorted(files) for literal, files in found.items() if len(literal) > width}
     assert not too_long, (
-        f"processing_status is VARCHAR({width}), and these literals do not fit: "
-        f"{ {k: len(k) for k in too_long} }. PostgreSQL raises rather than truncates, "
-        f"so every write of them fails. Written at: {too_long}"
+        f"processing_status is VARCHAR({width}) ({widths}), and these literals do not "
+        f"fit: { {k: len(k) for k in too_long} }. PostgreSQL raises rather than "
+        f"truncates, so every write of them fails. Written at: {too_long}"
+    )
+
+
+def test_the_scan_sees_every_status_this_file_round_trips() -> None:
+    """The listed values and the scanned ones must not drift apart.
+
+    ``STATUS_VALUES`` above is hand-maintained, and a hand-maintained list of
+    "every value the application writes" is exactly the thing that goes stale.
+    The first version of this file listed six of the eight, because the two it
+    missed are written by a ternary the scan could not see either -- one blind
+    spot hiding another. Cross-checking the two halves is what stops that from
+    being invisible.
+    """
+    scanned = set(_status_string_literals())
+    missing = sorted(scanned - set(STATUS_VALUES) - {m.value for m in ProcessingStatus})
+    assert not missing, (
+        f"src/ writes {missing} to a processing_status, and STATUS_VALUES does not "
+        "list them, so no round-trip covers them. Add them to STATUS_VALUES."
+    )
+
+
+def test_every_processing_status_enum_member_fits_cv_documents() -> None:
+    """``ProcessingStatus`` is the value set for ``cv_documents.processing_status``.
+
+    Those writes are ``ProcessingStatus.COMPLETED``, not string literals, so the
+    scan above never sees them -- the enum is the only place they exist. Same
+    failure mode as ``classification_failed``: a member added later with a long
+    name would raise on flush and nothing else would notice.
+    """
+    width = CVDocument.__table__.c.processing_status.type.length
+    too_long = {m.name: m.value for m in ProcessingStatus if len(m.value) > width}
+    assert not too_long, (
+        f"cv_documents.processing_status is VARCHAR({width}); these ProcessingStatus "
+        f"members do not fit: {too_long}"
     )
