@@ -520,11 +520,14 @@ tự do thì sẽ làm baseline nhiễu mỗi lần sửa chữ.
 Chi phí: **~6s** cho cả 4 test.
 
 **Nó chạy ở hai nơi, và cần cả hai.** Trong suite (rẻ, lập trình viên thấy ngay khi chạy pytest), và ở
-**`Gate 6 - schema drift`** — job CI riêng, *không* `continue-on-error`. Lý do phải có job riêng chính là
-Gate 4b: đó là job duy nhất chạy pytest và nó đang `continue-on-error: true`, còn Gate 3 chỉ `--collect-only`.
-Một hàng rào chỉ nằm trong suite thì GitHub vẫn báo `success` cho PR làm mất index. Gate 6 chưa phải required
-status check — đó là quyết định của owner và của ruleset — nhưng khác 4a/4b, nó đỏ thật trong
-`gh run view --json`.
+**`Gate 6 - schema drift`** — job CI riêng, *không* `continue-on-error`. Lý do ban đầu là Gate 4b — job duy
+nhất chạy pytest — khi đó còn `continue-on-error: true`, nên một hàng rào chỉ nằm trong suite thì GitHub vẫn
+báo `success` cho PR làm mất index. `838a525` đã gỡ cờ đó khỏi 4a/4b, nên lý do ấy hết hiệu lực: suite bây
+giờ chặn merge thật. Job riêng vẫn giữ, vì hai lý do không phụ thuộc vào cờ đó. Nó cần container pgvector
+riêng (xem đoạn trên) chứ không dùng chung `postgres_async_url`. Và nó là gate duy nhất đo drift: gộp vào 4b
+thì tín hiệu nằm sau ~2500 test không liên quan và đọc ra thành "suite backend đỏ" thay vì "model đã drift",
+trong khi tách ra thì ~6s là biết. Gate 6 chưa phải required status check — đó là quyết định của owner và
+của ruleset.
 
 Đã mutation-test: xoá `index=True` của `employees.department_id` → toàn bộ 2574 test còn lại vẫn xanh, chỉ
 `test_no_new_drift_between_models_and_migrated_schema` đỏ, và nó nêu đúng

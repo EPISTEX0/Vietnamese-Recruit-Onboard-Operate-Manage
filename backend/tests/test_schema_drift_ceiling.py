@@ -28,9 +28,13 @@ The warning names the lines to delete; deleting them closes the window.
 
 **Cost: about 6s** (~5s for the container plus the migration chain, ~0.7s for
 the probe), cheap enough to be an ordinary suite test. It also runs as its own
-CI job (`Gate 6 - schema drift`), because Gate 4b -- the only job that runs
-pytest -- is `continue-on-error: true`, so a fence living only there could never
-fail a build.
+CI job (`Gate 6 - schema drift`). That job earned its keep back when Gate 4b was
+`continue-on-error: true` and a fence living only in the suite could never fail a
+build; 838a525 dropped that flag, so the suite is load-bearing again and the job
+is kept for two reasons that survive the change. It needs its own container
+anyway (see below), and it is the only gate that measures drift -- folded into
+Gate 4b it would land behind ~2500 unrelated tests and read as "the backend
+suite is red" rather than "the models drifted".
 
 **Why its own container** rather than the session-scoped ``postgres_async_url``:
 this fence has to compare the models against a database whose entire history is
