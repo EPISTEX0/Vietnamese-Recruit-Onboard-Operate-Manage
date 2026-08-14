@@ -22,10 +22,6 @@ add_index interview_participants ix_interview_participants_employee_id          
 add_index interview_participants ix_interview_participants_type                                       # (type)
 add_index interviews ix_interviews_calendar_id                                                        # (calendar_id)
 add_index interviews ix_interviews_status                                                             # (status)
-modify_comment employee_knowledge_base_documents kb_type                                              # employee — the type of knowledge base this doc belongs to -> None
-modify_comment employee_knowledge_base_documents status                                               # pending | processing | ready | error -> None
-modify_comment hr_knowledge_base_documents kb_type                                                    # hr (default) — the type of knowledge base this doc belongs to -> None
-modify_comment hr_knowledge_base_documents status                                                     # pending | processing | ready | error -> None
 modify_type cv_documents confirmed_fields JSON -> JSONB
 modify_type cv_documents field_provenance JSON -> JSONB
 modify_type email_messages processing_status VARCHAR(20) -> VARCHAR(30)
@@ -33,4 +29,3 @@ modify_type recruitment_inbox_items attachments_metadata JSON -> JSONB
 modify_type recruitment_inbox_items correction_history JSON -> JSONB
 modify_type recruitment_inbox_items evidence JSON -> JSONB
 modify_type recruitment_inbox_items source_hints JSON -> JSONB
-remove_table_comment onboarding_audit_logs -                                                          # table comment

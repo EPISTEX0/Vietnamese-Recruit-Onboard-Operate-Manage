@@ -53,11 +53,18 @@ class KnowledgeBaseDocument(SQLModel, table=True):
     status: str = Field(
         default="pending",
         max_length=20,
+        sa_column_kwargs={"comment": "pending | processing | ready | error"},
     )
     error_message: str | None = Field(default=None, sa_type=Text)
     chunk_count: int = Field(default=0)
     description: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    kb_type: str = Field(default="hr", max_length=20)
+    kb_type: str = Field(
+        default="hr",
+        max_length=20,
+        sa_column_kwargs={
+            "comment": "hr (default) — the type of knowledge base this doc belongs to"
+        },
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -123,11 +130,16 @@ class EmployeeKnowledgeBaseDocument(SQLModel, table=True):
     status: str = Field(
         default="pending",
         max_length=20,
+        sa_column_kwargs={"comment": "pending | processing | ready | error"},
     )
     error_message: str | None = Field(default=None, sa_type=Text)
     chunk_count: int = Field(default=0)
     description: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    kb_type: str = Field(default="employee", max_length=20)
+    kb_type: str = Field(
+        default="employee",
+        max_length=20,
+        sa_column_kwargs={"comment": "employee — the type of knowledge base this doc belongs to"},
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),

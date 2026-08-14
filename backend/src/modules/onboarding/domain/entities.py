@@ -93,6 +93,16 @@ class OnboardingAuditLog(SQLModel, table=True):
     """
 
     __tablename__ = "onboarding_audit_logs"
+    # 070 set this comment on the table; it is the append-only rule stated where
+    # someone reading the schema with psql will see it, not just here. Without it
+    # in the model, autogenerate proposes clearing it off the database.
+    __table_args__ = {
+        "comment": (
+            "Append-only audit trail for the onboarding module. UPDATE/DELETE are "
+            "not permitted by the application; entries are an immutable record of "
+            "onboarding state changes."
+        )
+    }
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
