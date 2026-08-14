@@ -4,8 +4,8 @@ Feature: interview-calendar-scheduling, Property 15.
 
 Validates: Requirements 7.2.
 
-For any reschedule of a Candidate that already has a stored
-``calendar_event_id``, ``CandidateService.reschedule_interview`` patches the
+For any reschedule of a Candidate whose Interview already stores a
+``calendar_event_id``, ``InterviewSchedulerService.reschedule_interview`` patches the
 *existing* Google Calendar event in place rather than creating a new one. The
 patch specification handed to the Calendar adapter must NOT request a new
 conferencing link (``request_meet_link is False``), which is exactly what makes
@@ -46,6 +46,7 @@ from tests.modules.recruitment._interview_support import (
     iana_timezones,
     make_candidate,
     make_employee,
+    make_interview,
 )
 
 # A pre-existing Calendar event the reschedule will patch in place.
@@ -91,17 +92,20 @@ def test_reschedule_patch_spec_never_requests_a_new_meet_link(
         ]
         interviewer_ids: list[UUID] = [employee.id for employee in employees]
 
-        # A Candidate that already has a scheduled interview (stored event id +
-        # start) — the precondition for a reschedule (R7.1/R7.5).
-        candidate = make_candidate(
-            status=CandidateStatus.INTERVIEW_SCHEDULED,
+        # A Candidate that already has a scheduled interview (its Interview
+        # carries the stored event id + start) — the precondition for a
+        # reschedule (R7.1/R7.5).
+        candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+        existing_interview = make_interview(
+            candidate_id=candidate.id,
             calendar_event_id=_EXISTING_EVENT_ID,
-            interview_start_at=datetime(2089, 6, 1, 9, 0, 0, tzinfo=UTC),
-            interview_timezone="UTC",
+            start_at=datetime(2089, 6, 1, 9, 0, 0, tzinfo=UTC),
+            timezone="UTC",
         )
         harness = build_calendar_harness(
             candidates=[candidate],
             employees=employees,
+            interviews=[existing_interview],
             org_timezone=org_timezone,
         )
 

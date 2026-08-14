@@ -104,10 +104,12 @@ async def _run_unmatched_interviewers(
     assert set(exc_info.value.unmatched_ids) == expected_unmatched
 
     # No Calendar event was created (the adapter was never invoked) and the
-    # Candidate did not transition.
+    # Candidate did not transition. The event reference lives on the Interview
+    # row a successful schedule creates, so "no event was stored" is asserted as
+    # "no Interview exists for this Candidate".
     assert harness.calendar.was_called is False
     assert candidate.status == CandidateStatus.NEW
-    assert candidate.calendar_event_id is None
+    assert await harness.interviews_for(candidate.id) == []
 
 
 # Feature: interview-calendar-scheduling, Property 2

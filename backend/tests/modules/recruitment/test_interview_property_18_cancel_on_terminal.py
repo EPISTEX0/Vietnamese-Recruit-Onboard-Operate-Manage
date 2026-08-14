@@ -29,16 +29,15 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import patch
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.modules.recruitment.application import interview_scheduler_service as candidate_service
 from src.modules.recruitment.domain.enums import CandidateStatus
 from tests.modules.recruitment._interview_support import (
     build_calendar_harness,
     make_candidate,
+    make_interview,
 )
 
 # The known stored event id the cancellation must target EXACTLY.
@@ -80,24 +79,25 @@ def test_reject_or_archive_cancels_stored_event(action: str, reason: str | None)
     """
 
     async def _run() -> None:
-        candidate = make_candidate(
-            status=CandidateStatus.INTERVIEW_SCHEDULED,
+        candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+        booked = make_interview(
+            candidate_id=candidate.id,
             calendar_event_id=_STORED_EVENT_ID,
-            interview_start_at=_INTERVIEW_START,
-            interview_timezone="Asia/Ho_Chi_Minh",
+            start_at=_INTERVIEW_START,
+            timezone="Asia/Ho_Chi_Minh",
         )
+        harness = build_calendar_harness(candidates=[candidate], interviews=[booked])
+
         # Precondition for this property: a stored interview event exists.
-        assert candidate.calendar_event_id == _STORED_EVENT_ID
+        scheduled = await harness.scheduled_interview(candidate.id)
+        assert scheduled is not None
+        assert scheduled.calendar_event_id == _STORED_EVENT_ID
 
-        harness = build_calendar_harness(candidates=[candidate])
-
-        # The real ``log_audit`` would hit ``session.add``/``flush`` (unsupported
-        # by the fake session); the spy sink records entries without persisting.
-        with patch.object(candidate_service, "log_audit", harness.audit_sink):
+        with harness.audit_patch():
             if action == "reject":
-                returned = await harness.service.reject_candidate(candidate.id, reason)
+                returned = await harness.lifecycle.reject_candidate(candidate.id, reason)
             else:
-                returned = await harness.service.archive_candidate(candidate.id)
+                returned = await harness.lifecycle.archive_candidate(candidate.id)
 
         # R8.1 / R8.2: exactly one delete call, targeting the EXACT stored id;
         # no spurious create/patch calls.

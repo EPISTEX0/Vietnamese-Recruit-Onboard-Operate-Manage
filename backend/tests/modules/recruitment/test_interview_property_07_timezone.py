@@ -44,6 +44,7 @@ from tests.modules.recruitment._interview_support import (
     iana_timezones,
     make_candidate,
     make_employee,
+    make_interview,
 )
 
 # Statuses from which a transition to ``interview_scheduled`` is permitted.
@@ -117,10 +118,11 @@ def test_schedule_applies_and_stores_organization_timezone(
         # absolute UTC instant is preserved (tz-robust).
         assert spec.start.astimezone(UTC) == start.astimezone(UTC)
 
-        # R11.2: on success the applied timezone is persisted on the Candidate.
-        persisted = await harness.candidate_repo.get_by_id(candidate.id)
+        # R11.2: on success the applied timezone is persisted on the Interview
+        # the schedule creates (the Candidate no longer carries it).
+        persisted = await harness.scheduled_interview(candidate.id)
         assert persisted is not None
-        assert persisted.interview_timezone == org_timezone
+        assert persisted.timezone == org_timezone
 
     asyncio.run(_run())
 
@@ -149,18 +151,21 @@ def test_reschedule_applies_and_stores_organization_timezone(
         ]
         interviewer_ids: list[UUID] = [employee.id for employee in employees]
 
-        # A Candidate already scheduled: it has a stored event id + start so that
-        # ``reschedule_interview`` patches the existing event (R7.1) rather than
-        # rejecting with ``NoInterviewToRescheduleError`` (R7.5).
-        candidate = make_candidate(
-            status=CandidateStatus.INTERVIEW_SCHEDULED,
+        # A Candidate already scheduled: its Interview carries a stored event id
+        # + start so that ``reschedule_interview`` patches the existing event
+        # (R7.1) rather than rejecting with ``NoInterviewToRescheduleError``
+        # (R7.5).
+        candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+        existing_interview = make_interview(
+            candidate_id=candidate.id,
             calendar_event_id="evt-existing-0001",
-            interview_start_at=datetime(2089, 6, 1, 9, 0, 0, tzinfo=UTC),
-            interview_timezone="UTC",
+            start_at=datetime(2089, 6, 1, 9, 0, 0, tzinfo=UTC),
+            timezone="UTC",
         )
         harness = build_calendar_harness(
             candidates=[candidate],
             employees=employees,
+            interviews=[existing_interview],
             org_timezone=org_timezone,
         )
 
@@ -186,9 +191,10 @@ def test_reschedule_applies_and_stores_organization_timezone(
         # absolute UTC instant is preserved (tz-robust).
         assert spec.start.astimezone(UTC) == start.astimezone(UTC)
 
-        # R11.2: on success the applied timezone is persisted on the Candidate.
-        persisted = await harness.candidate_repo.get_by_id(candidate.id)
+        # R11.2: on success the applied timezone is persisted on the Interview
+        # (the Candidate no longer carries it).
+        persisted = await harness.scheduled_interview(candidate.id)
         assert persisted is not None
-        assert persisted.interview_timezone == org_timezone
+        assert persisted.timezone == org_timezone
 
     asyncio.run(_run())

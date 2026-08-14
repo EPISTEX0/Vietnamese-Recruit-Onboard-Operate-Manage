@@ -45,13 +45,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import patch
 from uuid import UUID
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.modules.recruitment.application import interview_scheduler_service as candidate_service
 from src.modules.recruitment.domain.enums import CandidateStatus
 from tests.modules.recruitment._interview_support import (
     SpyAuditSink,
@@ -59,6 +57,7 @@ from tests.modules.recruitment._interview_support import (
     iana_timezones,
     make_candidate,
     make_employee,
+    make_interview,
 )
 
 # The four audited interview actions exercised by this property (R12.5).
@@ -124,15 +123,19 @@ def test_audit_write_failure_never_rolls_back_the_action(
         # Seed the Candidate for the drawn action. Reschedule/cancel actions need
         # a stored event reference (and a prior start) so the Calendar
         # side-effect — and its audit — is exercised.
+        booked: list = []
         if action == "schedule":
             candidate = make_candidate(status=permitting_status)
         else:
-            candidate = make_candidate(
-                status=CandidateStatus.INTERVIEW_SCHEDULED,
-                calendar_event_id=_EXISTING_EVENT_ID,
-                interview_start_at=_PREVIOUS_START,
-                interview_timezone="Asia/Ho_Chi_Minh",
-            )
+            candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+            booked = [
+                make_interview(
+                    candidate_id=candidate.id,
+                    calendar_event_id=_EXISTING_EVENT_ID,
+                    start_at=_PREVIOUS_START,
+                    timezone="Asia/Ho_Chi_Minh",
+                )
+            ]
 
         # ``fail=True``: the sink swallows like the real ``log_audit`` — it
         # records every attempt but persists no entry and never raises, modelling
@@ -141,11 +144,12 @@ def test_audit_write_failure_never_rolls_back_the_action(
         harness = build_calendar_harness(
             candidates=[candidate],
             employees=employees,
+            interviews=booked,
             audit_sink=failing_sink,
             org_timezone=org_timezone,
         )
 
-        with patch.object(candidate_service, "log_audit", harness.audit_sink):
+        with harness.audit_patch():
             if action == "schedule":
                 returned = await harness.service.schedule_interview(
                     candidate.id,
@@ -163,11 +167,11 @@ def test_audit_write_failure_never_rolls_back_the_action(
                     notes=notes,
                 )
             elif action == "cancel_reject":
-                returned = await harness.service.reject_candidate(
+                returned = await harness.lifecycle.reject_candidate(
                     candidate.id, reason="position filled"
                 )
             else:  # cancel_archive
-                returned = await harness.service.archive_candidate(candidate.id)
+                returned = await harness.lifecycle.archive_candidate(candidate.id)
 
         # R12.5 (audit attempted): the action reached at least one ``log_audit``
         # call — the audit write was genuinely attempted, then "failed".
@@ -183,20 +187,20 @@ def test_audit_write_failure_never_rolls_back_the_action(
 
         if action == "schedule":
             assert returned.status == CandidateStatus.INTERVIEW_SCHEDULED
-            assert returned.calendar_event_id is not None
             assert persisted.status == CandidateStatus.INTERVIEW_SCHEDULED
-            assert persisted.calendar_event_id == returned.calendar_event_id
-            assert persisted.interview_start_at is not None
-            assert persisted.interview_start_at.astimezone(UTC) == start.astimezone(UTC)
+            # The schedule's effect -- the event reference and the scheduled
+            # start -- is committed on the Interview it created.
+            interview = await harness.scheduled_interview(candidate.id)
+            assert interview is not None
+            assert interview.calendar_event_id is not None
+            assert interview.start_at.astimezone(UTC) == start.astimezone(UTC)
         elif action == "reschedule":
             # The stored start advanced to the new instant; the event reference
             # is left unchanged (reschedule patches in place).
-            assert returned.interview_start_at is not None
-            assert returned.interview_start_at.astimezone(UTC) == start.astimezone(UTC)
-            assert returned.calendar_event_id == _EXISTING_EVENT_ID
-            assert persisted.interview_start_at is not None
-            assert persisted.interview_start_at.astimezone(UTC) == start.astimezone(UTC)
-            assert persisted.calendar_event_id == _EXISTING_EVENT_ID
+            interview = await harness.scheduled_interview(candidate.id)
+            assert interview is not None
+            assert interview.calendar_event_id == _EXISTING_EVENT_ID
+            assert interview.start_at.astimezone(UTC) == start.astimezone(UTC)
         elif action == "cancel_reject":
             assert returned.status == CandidateStatus.REJECTED
             assert persisted.status == CandidateStatus.REJECTED

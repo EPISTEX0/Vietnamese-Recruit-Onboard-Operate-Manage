@@ -139,13 +139,12 @@ def test_interviewer_missing_email_blocks_scheduling(
         # R10.2: no Calendar event was created.
         assert harness.calendar.was_called is False
 
-        # R10.2: the Candidate status is left unchanged and no event reference
-        # was persisted.
+        # R10.2: the Candidate status is left unchanged and no event reference,
+        # scheduled start, or applied timezone was persisted -- all three live on
+        # the Interview row a successful schedule creates, and none exists.
         live = await harness.candidate_repo.get_by_id(candidate.id)
         assert live is not None
         assert live.status == status
-        assert live.calendar_event_id is None
-        assert live.interview_start_at is None
-        assert live.interview_timezone is None
+        assert await harness.interviews_for(candidate.id) == []
 
     asyncio.run(_run())

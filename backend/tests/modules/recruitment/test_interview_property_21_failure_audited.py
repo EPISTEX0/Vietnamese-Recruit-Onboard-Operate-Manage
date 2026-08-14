@@ -57,6 +57,7 @@ from tests.modules.recruitment._interview_support import (
     build_calendar_harness,
     make_candidate,
     make_employee,
+    make_interview,
 )
 
 # Statuses from which a transition to ``interview_scheduled`` IS allowed, derived
@@ -132,12 +133,7 @@ def test_every_action_failure_is_audited(
         if scenario == "schedule":
             # A permitting-status Candidate with no prior interview fields, so the
             # transition is valid and the create call is reached, then fails.
-            candidate = make_candidate(
-                status=permitting_status,
-                calendar_event_id=None,
-                interview_start_at=None,
-                interview_timezone=None,
-            )
+            candidate = make_candidate(status=permitting_status)
             calendar = FakeCalendarPort(create_outcomes=[CalendarEventCreateFailedError()])
             harness = build_calendar_harness(
                 candidates=[candidate],
@@ -160,16 +156,18 @@ def test_every_action_failure_is_audited(
         elif scenario == "reschedule":
             # A Candidate that already has a stored interview event (R7
             # precondition); the patch call is reached, then fails.
-            candidate = make_candidate(
-                status=CandidateStatus.INTERVIEW_SCHEDULED,
+            candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+            booked = make_interview(
+                candidate_id=candidate.id,
                 calendar_event_id=_STORED_EVENT_ID,
-                interview_start_at=_STORED_START,
-                interview_timezone=_STORED_TIMEZONE,
+                start_at=_STORED_START,
+                timezone=_STORED_TIMEZONE,
             )
             calendar = FakeCalendarPort(patch_outcomes=[CalendarEventUpdateFailedError()])
             harness = build_calendar_harness(
                 candidates=[candidate],
                 employees=employees,
+                interviews=[booked],
                 calendar=calendar,
                 audit_sink=audit_sink,
             )
@@ -189,11 +187,12 @@ def test_every_action_failure_is_audited(
         else:  # scenario == "cancel"
             # A Candidate with a stored event that can transition to
             # rejected/archived; the cancellation delete is scripted to fail.
-            candidate = make_candidate(
-                status=CandidateStatus.INTERVIEW_SCHEDULED,
+            candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+            booked = make_interview(
+                candidate_id=candidate.id,
                 calendar_event_id=_STORED_EVENT_ID,
-                interview_start_at=_STORED_START,
-                interview_timezone=_STORED_TIMEZONE,
+                start_at=_STORED_START,
+                timezone=_STORED_TIMEZONE,
             )
             calendar = FakeCalendarPort(
                 delete_outcomes=[RuntimeError("simulated calendar delete failure")]
@@ -201,16 +200,17 @@ def test_every_action_failure_is_audited(
             harness = build_calendar_harness(
                 candidates=[candidate],
                 employees=employees,
+                interviews=[booked],
                 calendar=calendar,
                 audit_sink=audit_sink,
             )
-            with patch.object(candidate_service, "log_audit", audit_sink):
+            with harness.audit_patch():
                 # Cancellation failure is best-effort: the terminal transition
                 # must NOT raise (R8.4 / R8.5).
                 if cancel_action == "reject":
-                    returned = await harness.service.reject_candidate(candidate.id, notes)
+                    returned = await harness.lifecycle.reject_candidate(candidate.id, notes)
                 else:
-                    returned = await harness.service.archive_candidate(candidate.id)
+                    returned = await harness.lifecycle.archive_candidate(candidate.id)
             # The terminal transition still completed despite the failed delete.
             expected_status = (
                 CandidateStatus.REJECTED if cancel_action == "reject" else CandidateStatus.ARCHIVED

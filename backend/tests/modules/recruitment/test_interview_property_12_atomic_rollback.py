@@ -23,9 +23,9 @@ For every pre-request Candidate snapshot (any permitting status, no prior
 interview fields) and any valid request, a create failure must:
 
 * raise ``CalendarEventCreateFailedError`` (R3.3);
-* leave the persisted Candidate exactly as before - status unchanged (R3.1),
-  ``calendar_event_id`` / ``interview_start_at`` / ``interview_timezone`` all
-  still ``None`` (R3.2, R3.4);
+* leave the persisted Candidate exactly as before - status unchanged (R3.1) -
+  and leave no Interview row behind, so no ``calendar_event_id`` / scheduled
+  ``start_at`` / applied ``timezone`` was stored anywhere (R3.2, R3.4);
 * drive at least one ``session.rollback()`` (R3.4); and
 * have made exactly one (failed) Calendar create attempt.
 """
@@ -83,8 +83,9 @@ def test_calendar_create_failure_rolls_back_atomically(
     For any Candidate in a permitting status with no prior interview fields and
     any valid request, when ``create_event`` fails, ``schedule_interview`` raises
     ``CalendarEventCreateFailedError`` and the persisted Candidate record equals
-    its pre-request snapshot exactly: status unchanged, and ``calendar_event_id``
-    / ``interview_start_at`` / ``interview_timezone`` all still ``None``.
+    its pre-request snapshot exactly: status unchanged, and no Interview row was
+    left behind, so no ``calendar_event_id`` / scheduled start / applied
+    timezone was stored.
 
     Validates: Requirements 3.1, 3.2, 3.3, 3.4
     """
@@ -97,14 +98,10 @@ def test_calendar_create_failure_rolls_back_atomically(
         ]
         interviewer_ids: list[UUID] = [employee.id for employee in employees]
 
-        # A Candidate in a permitting status with NO prior interview fields, so
-        # the pre-request snapshot has calendar_event_id / start / timezone unset.
-        candidate = make_candidate(
-            status=status,
-            calendar_event_id=None,
-            interview_start_at=None,
-            interview_timezone=None,
-        )
+        # A Candidate in a permitting status with NO prior interview, so there is
+        # no stored calendar_event_id / start / timezone to begin with -- those
+        # live on the Interview row a successful schedule would create.
+        candidate = make_candidate(status=status)
 
         # Script the single create_event call to raise the canonical adapter
         # failure, so the create-before-commit step (R2.1) fails atomically.
@@ -149,12 +146,13 @@ def test_calendar_create_failure_rolls_back_atomically(
         snapshot_after = harness.candidate_repo.committed_snapshot(candidate.id)
         assert snapshot_after == snapshot_before
 
-        # R3.1 / R3.2 spelled out against the live Candidate instance.
+        # R3.1 spelled out against the live Candidate instance.
         persisted = await harness.candidate_repo.get_by_id(candidate.id)
         assert persisted is not None
         assert persisted.status == status
-        assert persisted.calendar_event_id is None
-        assert persisted.interview_start_at is None
-        assert persisted.interview_timezone is None
+
+        # R3.2 / R3.4: no event reference, scheduled start, or applied timezone
+        # was stored -- the rollback left no Interview row behind at all.
+        assert await harness.interviews_for(candidate.id) == []
 
     asyncio.run(_run())

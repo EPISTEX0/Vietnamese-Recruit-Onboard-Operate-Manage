@@ -4,8 +4,8 @@ Feature: interview-calendar-scheduling, Property 14.
 
 Validates: Requirements 7.1, 7.3, 12.2.
 
-For any Candidate that has a stored ``calendar_event_id``, a successful
-reschedule via :meth:`CandidateService.reschedule_interview`:
+For any Candidate whose Interview stores a ``calendar_event_id``, a successful
+reschedule via :meth:`InterviewSchedulerService.reschedule_interview`:
 
 * invokes the adapter's ``patch_event`` on that EXACT stored event id with an end
   equal to the new ``start`` plus ``duration_minutes`` (R7.1);
@@ -51,14 +51,18 @@ from tests.modules.recruitment._interview_support import (
     build_calendar_harness,
     make_candidate,
     make_employee,
+    make_interview,
 )
 
-# The event id stored on the Candidate before the reschedule; the patch call MUST
+# The event id stored on the Interview before the reschedule; the patch call MUST
 # target this exact id and the stored reference MUST stay unchanged afterwards.
 _EXISTING_EVENT_ID = "evt-existing-1"
-# A fixed, tz-aware previous scheduled start seeded on the Candidate. It sits well
+# A fixed, tz-aware previous scheduled start seeded on the Interview. It sits well
 # before the drawn new starts so the previous/new starts are always distinct.
 _PREVIOUS_START = datetime(2080, 6, 1, 9, 0, 0, tzinfo=UTC)
+# The etag stored alongside the event; the reschedule must send it as the
+# conditional-write precondition.
+_SEEDED_ETAG = '"etag-before-reschedule"'
 
 # Valid, unambiguously-future new starts: tz-aware UTC datetimes far in the future
 # (well beyond any execution-time clock skew), so the future-``start`` rule (R1.4)
@@ -100,17 +104,21 @@ def test_successful_reschedule_patches_event_and_updates_start(
         ]
         interviewer_ids: list[UUID] = [employee.id for employee in employees]
 
-        # A Candidate already interview-scheduled, carrying a stored event id and
-        # a previous scheduled start (the reschedule must patch this exact event).
-        candidate = make_candidate(
-            status=CandidateStatus.INTERVIEW_SCHEDULED,
+        # A Candidate already interview-scheduled, whose Interview carries the
+        # stored event id and previous scheduled start (the reschedule must patch
+        # this exact event).
+        candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+        existing_interview = make_interview(
+            candidate_id=candidate.id,
             calendar_event_id=_EXISTING_EVENT_ID,
-            interview_start_at=_PREVIOUS_START,
-            interview_timezone="Asia/Ho_Chi_Minh",
+            calendar_etag=_SEEDED_ETAG,
+            start_at=_PREVIOUS_START,
+            timezone="Asia/Ho_Chi_Minh",
         )
         harness = build_calendar_harness(
             candidates=[candidate],
             employees=employees,
+            interviews=[existing_interview],
             org_timezone="Asia/Ho_Chi_Minh",
         )
 
@@ -131,7 +139,15 @@ def test_successful_reschedule_patches_event_and_updates_start(
         assert len(harness.calendar.create_calls) == 0
         patch_call = harness.calendar.patch_calls[0]
         assert patch_call.event_id == _EXISTING_EVENT_ID
-        assert patch_call.event_id == candidate.calendar_event_id
+        assert patch_call.event_id == existing_interview.calendar_event_id
+
+        # The patch is conditional on the etag we last stored for the event, so
+        # Google answers 412 instead of clobbering an event edited elsewhere in
+        # the meantime. Compared against the seeded etag rather than the live
+        # entity's, because a successful patch overwrites the entity's etag with
+        # the one the response carried. Asserted here because nothing else
+        # forces the service to keep sending the precondition.
+        assert patch_call.if_match == _SEEDED_ETAG
 
         # R7.1: the patched event window ends exactly ``duration_minutes`` after
         # its start (tz-robust: independent of the org timezone the service
@@ -140,35 +156,42 @@ def test_successful_reschedule_patches_event_and_updates_start(
         assert patch_call.spec.end - patch_call.spec.start == timedelta(minutes=duration_minutes)
         assert patch_call.spec.start.astimezone(UTC) == start.astimezone(UTC)
 
-        # R7.3: the stored scheduled start is updated to the new instant while the
-        # calendar_event_id is left unchanged. Checked on both the returned and
-        # the committed (persisted) Candidate.
-        assert returned.interview_start_at is not None
-        assert returned.interview_start_at.astimezone(UTC) == start.astimezone(UTC)
-        assert returned.calendar_event_id == _EXISTING_EVENT_ID
+        # The Candidate itself stays interview_scheduled; the schedule state it
+        # used to carry now lives on the Interview.
+        assert returned.status == CandidateStatus.INTERVIEW_SCHEDULED
 
-        persisted = await harness.candidate_repo.get_by_id(candidate.id)
+        # R7.3: the stored scheduled start is updated to the new instant while the
+        # calendar_event_id is left unchanged. Checked on both the live Interview
+        # and its committed (persisted) snapshot.
+        persisted = await harness.scheduled_interview(candidate.id)
         assert persisted is not None
         assert persisted.calendar_event_id == _EXISTING_EVENT_ID
-        assert persisted.interview_start_at is not None
-        assert persisted.interview_start_at.astimezone(UTC) == start.astimezone(UTC)
+        assert persisted.start_at is not None
+        assert persisted.start_at.astimezone(UTC) == start.astimezone(UTC)
+
+        committed = harness.committed_interview_snapshot(persisted.id)
+        assert committed is not None
+        assert committed["calendar_event_id"] == _EXISTING_EVENT_ID
+        assert committed["start_at"].astimezone(UTC) == start.astimezone(UTC)
 
         # R12.2: an ``interview_rescheduled`` audit entry records the previous and
-        # new scheduled starts (asserting against the actual new_value keys the
-        # service writes: ``previous_start`` and ``new_start``).
+        # new scheduled starts. The service records them the way the audit shape
+        # means them -- the previous start under ``previous_value``, the new start
+        # under ``new_value`` -- rather than both under ``new_value``.
         rescheduled_entries = harness.audit_sink.entries_for("interview_rescheduled")
         assert len(rescheduled_entries) == 1
         entry = rescheduled_entries[0]
         assert entry.user_id == harness.user_id
         assert entry.entity_id == candidate.id
         assert entry.success is True
+        assert entry.previous_value is not None
         assert entry.new_value is not None
-        assert "previous_start" in entry.new_value
-        assert "new_start" in entry.new_value
+        assert "start" in entry.previous_value
+        assert "start" in entry.new_value
         # The recorded previous start is the seeded start; the recorded new start
         # is the requested instant (both compared tz-robustly as UTC instants).
-        recorded_previous = entry.new_value["previous_start"]
-        recorded_new = entry.new_value["new_start"]
+        recorded_previous = entry.previous_value["start"]
+        recorded_new = entry.new_value["start"]
         assert recorded_previous is not None
         assert datetime.fromisoformat(recorded_previous).astimezone(UTC) == _PREVIOUS_START
         assert datetime.fromisoformat(recorded_new).astimezone(UTC) == start.astimezone(UTC)

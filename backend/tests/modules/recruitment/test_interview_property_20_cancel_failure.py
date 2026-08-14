@@ -36,18 +36,17 @@ action must:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.modules.recruitment.application import interview_scheduler_service as candidate_service
 from src.modules.recruitment.domain.enums import CandidateStatus
 from tests.modules.recruitment._interview_support import (
     FakeCalendarPort,
     build_calendar_harness,
     make_candidate,
     make_http_status_error,
+    make_interview,
 )
 
 # The event id stored on the Candidate before the terminal action; the failed
@@ -96,29 +95,28 @@ def test_cancellation_failure_never_blocks_terminal_transition(
             else RuntimeError("calendar delete blew up")
         )
 
-        # A Candidate already scheduled, carrying the stored event id the failed
-        # cancellation must target.
-        candidate = make_candidate(
-            status=CandidateStatus.INTERVIEW_SCHEDULED,
+        # A Candidate already scheduled, whose Interview carries the stored event
+        # id the failed cancellation must target.
+        candidate = make_candidate(status=CandidateStatus.INTERVIEW_SCHEDULED)
+        booked = make_interview(
+            candidate_id=candidate.id,
             calendar_event_id=STORED_EVENT_ID,
         )
 
         # Script the single delete_event call to fail.
         calendar = FakeCalendarPort(delete_outcomes=[failure])
-        harness = build_calendar_harness(candidates=[candidate], calendar=calendar)
+        harness = build_calendar_harness(
+            candidates=[candidate], interviews=[booked], calendar=calendar
+        )
 
         commits_before = harness.session.commit_count
 
-        # The terminal action writes audits on both the success path
-        # (candidate_rejected/archived) and the failure path
-        # (interview_cancel_failed); the spy records them without touching the
-        # fake session's unsupported add/flush.
-        with patch.object(candidate_service, "log_audit", harness.audit_sink):
+        with harness.audit_patch():
             # The action must NOT raise despite the cancel failure (R8.4/R8.5).
             if action == "reject":
-                returned = await harness.service.reject_candidate(candidate.id)
+                returned = await harness.lifecycle.reject_candidate(candidate.id)
             else:
-                returned = await harness.service.archive_candidate(candidate.id)
+                returned = await harness.lifecycle.archive_candidate(candidate.id)
 
         terminal_status = _TERMINAL_STATUS[action]
 

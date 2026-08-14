@@ -29,6 +29,7 @@ from src.modules.recruitment.application.interview_scheduler_service import Cale
 from src.modules.recruitment.domain.enums import CandidateStatus
 from src.modules.recruitment.domain.exceptions import (
     CalendarEventCreateFailedError,
+    CalendarGrantMissingError,
     InterviewerMissingEmailError,
     InterviewerNotFoundError,
 )
@@ -180,11 +181,14 @@ class TestGrantAndTokenSeams:
         valid = build_calendar_harness(candidates=[make_candidate()])
         await valid.service._ensure_org_connection_active()  # no raise
 
-        # When connection_repo is not set, it must raise.
+        # When connection_repo is not set, it must refuse and name the
+        # misconfiguration. The refusal is a domain CalendarGrantMissingError
+        # (403 / CALENDAR_GRANT_MISSING) rather than a bare RuntimeError, so the
+        # API layer renders a re-consent response instead of a 500.
         no_repo = build_calendar_harness(candidates=[make_candidate()], connection_repo=None)
         if hasattr(no_repo.service, "_connection_repo"):
             no_repo.service._connection_repo = None
-        with pytest.raises(RuntimeError, match="not configured"):
+        with pytest.raises(CalendarGrantMissingError, match="not configured"):
             await no_repo.service._ensure_org_connection_active()
 
     async def test_connection_repo_active_grant_passes(self) -> None:

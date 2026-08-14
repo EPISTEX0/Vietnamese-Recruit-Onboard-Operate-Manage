@@ -166,8 +166,12 @@ def test_request_field_validation(
                 )
 
                 # Accepted: the Candidate is scheduled and an event was created.
+                # The event reference is persisted on the Interview row the
+                # schedule creates, not on the Candidate.
                 assert result.status == CandidateStatus.INTERVIEW_SCHEDULED
-                assert result.calendar_event_id is not None
+                interview = await harness.scheduled_interview(candidate.id)
+                assert interview is not None
+                assert interview.calendar_event_id is not None
                 assert harness.calendar.was_called is True
                 assert len(harness.calendar.create_calls) == 1
             else:
@@ -186,8 +190,9 @@ def test_request_field_validation(
                 live = await harness.candidate_repo.get_by_id(candidate.id)
                 assert live is not None
                 assert live.status == status
-                assert live.calendar_event_id is None
-                assert live.interview_start_at is None
-                assert live.interview_timezone is None
+                # No event reference, scheduled start, or applied timezone was
+                # stored: all three live on the Interview row a successful
+                # schedule creates, and no such row exists.
+                assert await harness.interviews_for(candidate.id) == []
 
     asyncio.run(_run())

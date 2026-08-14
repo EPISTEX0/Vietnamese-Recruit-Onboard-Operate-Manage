@@ -201,18 +201,23 @@ def test_best_effort_sub_operations_never_fail_scheduling(
         assert harness.session.rollback_count == 0
         assert harness.session.commit_count >= 1
 
-        # The Candidate transitions to ``interview_scheduled`` and stores the
-        # returned event id (R5.3 / R6.2 / R6.3: schedule still completes).
+        # The Candidate transitions to ``interview_scheduled`` and the returned
+        # event id, start, and timezone are stored on the Interview the schedule
+        # creates (R5.3 / R6.2 / R6.3: schedule still completes).
         assert result.status == CandidateStatus.INTERVIEW_SCHEDULED
-        assert result.calendar_event_id == scripted_event.event_id
-        assert result.interview_start_at is not None
-        assert result.interview_timezone == timezone
+        interview = await harness.scheduled_interview(candidate.id)
+        assert interview is not None
+        assert interview.calendar_event_id == scripted_event.event_id
+        assert interview.start_at is not None
+        assert interview.timezone == timezone
 
-        # The persisted (committed) snapshot reflects the same successful outcome.
+        # The persisted (committed) snapshots reflect the same successful outcome.
         snapshot = harness.candidate_repo.committed_snapshot(candidate.id)
         assert snapshot is not None
         assert snapshot["status"] == CandidateStatus.INTERVIEW_SCHEDULED
-        assert snapshot["calendar_event_id"] == scripted_event.event_id
+        interview_snapshot = harness.committed_interview_snapshot(interview.id)
+        assert interview_snapshot is not None
+        assert interview_snapshot["calendar_event_id"] == scripted_event.event_id
 
         # A success audit entry is recorded for the schedule action.
         assert harness.audit_sink.entries_for("interview_scheduled")

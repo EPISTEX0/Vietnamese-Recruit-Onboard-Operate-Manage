@@ -4,10 +4,13 @@ For any sequence of valid schedule-then-reschedule operations on a Candidate,
 the stored ``calendar_event_id`` is always a single value equal to the most
 recently created or patched event and never accumulates more than one reference.
 
-Because ``calendar_event_id`` is a single scalar column on the existing
-``Candidate`` entity (not a collection, per R4.4 / R4.5), "single value" is
-*structural*: there is exactly one slot. This property pins down its behaviour
-across an operation sequence:
+Because ``calendar_event_id`` is a single scalar column on the ``Interview``
+entity (not a collection, per R4.4 / R4.5), "single value" is *structural*:
+there is exactly one slot. Since the calendar-scheduling refactor a Candidate
+can in principle carry more than one Interview row, so the test also asserts
+that scheduling-then-rescheduling leaves exactly *one* such row -- the reference
+must not accumulate at the row level either. This property pins down that
+behaviour across an operation sequence:
 
 * After ``schedule_interview`` the stored ``calendar_event_id`` is a single
   non-``None`` ``str`` equal to the event the Calendar adapter created (the fake
@@ -118,7 +121,9 @@ def test_single_calendar_event_id_invariant(
                 notes=None,
             )
 
-            persisted = await harness.candidate_repo.get_by_id(candidate.id)
+            # Exactly one Interview row exists, holding exactly one reference.
+            assert len(await harness.interviews_for(candidate.id)) == 1
+            persisted = await harness.scheduled_interview(candidate.id)
             assert persisted is not None
             event_id_after_schedule = persisted.calendar_event_id
             # A single non-``None`` scalar value: exactly one stored reference.
@@ -138,7 +143,10 @@ def test_single_calendar_event_id_invariant(
                     notes=None,
                 )
 
-                persisted = await harness.candidate_repo.get_by_id(candidate.id)
+                # Still exactly one Interview row: a reschedule patches in place
+                # rather than accumulating a second reference.
+                assert len(await harness.interviews_for(candidate.id)) == 1
+                persisted = await harness.scheduled_interview(candidate.id)
                 assert persisted is not None
                 # The stored reference is unchanged -- still the single original id.
                 assert persisted.calendar_event_id == event_id_after_schedule
@@ -154,7 +162,8 @@ def test_single_calendar_event_id_invariant(
         # End state: exactly one create call total and the stored
         # ``calendar_event_id`` is still that single original id -- it never
         # accumulated more than one reference.
-        final = await harness.candidate_repo.get_by_id(candidate.id)
+        assert len(await harness.interviews_for(candidate.id)) == 1
+        final = await harness.scheduled_interview(candidate.id)
         assert final is not None
         assert final.calendar_event_id == event_id_after_schedule
         assert len(harness.calendar.create_calls) == 1

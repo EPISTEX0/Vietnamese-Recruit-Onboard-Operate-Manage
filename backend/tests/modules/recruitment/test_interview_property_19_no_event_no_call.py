@@ -29,12 +29,10 @@ asserts:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.modules.recruitment.application import interview_scheduler_service as candidate_service
 from src.modules.recruitment.application.candidate_validators import VALID_TRANSITIONS
 from src.modules.recruitment.domain.enums import CandidateStatus
 from tests.modules.recruitment._interview_support import (
@@ -95,29 +93,24 @@ def test_reject_or_archive_without_event_makes_no_calendar_call(
     async def _run() -> None:
         # A Candidate with NO stored interview event, in a status that permits
         # the drawn action.
-        candidate = make_candidate(
-            status=status,
-            calendar_event_id=None,
-            interview_start_at=None,
-            interview_timezone=None,
-        )
+        candidate = make_candidate(status=status)
         harness = build_calendar_harness(candidates=[candidate])
+        # Precondition: nothing is booked on Calendar for this Candidate.
+        assert await harness.interviews_for(candidate.id) == []
 
-        # The transition writes its normal audit entry; the spy sink records it
-        # without touching the fake session's unsupported add/flush.
-        with patch.object(candidate_service, "log_audit", harness.audit_sink):
+        with harness.audit_patch():
             if action == "reject":
-                result = await harness.service.reject_candidate(candidate.id, reason=reason)
+                result = await harness.lifecycle.reject_candidate(candidate.id, reason=reason)
             else:
-                result = await harness.service.archive_candidate(candidate.id)
+                result = await harness.lifecycle.archive_candidate(candidate.id)
 
         # The status transition completed (R8.3).
         assert result.status == _TARGET_STATUS[action]
         persisted = await harness.candidate_repo.get_by_id(candidate.id)
         assert persisted is not None
         assert persisted.status == _TARGET_STATUS[action]
-        # The event reference stays absent throughout.
-        assert persisted.calendar_event_id is None
+        # No interview was conjured up along the way.
+        assert await harness.interviews_for(candidate.id) == []
 
         # R8.3: no Calendar call of any kind (create/patch/delete) was made.
         assert harness.calendar.was_called is False
