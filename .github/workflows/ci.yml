@@ -334,23 +334,31 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
-  # Frontend -- `pnpm build` is blocking (it is green today and type-checks the
-  # build graph). Lint, the standalone tsc pass, and the vitest suite are
-  # reporting-only.
+  # Frontend (blocking) -- every step fails the job.
   #
-  # `pnpm test` is reporting for now on purpose: the vitest suite was stood up in
-  # one go and has no history, so it has not yet earned the right to stop a
-  # merge. Promote it to blocking once it has been green across a run of real
-  # PRs -- the value of a blocking gate comes from its track record, not from the
-  # day it was added.
+  # eslint, the standalone tsc pass and the vitest suite were `continue-on-error`
+  # while they were being stood up. All three are green now (0 errors / 4
+  # warnings, 0 type errors, 55 tests passing), so they fail the job, the same
+  # promotion gates 4a and 4b already got on the backend. The second reason is
+  # the same one too: `continue-on-error` made `gh run view --json` report
+  # `success` for a step that exited 1, so CI state read as JSON was a lie.
+  #
+  # Consequence, as on gate 4a: the first red step skips the ones after it,
+  # `next build` included. That is the right trade -- the job exists to stop a
+  # merge, not to draw a full picture of the debt.
   # ---------------------------------------------------------------------------
   frontend:
-    # DO NOT rename. This exact string is a required status check on `main`
-    # (ruleset "main protection", id 16651838, alongside Gates 1/2/3/5). A rename
+    # The job name is a required status check context on `main` (ruleset
+    # "main protection", id 16651838, alongside Gates 1/2/3/5). Renaming it
     # retires the old context without ever reporting it again, and every open PR
-    # blocks forever waiting on a job that no longer exists. The step list below
-    # is free to grow; the job name is not.
-    name: Frontend - lint/typecheck (reporting) + build (blocking)
+    # blocks forever waiting on a job that no longer exists.
+    #
+    # It WAS renamed here -- from "Frontend - lint/typecheck (reporting) + build
+    # (blocking)", which stopped being true the moment the three steps below
+    # became blocking -- with the ruleset updated in the same breath. Do not
+    # change it again without doing both halves. The step list is free to grow;
+    # the job name is not.
+    name: Frontend - lint/typecheck/test/build (blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -363,13 +371,17 @@ jobs:
         with:
           version: 11
 
-      # `22` floats to the newest 22.x, which is what jsdom 30 needs
-      # (`engines: ^22.22.2 || ^24.15.0 || >=26.0.0`). Do not pin this down to an
-      # exact older 22.x — the vitest step is `continue-on-error`, so an engine
-      # mismatch would show up as a quietly red reporting check, not a failure.
+      # jsdom 30 requires `engines: ^22.22.2 || ^24.15.0 || >=26.0.0`. This was
+      # `22`, which floats to the newest 22.x and so satisfied that only by
+      # luck: any pin down to an older 22.x would have broken the vitest step.
+      # That was survivable while vitest was `continue-on-error` (it would have
+      # shown up as a quietly red reporting check); now that vitest blocks, it
+      # would be a hard CI failure. 24 floats well clear of jsdom's `^24.15.0`.
+      # Verified locally on 24.19.0: install, lint, tsc, vitest and next build
+      # all pass.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
@@ -377,24 +389,21 @@ jobs:
 
       - name: eslint
         id: eslint
-        continue-on-error: true
         run: pnpm run lint
 
       - name: tsc --noEmit
         id: tsc
-        continue-on-error: true
         run: pnpm exec tsc --noEmit
 
       - name: vitest
         id: vitest
-        continue-on-error: true
         run: pnpm test
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### Frontend lint/typecheck/test (reporting only)"
+            echo "### Frontend lint/typecheck/test"
             echo ""
             echo "| Check | Outcome |"
             echo "| --- | --- |"
@@ -403,7 +412,8 @@ jobs:
             echo "| \`pnpm test\` | ${{ steps.vitest.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Blocking: next.config.ts sets typescript.ignoreBuildErrors=false, so this
-      # type-checks everything reachable from the build graph as well.
+      # next.config.ts sets typescript.ignoreBuildErrors=false, so this
+      # type-checks everything reachable from the build graph as well. Kept last
+      # because it is the slowest step and the cheap ones above should fail first.
       - name: next build
         run: pnpm run build
