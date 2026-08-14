@@ -25,19 +25,45 @@ SRC_ROOT = Path(__file__).resolve().parent.parent
 """Filesystem root of the ``src`` package."""
 
 
-def _declares_sqlmodel_table(node: ast.stmt) -> bool:
+def _declares_sqlmodel_table(node: ast.ClassDef) -> bool:
     """Whether ``node`` is a ``class X(SQLModel, table=True)`` declaration."""
-    if not isinstance(node, ast.ClassDef):
-        return False
     return any(
         kw.arg == "table" and isinstance(kw.value, ast.Constant) and kw.value.value is True
         for kw in node.keywords
     )
 
 
+def _declared_tablename(node: ast.ClassDef) -> str | None:
+    """The literal ``__tablename__`` a class assigns, if it assigns one."""
+    for stmt in node.body:
+        targets = (
+            stmt.targets
+            if isinstance(stmt, ast.Assign)
+            else [stmt.target]
+            if isinstance(stmt, ast.AnnAssign)
+            else []
+        )
+        for target in targets:
+            if (
+                isinstance(target, ast.Name)
+                and target.id == "__tablename__"
+                and isinstance(stmt.value, ast.Constant)
+                and isinstance(stmt.value.value, str)
+            ):
+                return stmt.value.value
+    return None
+
+
 def _module_name(path: Path) -> str:
     relative = path.relative_to(SRC_ROOT).with_suffix("")
-    return ".".join(("src", *relative.parts))
+    parts = relative.parts
+    # ``pkg/__init__.py`` is the module ``src.pkg``. Importing it as
+    # ``src.pkg.__init__`` would give the same file two entries in
+    # ``sys.modules`` and re-execute its class bodies, which SQLAlchemy rejects
+    # with "Table … is already defined for this MetaData instance".
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(("src", *parts))
 
 
 @lru_cache(maxsize=1)
@@ -50,18 +76,40 @@ def discover_entity_modules() -> tuple[tuple[str, tuple[str, ...]], ...]:
     """
     found: list[tuple[str, tuple[str, ...]]] = []
     for path in sorted(SRC_ROOT.rglob("*.py")):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError:  # pragma: no cover - a broken source file fails elsewhere
-            continue
-        classes = tuple(
-            node.name  # type: ignore[union-attr]
-            for node in tree.body
-            if _declares_sqlmodel_table(node)
-        )
+        classes = tuple(node.name for node in _table_classes(path))
         if classes:
             found.append((_module_name(path), classes))
     return tuple(found)
+
+
+@lru_cache(maxsize=1)
+def discover_table_names() -> frozenset[str]:
+    """Every ``__tablename__`` literal declared by a table class under ``src``.
+
+    Read straight out of the source text, so it stays an independent statement
+    of what the schema should contain rather than a restatement of whatever
+    :func:`import_all_entity_modules` managed to import.
+    """
+    names: set[str] = set()
+    for path in SRC_ROOT.rglob("*.py"):
+        for node in _table_classes(path):
+            tablename = _declared_tablename(node)
+            if tablename is not None:
+                names.add(tablename)
+    return frozenset(names)
+
+
+def _table_classes(path: Path) -> list[ast.ClassDef]:
+    """Every table-mapped class declared in ``path``, nested ones included."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError:  # pragma: no cover - a broken source file fails elsewhere
+        return []
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and _declares_sqlmodel_table(node)
+    ]
 
 
 def import_all_entity_modules() -> tuple[str, ...]:

@@ -21,8 +21,13 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 # Runs in a subprocess: exec the model-import section of ``alembic/env.py``
-# exactly as alembic would, snapshot the metadata, then import everything the
-# source tree actually declares and report what appeared late.
+# exactly as alembic would, then report what alembic ended up seeing.
+#
+# The expected set is *not* taken from ``import_all_entity_modules()``. Both
+# sides coming from the same importer would make the comparison vacuous — it
+# would only notice env.py dropping the call, not the discovery itself missing
+# a model. ``discover_table_names()`` reads ``__tablename__`` literals out of
+# the source text instead, which is an independent statement of the answer.
 PROBE = """
 import json, sys
 from pathlib import Path
@@ -37,19 +42,18 @@ namespace = {}
 exec(compile(env_source[start:end], "env_imports", "exec"), namespace)
 SQLModel = namespace["SQLModel"]
 
-seen_by_alembic = set(SQLModel.metadata.tables)
+from src.shared.model_registry import discover_entity_modules, discover_table_names
 
-from src.shared.model_registry import import_all_entity_modules
-
-import_all_entity_modules()
-declared_in_src = set(SQLModel.metadata.tables)
-
-print(json.dumps(sorted(declared_in_src - seen_by_alembic)))
+print(json.dumps({
+    "seen_by_alembic": sorted(SQLModel.metadata.tables),
+    "declared_in_source": sorted(discover_table_names()),
+    "modules_with_tables": sorted(m for m, _ in discover_entity_modules()),
+    "modules_imported": sorted(m for m, _ in discover_entity_modules() if m in sys.modules),
+}))
 """
 
 
-def test_alembic_env_imports_every_table_in_src() -> None:
-    """Every ``table=True`` class in ``src`` is registered by ``alembic/env.py``."""
+def _probe() -> dict[str, list[str]]:
     result = subprocess.run(
         [sys.executable, "-c", PROBE, str(BACKEND_ROOT)],
         capture_output=True,
@@ -58,9 +62,27 @@ def test_alembic_env_imports_every_table_in_src() -> None:
         check=False,
     )
     assert result.returncode == 0, f"probe failed:\n{result.stderr}"
+    return json.loads(result.stdout.strip().splitlines()[-1])
 
-    missing = json.loads(result.stdout.strip().splitlines()[-1])
+
+def test_alembic_env_registers_every_table_declared_in_src() -> None:
+    """Every ``__tablename__`` in ``src`` reaches the metadata alembic compares."""
+    probe = _probe()
+    missing = sorted(set(probe["declared_in_source"]) - set(probe["seen_by_alembic"]))
     assert missing == [], (
         "alembic/env.py does not register these tables, so autogenerate would "
         f"emit drop_table() for them: {missing}"
     )
+
+
+def test_alembic_env_imports_every_module_declaring_a_table() -> None:
+    """The module-level view of the same invariant.
+
+    Catches a module whose tables happen to be registered by some other import
+    chain, which would leave the table-name check green while the entity module
+    itself is still absent from what ``env.py`` deliberately loads.
+    """
+    probe = _probe()
+    assert probe["modules_with_tables"], "table discovery found nothing at all"
+    unimported = sorted(set(probe["modules_with_tables"]) - set(probe["modules_imported"]))
+    assert unimported == [], f"alembic/env.py never imports these entity modules: {unimported}"
