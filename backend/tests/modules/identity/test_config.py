@@ -21,7 +21,7 @@ def clean_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drop every ``AUTH_*`` var inherited from the process env.
 
     ``src/main.py`` calls ``load_dotenv()`` at import time, so any test that
-    imports it -- directly or transitively -- dumps all of ``backend/.env``
+    imports it -- directly or transitively -- dumps all of the repo-root ``.env``
     into ``os.environ`` for the rest of the session. ``AuthSettings`` declares
     ``env_prefix="AUTH_"`` with no ``env_file``, so it reads that process env
     and an inherited value silently wins over the default under assertion.

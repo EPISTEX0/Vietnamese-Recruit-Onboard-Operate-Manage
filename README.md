@@ -78,11 +78,17 @@ Vroom HR goes beyond traditional HRM software by embedding **AI automation and a
 git clone git@github.com:EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage.git
 cd Vietnamese-Recruit-Onboard-Operate-Manage
 
+# Create the one .env this project uses, at the repo root. Required, and required
+# *first*: docker-compose.yml declares `env_file: - .env` for the backend and the
+# three workers, and Compose refuses to load the project at all when it is missing
+# — even for `up postgres redis`. Running the backend on the host reads this same file.
+cp .env.example .env
+
 # Start core infrastructure (PostgreSQL+pgvector, Redis)
 docker compose up -d postgres redis
 
 # Optional — full RAG stack (embedding service + MinIO object storage):
-# cp .env.example .env   # then set EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY
+# set EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY in .env, then:
 # docker compose up -d
 ```
 
@@ -95,11 +101,12 @@ docker compose up -d postgres redis
 ### 2. Backend
 
 ```bash
-cd backend
-cp .env.example .env
-# Edit .env — set at minimum AUTH_JWT_SECRET_KEY, AUTH_OAUTH_TOKEN_ENCRYPTION_KEY,
-# and your Google OAuth credentials if using Gmail integration.
+# No .env is created here. Edit the root .env from step 1 — set at minimum
+# AUTH_JWT_SECRET_KEY and AUTH_OAUTH_TOKEN_ENCRYPTION_KEY, plus your Google OAuth
+# credentials if you use the Gmail integration. Do not create backend/.env: it
+# would shadow the root .env entirely rather than adding to it.
 
+cd backend
 uv sync
 uv run alembic upgrade head          # apply database migrations
 
@@ -139,7 +146,13 @@ pnpm dev                             # http://localhost:3000
 
 ## Environment Variables
 
-### Backend (`backend/.env`)
+> There is **one** backend-side env file: **`.env` at the repo root**, created with
+> `cp .env.example .env`. The next two tables are two views of that same file, split by
+> concern — they are not two files. Do not create `backend/.env`: python-dotenv stops at
+> the first `.env` it finds walking upward, so that file would shadow the root one
+> entirely rather than adding to it.
+
+### Backend application settings (in the root `.env`)
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -155,7 +168,7 @@ pnpm dev                             # http://localhost:3000
 | `ASSISTANT_LLM_BASE_URL` / `ASSISTANT_LLM_MODEL` | LLM for the AI assistants | OpenAI-compatible endpoint |
 | `KB_MINIO_BUCKET` / `KB_EMBEDDING_SERVICE_URL` / `KB_DATABASE_URL` | Knowledge Base storage, embedding & DB | `knowledge-base` / `http://localhost:8080` |
 
-### Infrastructure & Docker Compose (`.env` at root)
+### Infrastructure & Docker Compose (in the same root `.env`)
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -176,7 +189,7 @@ pnpm dev                             # http://localhost:3000
 | `NEXT_PUBLIC_API_URL` | Backend (FastAPI) base URL for all API calls | `http://localhost:8000` |
 | `NEXT_PUBLIC_APP_URL` | Public URL where the frontend is hosted | `http://localhost:3000` |
 
-> See `backend/.env.example` for the complete set of module-prefixed settings (`AUTH_`, `GMAIL_`, `EMPLOYEE_`, `RECRUITMENT_`, `ASSISTANT_LLM_`, `KB_`) and their defaults.
+> `backend/.env.example` is the reference catalogue — look up the complete set of module-prefixed settings (`AUTH_`, `GMAIL_`, `EMPLOYEE_`, `RECRUITMENT_`, `ASSISTANT_LLM_`, `KB_`) and their defaults there, then write the ones you need into the root `.env`. It is not a file to copy.
 
 ---
 

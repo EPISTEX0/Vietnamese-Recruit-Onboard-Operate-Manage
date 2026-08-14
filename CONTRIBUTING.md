@@ -56,6 +56,15 @@ By participating in this project you agree to abide by our [Code of Conduct](./C
 
 ### Infrastructure (Docker)
 
+First create the project's single `.env`, at the **repo root**. `docker-compose.yml`
+declares `env_file: - .env` for the backend and the three workers, and Compose refuses
+to load the project without it — even when you only bring up `postgres redis minio`. So
+this comes before any `docker compose` command:
+
+```bash
+cp .env.example .env
+```
+
 Start the backing services:
 
 ```bash
@@ -86,12 +95,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 ### Backend (Python / uv)
 
-```bash
-cd backend
+The backend reads the root `.env` you created above. There is no `backend/.env`, and
+creating one would shadow the root file entirely rather than adding to it — python-dotenv
+stops at the first `.env` it finds walking upward.
 
-# Create .env from the template
-cp .env.example .env
-# ...edit .env with your local settings...
+```bash
+# ...edit the root .env with your local settings...
+
+cd backend
 
 # Install dependencies and sync environment
 uv sync

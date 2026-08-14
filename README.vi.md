@@ -78,11 +78,17 @@ Vroom HR vượt xa phần mềm HRM truyền thống bằng cách tích hợp *
 git clone git@github.com:EPISTEX0/Vietnamese-Recruit-Onboard-Operate-Manage.git
 cd Vietnamese-Recruit-Onboard-Operate-Manage
 
+# Tạo file .env duy nhất của dự án, ở gốc repo. Bắt buộc, và bắt buộc phải làm
+# TRƯỚC: docker-compose.yml khai `env_file: - .env` cho backend và ba worker, nên
+# thiếu file này thì Compose từ chối load cả project — kể cả khi chỉ chạy
+# `up postgres redis`. Chạy backend trực tiếp trên host cũng đọc đúng file này.
+cp .env.example .env
+
 # Khởi động hạ tầng lõi (PostgreSQL+pgvector, Redis)
 docker compose up -d postgres redis
 
 # Tùy chọn — full RAG stack (dịch vụ embedding + object storage MinIO):
-# cp .env.example .env   # rồi đặt EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY
+# đặt EMBEDDING_API_BASE_URL / EMBEDDING_API_KEY trong .env, rồi:
 # docker compose up -d
 ```
 
@@ -96,11 +102,12 @@ docker compose up -d postgres redis
 ### 2. Backend
 
 ```bash
-cd backend
-cp .env.example .env
-# Edit .env — set at minimum AUTH_JWT_SECRET_KEY, AUTH_OAUTH_TOKEN_ENCRYPTION_KEY,
-# và Google OAuth credentials nếu dùng tích hợp Gmail.
+# Không tạo .env nào ở đây. Sửa file .env ở gốc đã tạo ở bước 1 — đặt tối thiểu
+# AUTH_JWT_SECRET_KEY và AUTH_OAUTH_TOKEN_ENCRYPTION_KEY, cộng Google OAuth
+# credentials nếu dùng tích hợp Gmail. Đừng tạo backend/.env: nó sẽ che hoàn toàn
+# .env ở gốc chứ không bổ sung vào đó.
 
+cd backend
 uv sync
 uv run alembic upgrade head          # apply database migrations
 
@@ -140,7 +147,13 @@ pnpm dev                             # http://localhost:3000
 
 ## Biến môi trường
 
-### Backend (`backend/.env`)
+> Backend chỉ có **một** file env: **`.env` ở thư mục gốc repo**, tạo bằng
+> `cp .env.example .env`. Hai bảng dưới đây là hai góc nhìn của cùng file đó, chia theo
+> mối quan tâm — không phải hai file. Đừng tạo `backend/.env`: python-dotenv dừng ở file
+> `.env` đầu tiên tìm thấy khi đi ngược lên, nên file đó sẽ che hoàn toàn `.env` ở gốc
+> chứ không bổ sung vào nó.
+
+### Cấu hình ứng dụng Backend (trong `.env` ở gốc)
 
 | Biến | Mô tả | Mặc định |
 | --- | --- | --- |
@@ -156,7 +169,7 @@ pnpm dev                             # http://localhost:3000
 | `ASSISTANT_LLM_BASE_URL` / `ASSISTANT_LLM_MODEL` | LLM cho AI Assistant | Endpoint tương thích OpenAI |
 | `KB_MINIO_BUCKET` / `KB_EMBEDDING_SERVICE_URL` / `KB_DATABASE_URL` | Storage, embedding & DB cho Knowledge Base | `knowledge-base` / `http://localhost:8080` |
 
-### Hạ tầng & Docker Compose (`.env` ở root)
+### Hạ tầng & Docker Compose (cũng trong `.env` ở gốc)
 
 | Biến | Mô tả | Mặc định |
 | --- | --- | --- |
@@ -177,7 +190,7 @@ pnpm dev                             # http://localhost:3000
 | `NEXT_PUBLIC_API_URL` | Base URL backend (FastAPI) cho mọi API call | `http://localhost:8000` |
 | `NEXT_PUBLIC_APP_URL` | URL công khai nơi frontend được host | `http://localhost:3000` |
 
-> Xem `backend/.env.example` để có đầy đủ các setting theo tiền tố module (`AUTH_`, `GMAIL_`, `EMPLOYEE_`, `RECRUITMENT_`, `ASSISTANT_LLM_`, `KB_`) và giá trị mặc định.
+> `backend/.env.example` là catalogue tra cứu — xem ở đó để có đầy đủ các setting theo tiền tố module (`AUTH_`, `GMAIL_`, `EMPLOYEE_`, `RECRUITMENT_`, `ASSISTANT_LLM_`, `KB_`) và giá trị mặc định, rồi ghi những key bạn cần vào `.env` ở gốc. Đây không phải file để copy.
 
 ---
 
