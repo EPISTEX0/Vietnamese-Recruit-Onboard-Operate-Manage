@@ -177,8 +177,12 @@ async def get_candidate_lifecycle_service(
 ) -> CandidateLifecycleService:
     """Provide a CandidateLifecycleService instance with all dependencies.
 
-    Wires lifecycle-only dependencies: repositories, MinIO, event publisher.
-    Does NOT include Calendar, Gmail, or crypto dependencies.
+    Wires lifecycle dependencies: repositories, MinIO, event publisher, and the
+    interview-cancellation seam. The lifecycle service takes no Calendar, Gmail,
+    or crypto dependency of its own -- rejecting or archiving a Candidate must
+    call off their booked interview (R8), and that Calendar work is delegated
+    whole to :class:`InterviewSchedulerService` through the one-method
+    ``InterviewCanceller`` protocol.
 
     Args:
         session: The async database session from DI.
@@ -200,6 +204,7 @@ async def get_candidate_lifecycle_service(
         event_publisher=get_event_publisher(),
         session=session,
         user_id=current_user.id,
+        interview_canceller=await get_interview_scheduler_service(session, current_user),
     )
 
 

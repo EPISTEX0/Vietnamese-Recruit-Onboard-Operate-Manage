@@ -13,10 +13,11 @@ Requirements: ADR-0008, 6.5, 7.1, 7.3, 7.4, 7.5, 8.1-8.6, 9.1, 9.3, 9.5,
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +44,11 @@ from src.modules.recruitment.domain.exceptions import (
     InterviewerNotFoundError,
     NoInterviewToRescheduleError,
 )
-from src.modules.recruitment.domain.value_objects import CalendarEvent, CalendarEventSpec
+from src.modules.recruitment.domain.value_objects import (
+    CalendarEvent,
+    CalendarEventSpec,
+    MeetingMode,
+)
 from src.modules.recruitment.infrastructure.audit_repository import log_audit
 from src.modules.recruitment.infrastructure.repositories import (
     CandidateRepository,
@@ -59,6 +64,15 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+# Participant email shape: exactly one ``@`` with non-empty local and domain
+# parts. Deliberately permissive -- Google is the real authority on
+# deliverability; this only rejects input that could never be an address.
+_PARTICIPANT_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+$")
+
+# Upper bound on interviewers and on external participants for one interview,
+# mirroring the ``max_length=20`` the API schema puts on both lists.
+_MAX_INTERVIEW_PARTICIPANTS = 20
 
 # Return type for adapter calls executed through ``_with_org_token``.
 _CalendarResultT = TypeVar("_CalendarResultT")
@@ -340,7 +354,6 @@ class InterviewSchedulerService:
             raise RuntimeError("Calendar port is not configured")
         if self._user_id is None:
             raise RuntimeError("Acting HR user id is not configured")
-        calendar_port = self._calendar_port
 
         # Step 1: load the candidate and find the existing interview.
         candidate = await self._get_candidate_or_raise(candidate_id)
@@ -383,14 +396,16 @@ class InterviewSchedulerService:
             request_meet_link=False,  # Preserve existing Meet link (R11.1-R11.2)
         )
 
-        # Step 5: patch the EXACT existing event (R7.1).
+        # Step 5: patch the EXACT existing event (R7.1). The patch is conditional
+        # on the etag we last stored, so an event somebody edited on Google in
+        # the meantime surfaces as a 412 conflict instead of being overwritten.
         previous_start = interview.start_at
         result_event = await self._patch_calendar_event(
             user_id=self._user_id,
             candidate_id=candidate_id,
-            calendar_port=calendar_port,
             event_id=event_id,
             spec=spec,
+            if_match=interview.calendar_etag,
         )
 
         # Step 6: on success, update the Interview record.
@@ -432,6 +447,11 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without a commit the
+        # entry is discarded when the session closes, leaving a successful action
+        # with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
         return candidate
 
@@ -510,8 +530,140 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without a commit the
+        # entry is discarded when the session closes, leaving a successful action
+        # with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
         return interview
+
+    # ─── Cancel on terminal candidate transition (R8) ──────────────────
+
+    async def cancel_interview_for_candidate(self, candidate_id: UUID, *, trigger: str) -> None:
+        """Best-effort cancellation of a Candidate's interview Calendar event.
+
+        Invoked by :class:`CandidateLifecycleService` **after** a terminal
+        transition (reject/archive) has already committed, so this method never
+        raises: a Calendar failure must not undo a committed transition
+        (R8.4, R8.5). Behaviour:
+
+        * With no Calendar wiring (``calendar_port`` or the acting ``user_id``
+          absent), do nothing -- callers constructed without Calendar
+          dependencies keep their transition-only behaviour.
+        * With no scheduled Interview, or none that holds a
+          ``calendar_event_id``, make no Calendar call at all (R8.3).
+        * Otherwise, for EVERY scheduled Interview the Candidate holds, delete
+          the EXACT stored event, mark that Interview ``cancelled``, and write an
+          ``interview_event_cancelled`` audit entry naming the acting HR user,
+          the Candidate, the cancelled ``calendar_event_id``, and the trigger
+          (R12.3). On any failure, swallow the error and write an
+          ``interview_cancel_failed`` entry (``success=False``) carrying the same
+          identifiers (R8.6). A Candidate can hold more than one scheduled round;
+          cancelling only the most recent would leave the earlier one live.
+
+        Each delete targets the calendar the event was actually booked on
+        (``interview.calendar_id``), not whichever calendar the Organization has
+        selected today -- re-selecting a calendar must not strand old events,
+        and the adapter treats the resulting 404 as an idempotent success, so
+        the mistake would be silent.
+
+        The delete is deliberately unconditional (no ``If-Match``): the point is
+        that the meeting stops existing. A conditional delete would answer 412
+        for an event somebody merely edited, leaving a rejected candidate
+        holding a live invitation.
+
+        Args:
+            candidate_id: The Candidate whose interview events should be cancelled.
+            trigger: The terminal action that triggered the cancellation
+                (``"reject"`` or ``"archive"``).
+        """
+        if self._calendar_port is None or self._user_id is None:
+            return
+
+        interviews = await self._interview_repo.find_by_candidate_id(candidate_id)
+        for interview in [iv for iv in interviews if iv.status == "scheduled"]:
+            event_id = interview.calendar_event_id
+            if event_id is None:
+                # Nothing booked on Calendar for this round (R8.3).
+                continue
+            await self._cancel_one_interview_event(
+                interview, event_id=event_id, candidate_id=candidate_id, trigger=trigger
+            )
+
+    async def _cancel_one_interview_event(
+        self,
+        interview: Interview,
+        *,
+        event_id: str,
+        candidate_id: UUID,
+        trigger: str,
+    ) -> None:
+        """Delete one booked event and audit the outcome; never raises."""
+        try:
+            calendar_id = interview.calendar_id or await self._resolve_org_calendar_id()
+            await self._delete_calendar_event(event_id, calendar_id)
+        except Exception as exc:  # noqa: BLE001 - cancellation is best-effort
+            logger.warning(
+                "Calendar event cancellation failed for candidate %s (event %s) on %s: %s",
+                candidate_id,
+                event_id,
+                trigger,
+                exc,
+            )
+            await self._mark_interview_cancelled(interview)
+            await log_audit(
+                session=self._session,
+                operation_type="interview_cancel_failed",
+                entity_type="candidate",
+                entity_id=candidate_id,
+                user_id=self._user_id,
+                new_value={
+                    "attempted_action": f"{trigger}_cancel_interview",
+                    "candidate_id": str(candidate_id),
+                    "calendar_event_id": event_id,
+                    "trigger": trigger,
+                    "success": False,
+                    "error": str(exc),
+                },
+                change_summary=(f"Interview cancellation failed on {trigger}; event {event_id}"),
+                success=False,
+            )
+            if self._session is not None:
+                await self._session.commit()
+            return
+
+        await self._mark_interview_cancelled(interview)
+        await log_audit(
+            session=self._session,
+            operation_type="interview_event_cancelled",
+            entity_type="candidate",
+            entity_id=candidate_id,
+            user_id=self._user_id,
+            new_value={
+                "candidate_id": str(candidate_id),
+                "calendar_event_id": event_id,
+                "trigger": trigger,
+            },
+            change_summary=(f"Interview event {event_id} cancelled on {trigger}"),
+            success=True,
+        )
+        if self._session is not None:
+            await self._session.commit()
+
+    async def _mark_interview_cancelled(self, interview: Interview) -> None:
+        """Record the Interview as cancelled on our side and commit.
+
+        Runs on both the success and failure paths of
+        :meth:`cancel_interview_for_candidate`: once the Candidate is rejected or
+        archived the interview is over in our system regardless of whether Google
+        accepted the delete, and leaving it ``scheduled`` would keep it in the
+        upcoming-interviews view.
+        """
+        interview.status = "cancelled"
+        if self._session is not None:
+            self._session.add(interview)
+            await self._session.commit()
 
     # ─── Complete interview ───────────────────────────────────────────
 
@@ -551,6 +703,11 @@ class InterviewSchedulerService:
             change_summary="Interview completed",
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without a commit the
+        # entry is discarded when the session closes, leaving a successful action
+        # with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
         return interview
 
@@ -564,9 +721,9 @@ class InterviewSchedulerService:
         start: datetime,
         end: datetime,
         timezone: str,
-        mode: str = "online",
+        mode: str = MeetingMode.GOOGLE_MEET,
         meeting_link: str | None = None,
-        interviewer_ids: list[UUID],
+        interviewer_ids: list[UUID] | None = None,
         external_participant_emails: list[str] | None = None,
         notes: str | None = None,
     ) -> Interview:
@@ -579,12 +736,14 @@ class InterviewSchedulerService:
         Args:
             candidate_id: UUID of the candidate.
             round_name: Name/round of the interview (e.g. "Technical Round 1").
-            start: Interview start datetime.
-            end: Interview end datetime.
+            start: Interview start datetime (must be timezone-aware).
+            end: Interview end datetime (must be timezone-aware, after ``start``).
             timezone: IANA timezone string.
-            mode: Meeting mode ("online" or "offline").
-            meeting_link: Optional external meeting link.
-            interviewer_ids: UUIDs of interviewer Employees.
+            mode: Meeting mode -- one of :class:`MeetingMode`
+                (``google_meet``, ``in_person``, ``custom_link``).
+            meeting_link: External meeting link; required when ``mode`` is
+                ``custom_link``.
+            interviewer_ids: UUIDs of interviewer Employees (defaults to none).
             external_participant_emails: Optional external participant emails.
             notes: Optional notes.
 
@@ -592,7 +751,12 @@ class InterviewSchedulerService:
             The created Interview record.
 
         Raises:
+            ValueError: If a request field violates its bounds.
             CandidateNotFoundError: If the candidate doesn't exist.
+            InterviewerNotFoundError: If any interviewer id has no Employee.
+            InterviewerMissingEmailError: If a matched interviewer has no email.
+            CalendarGrantMissingError: If the Organization Google Connection is
+                missing or invalid.
             CalendarEventCreateFailedError: If Calendar event creation fails.
         """
         if self._calendar_port is None:
@@ -601,10 +765,57 @@ class InterviewSchedulerService:
             raise RuntimeError("Acting HR user id is not configured")
         calendar_port = self._calendar_port
 
+        # Step 1: validate the request fields. These run before the Candidate is
+        # loaded and long before any Calendar call, so a bad request never
+        # reaches Google. The API layer validates the same bounds on
+        # ``CreateInterviewRequest``, but this method is also called directly
+        # (assistant tooling, tests), so the service enforces them itself.
+        round_name = round_name.strip()
+        if not round_name:
+            raise ValueError("round_name must not be empty")
+        if start.tzinfo is None or start.utcoffset() is None:
+            raise ValueError("start must be timezone-aware")
+        if end.tzinfo is None or end.utcoffset() is None:
+            raise ValueError("end must be timezone-aware")
+        if end <= start:
+            raise ValueError("end must be strictly after start")
+        timezone = timezone.strip()
+        if not timezone:
+            raise ValueError("timezone must not be empty")
+        try:
+            tz = ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            # ZoneInfoNotFoundError is a KeyError, which the API layer's
+            # ValueError -> 422 mapping does not catch; left unhandled a typo
+            # like "GMT+7" would surface as a 500.
+            raise ValueError(f"timezone is not a known IANA timezone: {timezone!r}") from exc
+        # The mode vocabulary is owned by MeetingMode; reading it from the enum
+        # keeps this check from drifting away from the API contract the way a
+        # hard-coded set literal previously did.
+        valid_modes = {m.value for m in MeetingMode}
+        if mode not in valid_modes:
+            raise ValueError(f"mode must be one of {sorted(valid_modes)}, got {mode!r}")
+        if mode == MeetingMode.CUSTOM_LINK and not meeting_link:
+            raise ValueError("meeting_link is required when mode is custom_link")
+        if notes is not None and len(notes) > 1000:
+            raise ValueError("notes must be at most 1000 characters")
+
+        resolved_interviewer_ids = list(interviewer_ids or [])
+        resolved_external_emails = [e.strip() for e in (external_participant_emails or [])]
+        if len(resolved_interviewer_ids) > _MAX_INTERVIEW_PARTICIPANTS:
+            raise ValueError(f"interviewer_ids must not exceed {_MAX_INTERVIEW_PARTICIPANTS}")
+        if len(resolved_external_emails) > _MAX_INTERVIEW_PARTICIPANTS:
+            raise ValueError(
+                f"external_participant_emails must not exceed {_MAX_INTERVIEW_PARTICIPANTS}"
+            )
+        for ext_email in resolved_external_emails:
+            if not _PARTICIPANT_EMAIL_PATTERN.match(ext_email):
+                raise ValueError(f"Invalid external participant email: {ext_email!r}")
+
         candidate = await self._get_candidate_or_raise(candidate_id)
 
         # Resolve interviewers
-        resolved = await self._resolve_interviewers(interviewer_ids)
+        resolved = await self._resolve_interviewers(resolved_interviewer_ids)
         interviewer_emails = [email for _, email in resolved]
 
         # Ensure org connection
@@ -614,24 +825,31 @@ class InterviewSchedulerService:
         # Build attendee list
         attendee_emails: list[str] = [candidate.email] if candidate.email else []
         attendee_emails.extend(interviewer_emails)
-        if external_participant_emails:
-            attendee_emails.extend(external_participant_emails)
+        attendee_emails.extend(resolved_external_emails)
 
-        tz = ZoneInfo(timezone)
-        start_resolved = start.replace(tzinfo=tz) if start.tzinfo is None else start.astimezone(tz)
-        end_resolved = end.replace(tzinfo=tz) if end.tzinfo is None else end.astimezone(tz)
+        start_resolved = start.astimezone(tz)
+        end_resolved = end.astimezone(tz)
 
-        request_meet = mode == "online" and not meeting_link
+        # A Meet link is requested exactly for the google_meet mode. The other
+        # two modes carry their own venue: in_person has none, custom_link
+        # supplies its own URL, and minting a Google conference for either would
+        # hand attendees a second, wrong way to join.
+        request_meet = mode == MeetingMode.GOOGLE_MEET
+        # CalendarEventSpec has no ``location`` field, so a custom link travels
+        # in the description -- which is where the pre-refactor flow put it and
+        # what the adapter actually renders onto the event.
+        description = notes
+        if mode == MeetingMode.CUSTOM_LINK:
+            description = f"{notes or ''}\nMeeting link: {meeting_link}".strip()
         spec = CalendarEventSpec(
             summary=f"Interview: {round_name} - {candidate.name}",
-            description=notes,
+            description=description,
             start=start_resolved,
             end=end_resolved,
             timezone=timezone,
             calendar_id=calendar_id,
             attendee_emails=tuple(attendee_emails),
             request_meet_link=request_meet,
-            location=meeting_link,
         )
 
         event = await self._create_calendar_event(self._user_id, candidate_id, calendar_port, spec)
@@ -654,39 +872,44 @@ class InterviewSchedulerService:
         )
         interview = await self._interview_repo.create(interview)
 
-        # Add participants
-        # Candidate as participant
+        # Add participants. Every one starts at ``needsAction``: that is the
+        # RSVP state Google reports for a freshly invited attendee, and the sync
+        # job overwrites it from the event's attendee list. Leaving it NULL makes
+        # a brand-new invitation indistinguishable from one Google has no
+        # response for.
         cand_part = InterviewParticipant(
             interview_id=interview.id,
             type="candidate",
             email=candidate.email,
             name=candidate.name,
+            response_status="needsAction",
         )
         await self._interview_repo.add_participant(cand_part)
 
-        # Interviewer participants
-        for emp_id in interviewer_ids:
-            emp = await self._get_employee(emp_id)
-            if emp:
-                emp_part = InterviewParticipant(
-                    interview_id=interview.id,
-                    type="employee",
-                    email=emp.email,
-                    name=emp.full_name,
-                    employee_id=emp_id,
-                )
-                await self._interview_repo.add_participant(emp_part)
+        # Interviewer participants. ``_resolve_interviewers`` already matched
+        # every id to an Employee with a usable (stripped) email, so reuse its
+        # result rather than re-querying and re-reading the unstripped column.
+        for employee, employee_email in resolved:
+            emp_part = InterviewParticipant(
+                interview_id=interview.id,
+                type="employee",
+                email=employee_email,
+                name=employee.full_name,
+                employee_id=employee.id,
+                response_status="needsAction",
+            )
+            await self._interview_repo.add_participant(emp_part)
 
         # External participants
-        if external_participant_emails:
-            for ext_email in external_participant_emails:
-                ext_part = InterviewParticipant(
-                    interview_id=interview.id,
-                    type="external",
-                    email=ext_email,
-                    name=ext_email.split("@")[0],
-                )
-                await self._interview_repo.add_participant(ext_part)
+        for ext_email in resolved_external_emails:
+            ext_part = InterviewParticipant(
+                interview_id=interview.id,
+                type="external",
+                email=ext_email,
+                name=ext_email.split("@")[0],
+                response_status="needsAction",
+            )
+            await self._interview_repo.add_participant(ext_part)
 
         if self._session is not None:
             await self._session.commit()
@@ -708,6 +931,11 @@ class InterviewSchedulerService:
             change_summary=(f"Interview created: {round_name} for candidate {candidate.name}"),
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without this commit the
+        # interview_created entry is discarded when the session closes, leaving
+        # the interview with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
         return interview
 
@@ -790,6 +1018,11 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without a commit the
+        # entry is discarded when the session closes, leaving a successful action
+        # with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
         return new_interview
 
@@ -1138,29 +1371,36 @@ class InterviewSchedulerService:
         self,
         user_id: UUID,
         candidate_id: UUID,
-        calendar_port: Any,
         event_id: str,
         spec: CalendarEventSpec,
+        if_match: str | None = None,
     ) -> CalendarEvent:
         """Patch an existing Calendar event, rolling back on failure.
 
         Args:
             user_id: Acting user ID.
             candidate_id: Candidate ID for audit.
-            calendar_port: Calendar port instance.
             event_id: Google Calendar event ID to patch.
             spec: New event specification.
+            if_match: The etag the caller last saw for this event. Sending it
+                makes the write conditional, so Google answers 412 instead of
+                silently clobbering an event somebody else edited meanwhile.
 
         Returns:
             The patched CalendarEvent.
 
         Raises:
+            CalendarEventConflictError: If the conditional write lost a race (412).
             CalendarEventUpdateFailedError: If the patch fails.
             CalendarRelinkRequiredError: If the event was deleted externally (410).
         """
+        if self._calendar_port is None:
+            raise RuntimeError("Calendar port is not configured")
+        calendar_port = self._calendar_port
+
         try:
             return await self._with_org_token(
-                lambda token: calendar_port.patch_event(token, event_id, spec),
+                lambda token: calendar_port.patch_event(token, event_id, spec, if_match),
             )
 
         except httpx.HTTPStatusError as exc:
@@ -1174,7 +1414,11 @@ class InterviewSchedulerService:
                     }
                 ) from exc
             if status == 412:
-                # Conditional write failed — capture conflict
+                # The conditional write lost a race: capture the conflict for HR
+                # to resolve, then report it as a conflict (412 /
+                # CALENDAR_CONFLICT) rather than as an upstream failure -- the
+                # conflict router keys off this type to offer a resolution, and
+                # "Google is broken" would be the wrong story to tell the user.
                 await self._capture_calendar_conflict(
                     user_id=user_id,
                     candidate_id=candidate_id,
@@ -1183,11 +1427,15 @@ class InterviewSchedulerService:
                 )
                 if self._session is not None:
                     await self._session.rollback()
-                raise CalendarEventUpdateFailedError(
+                raise CalendarEventConflictError(
                     details={
                         "calendar_event_id": event_id,
-                        "reason": "If-Match conflict (412)",
+                        "remote_status": 412,
                         "conflict_captured": True,
+                        "message": (
+                            "The Google Calendar event changed; "
+                            "a conflict record has been created for resolution"
+                        ),
                     }
                 ) from exc
             raise
@@ -1203,6 +1451,7 @@ class InterviewSchedulerService:
                 user_id=user_id,
                 new_value={
                     "attempted_action": "reschedule_interview",
+                    "candidate_id": str(candidate_id),
                     "calendar_event_id": event_id,
                     "error": str(exc),
                 },
@@ -1399,22 +1648,29 @@ class InterviewSchedulerService:
         # Every unmatched id is collected before raising: R1.7 asks the client
         # for the full list, and InterviewerNotFoundError takes a Sequence[UUID]
         # -- handing it a formatted string makes list() shred it into characters.
+        # Blank emails are collected the same way rather than raised inline, so
+        # the not-found report is never pre-empted by a blank-email report from a
+        # later id: the client would fix one problem only to hit the other.
         resolved: list[tuple[Any, str]] = []
         unmatched: list[UUID] = []
+        blank_email: list[UUID] = []
         for emp_id in interviewer_ids:
             emp = await self._get_employee(emp_id)
             if emp is None:
                 unmatched.append(emp_id)
                 continue
-            if not emp.email:
-                raise InterviewerMissingEmailError(
-                    employee_id=emp_id,
-                    name=emp.full_name or "Unknown",
-                )
-            resolved.append((emp, emp.email))
+            # A whitespace-only address is as unusable as an empty one: Calendar
+            # rejects it as an attendee, so treat it as missing (R10).
+            email = (emp.email or "").strip()
+            if not email:
+                blank_email.append(emp_id)
+                continue
+            resolved.append((emp, email))
 
         if unmatched:
             raise InterviewerNotFoundError(unmatched)
+        if blank_email:
+            raise InterviewerMissingEmailError(blank_email[0])
         return resolved
 
     async def _get_employee(self, employee_id: UUID) -> Any | None:
@@ -1705,6 +1961,11 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
+        # ``log_audit`` only stages the row (add + flush); without a commit the
+        # entry is discarded when the session closes, leaving a successful action
+        # with no audit trail.
+        if self._session is not None:
+            await self._session.commit()
 
     # ─── Private: Calendar conflict capture ───────────────────────────
 

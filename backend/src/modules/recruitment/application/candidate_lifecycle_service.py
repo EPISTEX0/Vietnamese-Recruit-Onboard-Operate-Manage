@@ -58,6 +58,25 @@ class DomainEventPublisher(Protocol):
         ...
 
 
+@runtime_checkable
+class InterviewCanceller(Protocol):
+    """Protocol for cancelling a Candidate's booked interview (R8).
+
+    Rejecting or archiving a Candidate must also call off the interview that was
+    booked for them, otherwise the interviewers keep a meeting on their calendar
+    for someone who is out of the process. That cancellation is Calendar work,
+    owned by ``InterviewSchedulerService``; this protocol is the one-method
+    surface the lifecycle needs, so nothing about Google leaks in here.
+
+    Implementations are best-effort and must not raise: the terminal transition
+    has already committed by the time they are called (R8.4, R8.5).
+    """
+
+    async def cancel_interview_for_candidate(self, candidate_id: UUID, *, trigger: str) -> None:
+        """Cancel the Candidate's booked interview event, if there is one."""
+        ...
+
+
 @dataclass
 class CVDocumentDetail:
     """CV document metadata with an optional presigned download URL.
@@ -133,6 +152,9 @@ class CandidateLifecycleService:
         event_publisher: Optional domain event publisher.
         session: Async database session.
         user_id: Optional acting user UUID for audit attribution.
+        interview_canceller: Optional seam that calls off a Candidate's booked
+            interview when they are rejected or archived (R8). When omitted the
+            transitions still work, but no Calendar event is cancelled.
     """
 
     def __init__(
@@ -144,6 +166,7 @@ class CandidateLifecycleService:
         event_publisher: DomainEventPublisher | None = None,
         session: AsyncSession | None = None,
         user_id: UUID | None = None,
+        interview_canceller: InterviewCanceller | None = None,
     ) -> None:
         self._candidate_repo = candidate_repo
         self._cv_document_repo = cv_document_repo
@@ -152,6 +175,7 @@ class CandidateLifecycleService:
         self._event_publisher = event_publisher
         self._session = session
         self._user_id = user_id
+        self._interview_canceller = interview_canceller
 
     # ─── Create / Update (CandidateCreator protocol) ─────────────────────
 
@@ -365,6 +389,12 @@ class CandidateLifecycleService:
         Validates the transition, stores the rejection reason and
         rejected_at timestamp, and logs an audit entry.
 
+        When the Candidate has a booked interview, its Google Calendar event is
+        cancelled as a best-effort side-effect AFTER the transition has
+        committed, so a cancellation failure can never undo the rejection
+        (R8.1, R8.4, R8.6, R12.3). With no booked interview, no Calendar call is
+        made (R8.3).
+
         Args:
             candidate_id: UUID of the candidate to reject.
             reason: Optional rejection reason (max 1000 characters).
@@ -402,6 +432,9 @@ class CandidateLifecycleService:
             new_value={"status": CandidateStatus.REJECTED},
             change_summary=(f"Candidate rejected: {reason[:200] if reason else 'no reason'}"),
         )
+
+        # Best-effort, and only after the rejection is committed (R8.1, R8.4).
+        await self._cancel_booked_interview(candidate.id, trigger="reject")
 
         return candidate
 
@@ -482,6 +515,13 @@ class CandidateLifecycleService:
         Not allowed from accepted status. Idempotent for already-archived
         candidates (returns existing record without modification).
 
+        When the Candidate has a booked interview, its Google Calendar event is
+        cancelled as a best-effort side-effect AFTER the transition has
+        committed, so a cancellation failure can never undo the archive
+        (R8.2, R8.5, R8.6, R12.3). With no booked interview, no Calendar call is
+        made (R8.3). The idempotent already-archived path cancels nothing -- it
+        changed no state, and the first archive already cancelled the event.
+
         Args:
             candidate_id: UUID of the candidate to archive.
 
@@ -523,7 +563,36 @@ class CandidateLifecycleService:
             change_summary=f"Candidate archived from status '{previous_status}'",
         )
 
+        # Best-effort, and only after the archive is committed (R8.2, R8.5).
+        await self._cancel_booked_interview(candidate.id, trigger="archive")
+
         return candidate
+
+    async def _cancel_booked_interview(self, candidate_id: UUID, *, trigger: str) -> None:
+        """Call off the Candidate's booked interview after a terminal transition.
+
+        Delegates to the :class:`InterviewCanceller` seam when one is wired.
+        Swallows anything it raises: the reject/archive has already committed, so
+        a Calendar problem must not surface as a failed transition (R8.4, R8.5).
+
+        Args:
+            candidate_id: The Candidate that just reached a terminal status.
+            trigger: ``"reject"`` or ``"archive"``.
+        """
+        if self._interview_canceller is None:
+            return
+        try:
+            await self._interview_canceller.cancel_interview_for_candidate(
+                candidate_id, trigger=trigger
+            )
+        except Exception:  # noqa: BLE001 - cancellation must never undo the transition
+            logger.warning(
+                "Interview cancellation raised on %s of candidate %s; "
+                "the terminal transition stands",
+                trigger,
+                candidate_id,
+                exc_info=True,
+            )
 
     # ─── Job Opening assignment ─────────────────────────────────────────
 
