@@ -379,18 +379,6 @@ class TestTelemetry:
 
         assert chat_session.message_count == 1
 
-    async def test_message_count_is_untouched_without_an_owned_session(
-        self, make_subject: Callable[..., Subject]
-    ) -> None:
-        """A foreign session id cannot inflate somebody else's counter."""
-        subject = make_subject([text_turn("Xong")])
-
-        await _collect(subject.stream(USER, session=_RecordingSession(), chat_session=None))
-
-        # Nothing to assert on but the absence of a write; the previous test
-        # proves the counter moves when the session *is* owned.
-        assert True
-
 
 class TestEmployeeScoping:
     """The ESS loop stays bound to the authenticated employee."""

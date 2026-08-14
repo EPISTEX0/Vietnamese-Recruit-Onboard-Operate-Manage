@@ -52,6 +52,7 @@ from src.modules.assistant.api.employee_router import (  # noqa: E402
     employee_assistant_router,
     get_employee_assistant_service,
 )
+from src.modules.assistant.api.sse import STREAM_ERROR_MESSAGE  # noqa: E402
 from src.modules.assistant.application import (  # noqa: E402
     employee_assistant_service as ess_module,
 )
@@ -339,7 +340,33 @@ class TestMidStreamFailure:
 
         assert response.status_code == 200
         assert [name for name, _ in events] == ["text_delta", "error"]
-        assert "upstream died" in events[-1][1]["error"]
+
+    async def test_the_error_payload_uses_the_key_the_client_reads(self, make_stack: Any) -> None:
+        """``AiChat`` reads ``data.message``; anything else renders as unknown.
+
+        Asserted on the wire rather than trusting the key name, because the two
+        sides agreeing is the entire value of the event — a payload the reader
+        cannot find is indistinguishable from no payload at all.
+        """
+        stack = make_stack(ExplodingLLMClient("upstream died"))
+
+        events = _parse_sse((await _post_stream(stack.app, ONE_TURN)).text)
+        payload = events[-1][1]
+
+        assert payload["message"] == STREAM_ERROR_MESSAGE
+
+    async def test_the_error_payload_does_not_leak_internals(self, make_stack: Any) -> None:
+        """The upstream failure text stays in the log, not in the response.
+
+        This stream is reachable by ordinary employee accounts, and an LLM
+        client error carries the provider URL and its response body.
+        """
+        stack = make_stack(ExplodingLLMClient("connect to http://secret-gateway:9/v1 failed"))
+
+        body = (await _post_stream(stack.app, ONE_TURN)).text
+
+        assert "secret-gateway" not in body
+        assert "connect to" not in body
 
 
 class TestTelemetryOwnership:

@@ -8,6 +8,16 @@ the response has started cannot become an HTTP status — the status line is lon
 gone — so it has to arrive as an ``error`` event inside the stream, or the
 client sees a connection that simply stops and waits out its timeout.  The
 frontend reader treats ``error`` as terminal exactly like ``done``.
+
+Two details about that frame are easy to get wrong and were both wrong here:
+
+* the payload key is ``message``, because that is what ``AiChat`` reads
+  (``event.data.message``).  Sending ``error`` instead is not a silent
+  mismatch — it renders every failure as "Lỗi không xác định".
+* the text is generic.  ``str(exc)`` on an LLM client error carries the
+  provider URL and upstream response bodies, and this stream is now reachable
+  by ordinary employee accounts, not just HR.  The detail goes to the log,
+  where it is wanted, and the user gets a sentence they can act on.
 """
 
 from __future__ import annotations
@@ -19,6 +29,8 @@ import typing
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
+
+STREAM_ERROR_MESSAGE = "Trợ lý gặp sự cố khi trả lời. Vui lòng thử lại."
 
 
 def sse_response(
@@ -41,9 +53,9 @@ def sse_response(
             async for event in events:
                 payload = json.dumps(event["data"], ensure_ascii=False)
                 yield f"event: {event['event']}\ndata: {payload}\n\n".encode()
-        except Exception as exc:
+        except Exception:
             logger.exception("%s stream error", log_label)
-            error_data = json.dumps({"error": str(exc)}, ensure_ascii=False)
+            error_data = json.dumps({"message": STREAM_ERROR_MESSAGE}, ensure_ascii=False)
             yield f"event: error\ndata: {error_data}\n\n".encode()
 
     return StreamingResponse(

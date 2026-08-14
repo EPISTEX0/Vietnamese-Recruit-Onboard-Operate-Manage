@@ -80,10 +80,14 @@ def test_every_path_the_client_posts_to_is_covered_here() -> None:
     """
     client_source = _ESS_CLIENT.read_text(encoding="utf-8")
 
-    # The client builds its URLs as `${BASE}/suffix`; BASE is the router prefix.
+    # The client builds its URLs as `${BASE}/suffix` inside a template literal,
+    # so the suffix runs to the closing backtick. Matched that way rather than
+    # with a character class of the characters today's paths happen to use: a
+    # class like ``[a-z/-]`` silently truncates ``/chat_v2`` to ``/chat``, which
+    # then matches an expected path and lets exactly the kind of unrouted new
+    # endpoint this test exists to catch slip through.
     posted = {
-        f"/api/ess/assistant{match}"
-        for match in re.findall(r"\$\{BASE\}(/[a-z/-]*)", client_source)
+        f"/api/ess/assistant{match}" for match in re.findall(r"\$\{BASE\}([^`]*)", client_source)
     }
 
     assert posted, f"found no ${{BASE}} calls in {_ESS_CLIENT} — has the client moved?"
