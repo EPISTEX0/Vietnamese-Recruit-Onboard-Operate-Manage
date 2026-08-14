@@ -1,9 +1,29 @@
 # Báo cáo drift giữa model SQLModel và schema thật
 
-**Ngày đo:** 2026-08-14 · **Alembic head:** `084` · **Phạm vi:** toàn bộ `backend/src/modules/*/domain/entities.py`
+**Đo lần đầu:** 2026-08-14 (head `084`, **113 diff**) · **Đo lại:** 2026-08-14 sau khi dọn
+(head `085`, **78 diff**) · **Phạm vi:** toàn bộ `backend/src/modules/*/domain/entities.py`
 
-Tài liệu này chỉ **liệt kê và phân loại**. Không có migration nào được sinh ra, và không entity nào bị
-sửa ngoài một FK trỏ sai tên bảng (mục [Điều kiện tiên quyết](#điều-kiện-tiên-quyết-một-fk-trỏ-sai-tên-bảng)).
+> ## Trạng thái: P0, P1, P2 đã đóng. Còn P3 và P4.
+>
+> | Mức | Lúc báo cáo | Hiện tại | |
+> |---|---:|---:|---|
+> | **P0** | 9 | **0** | ✅ đóng |
+> | **P1** | 13 | **0** | ✅ đóng (+1 diff mới lộ ra cũng đã đóng) |
+> | **P2** | 3 | **0** | ✅ đóng |
+> | **P3** | 20 | 20 | chưa làm |
+> | **P4** | 68 | 58 | chưa làm |
+> | | **113** | **78** | |
+>
+> **Số quả mìn còn lại: 0.** 78 diff còn lại đều không gây mất dữ liệu và không mất ràng buộc toàn vẹn —
+> chứng minh ở [§5.4](#54-p3--20-diff--hiệu-năng-và-rewrite) và [§5.5](#55-p4--58-diff--vô-hại).
+>
+> Khuyến nghị "không chạy autogenerate rồi apply thẳng" ở [§7](#7-khuyến-nghị-vận-hành) **vẫn còn hiệu lực**,
+> chỉ là lý do đã đổi: giờ là vì nhiễu, không còn vì nguy hiểm.
+
+Bản gốc của tài liệu này chỉ **liệt kê và phân loại**, không sửa gì ngoài một FK trỏ sai tên bảng
+(mục [Điều kiện tiên quyết](#điều-kiện-tiên-quyết-một-fk-trỏ-sai-tên-bảng)). Các mục §5.1–§5.3 bên dưới
+giữ nguyên phần mô tả gốc và bổ sung phần **đã xử lý thế nào** — cố ý không xoá phần chẩn đoán, vì
+lập luận mới là thứ đáng đọc lại chứ không phải kết quả.
 
 ---
 
@@ -114,16 +134,27 @@ và hậu quả chỉ lộ ra hàng tuần sau — nên P1 **nguy hiểm hơn P2
 
 ## 5. Kết quả
 
-| Mức | Số diff | Nội dung |
-|---|---:|---|
-| **P0** | **9** | DROP 3 bảng (+6 index của chúng) |
-| **P1** | **13** | 9 FK mất `ON DELETE CASCADE`, 1 mất UNIQUE, 3 cột mất timezone |
-| **P2** | **3** | 1 `NOT NULL`, 1 UNIQUE mới, 1 FK mới |
-| **P3** | **20** | 14 mất index hiệu năng, 6 rewrite JSON→JSONB |
-| **P4** | **68** | Vô hại (chi tiết §5.5) |
-| | **113** | |
+| Mức | Số diff | Nội dung | Trạng thái |
+|---|---:|---|---|
+| **P0** | **9** | DROP 3 bảng (+6 index của chúng) | ✅ đóng |
+| **P1** | **13** (+1) | 9 FK mất `ON DELETE CASCADE`, 1 mất UNIQUE, 3 cột mất timezone | ✅ đóng |
+| **P2** | **3** | 1 `NOT NULL`, 1 UNIQUE mới, 1 FK mới | ✅ đóng |
+| **P3** | **20** | 14 mất index hiệu năng, 6 rewrite JSON→JSONB | còn |
+| **P4** | **68** → 58 | Vô hại (chi tiết §5.5) | còn |
+| | **113** → **78** | | |
 
 **Số quả mìn = 25** (P0 + P1 + P2) — tức khoảng **22%** số diff sẽ gây hại nếu autogenerate được apply.
+**Hiện tại con số đó là 0.**
+
+> **Dọn P0 làm lộ thêm một quả mìn P1 mà báo cáo này không đếm được.** `attendance_records` vô hình với
+> autogenerate nên alembic chỉ nói đúng một câu "drop cả bảng" và không hề so từng cột. Import bảng vào
+> metadata xong thì diff thứ 114 hiện ra: `uq_attendance_employee_date` — UNIQUE `(employee_id, work_date)`
+> có trên DB, model không khai, **và không có gì thay thế**. Cùng hạng với `oauth_configs` ở §5.2.b. Đã đóng
+> luôn cùng đợt.
+>
+> Bài học đáng ghi: **số diff của một bảng bị `drop_table` che là không tin được** — nó luôn bằng 1 + số
+> index, bất kể bên trong lệch bao nhiêu. Nếu sau này còn bảng nào rơi vào diện đó, đừng coi con số của nó
+> là đã khảo sát xong.
 
 **Riêng loại "thu hẹp cột" giống hệt `users.role`: còn 0.** Đã quét toàn bộ 34 `modify_type`; chỉ đúng một
 diff có mang độ dài ở cả hai phía là `email_messages.processing_status` (DB `VARCHAR(20)` → model
@@ -154,6 +185,38 @@ dọn, hoặc bảng chưa bao giờ có model. Cần chủ sở hữu quyết �
 > `employee_requests` đang có dữ liệu thật trên DB dev. Trên production, đây là nhóm duy nhất mất dữ liệu
 > không hồi phục.
 
+#### ✅ Đã xử lý — nguyên nhân gốc, không chỉ triệu chứng
+
+Sửa hai dòng import thì hết P0, nhưng lần sau vẫn tụt lại y như vậy. Nên thay hẳn cơ chế:
+
+`backend/src/shared/model_registry.py` quét AST toàn bộ `src/` tìm class `table=True` rồi import đúng những
+module đó; `alembic/env.py` gọi `import_all_entity_modules()` thay cho danh sách tay. Quét **tĩnh** chứ không
+import dò, vì module đáng lo nhất chính là module chưa ai import.
+
+`backend/tests/test_alembic_metadata_complete.py` chốt bất biến. Test chạy trong **tiến trình con** — chi tiết
+này không phải cho đẹp: `SQLModel.metadata` là global, chạy chung suite thì các test khác đã import hộ entity,
+khoảng trống tự lấp và assert sẽ xanh oan trong khi autogenerate vẫn hỏng. Trước khi sửa, test đỏ và gọi đúng
+tên `['attendance_records', 'employee_requests']`.
+
+**`gmail_label_mappings`: loại khỏi phạm vi so sánh, không drop.** Bằng chứng truy được:
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Bảng từ đâu ra | migration `008_create_gmail_tables.py` (commit `79b73cd`, 20/05/2026) |
+| Model từng tồn tại chưa | **Có** — `GmailLabelMapping` trong `gmail/domain/entities.py`, kèm `label_repository.py` và `label_service.py` |
+| Mất khi nào | commit `76e9143` (12/07/2026) xoá trọn slice: model, repository, service 352 dòng, test 514 dòng, route, và dòng import trong `env.py`. **Không migration nào dọn bảng.** |
+| Còn code nào đọc không | Không — `rg` toàn repo chỉ ra tài liệu này |
+| Dữ liệu trên dev | 0 dòng |
+
+Feature bị xoá có chủ đích, nên bảng đúng là rác. Nhưng **không drop**, vì "0 dòng trên dev" không phải bằng
+chứng về production: DB dev hiện trống ở gần như mọi bảng (`cv_documents`, `assistant_chat_sessions`,
+`organization_ai_configurations` đều 0 dòng), trong khi feature label chạy thật từ 05/2026 đến 07/2026 nên DB
+triển khai có thể còn dữ liệu. Drop thì không hồi phục; loại khỏi so sánh thì không mất gì.
+
+Cách làm: `include_object` trong `alembic/env.py` với tập `UNMANAGED_TABLES` kèm ghi chú lý do.
+**Việc còn lại cho owner:** xác nhận bảng trên DB triển khai cũng trống, rồi mới viết migration drop và bỏ
+entry khỏi `UNMANAGED_TABLES`.
+
 ### 5.2 P1 — 13 diff — hỏng âm thầm
 
 Cả ba nhóm dưới đây: **model sai, DB đúng.**
@@ -175,6 +238,10 @@ Nguyên nhân là hạn chế của SQLModel: `Field(foreign_key=…)` không c�
 phải viết `sa_column=Column(ForeignKey(..., ondelete="CASCADE"))`. Không ai làm, nên **cả 9 FK trong repo đều
 thiếu** — đây là lỗi hệ thống, không phải 9 lần sơ suất riêng lẻ.
 
+> **Đính chính:** hạn chế đó đã hết. SQLModel trong repo là **0.0.38**, và `Field()` có sẵn tham số
+> `ondelete`. Không cần dựng `sa_column` — giữ nguyên `Field` thì `index`/`nullable`/kiểu cột không phải
+> khai lại bằng tay, đỡ một nguồn drift mới.
+
 Các FK bị ảnh hưởng: `calendar_conflicts.candidate_id`, `employee_knowledge_base_chunks.document_id`,
 `hr_knowledge_base_chunks.document_id`, `interview_participants.interview_id`, `interviews.candidate_id`,
 `job_application_link_proposals.{target_job_application_id, recruitment_inbox_item_id}`,
@@ -183,6 +250,13 @@ Các FK bị ảnh hưởng: `calendar_conflicts.candidate_id`, `employee_knowle
 Hậu quả sau khi apply: xoá một `User` sẽ **fail** vì còn `refresh_tokens` tham chiếu, thay vì dọn theo như
 thiết kế. Xoá một `Interview` để lại `interview_participants` mồ côi. Luồng xoá cascade của KB chunk gãy.
 Migration chạy xong sạch sẽ, không cảnh báo gì.
+
+##### ✅ Đã xử lý
+
+Cả 9 khai `Field(..., ondelete="CASCADE")`. Đã đối chiếu `pg_constraint.confdeltype` **từng cái một** thay vì
+giả định cả 9 giống nhau — và hoá ra không giống: `calendar_conflicts` có hai FK cạnh nhau,
+`candidate_id` là `'c'` (CASCADE) còn `interview_id` là `'a'` (NO ACTION). Chỉ sửa cái đầu, và để lại comment
+ngay tại chỗ để lần sau không ai "dọn cho đối xứng".
 
 #### b) 1 UNIQUE bị mất trắng — `oauth_configs (provider, is_active)`
 
@@ -198,6 +272,22 @@ thái hai OAuth config cùng active cho một provider, và bên chọn config s
 > diễn**: UNIQUE constraint bị bỏ nhưng một unique *index* tương đương được thêm vào ngay trong cùng diff
 > set, nên tính duy nhất vẫn được giữ. Đó là lý do chúng nằm ở P4. Chỉ `oauth_configs` là mất thật.
 > Nếu xếp loại theo tên diff của alembic thì 6 cái này bị gộp chung và kết luận sẽ sai.
+>
+> *Kiểm chứng lại từng cái khi dọn — kết luận đúng, nhưng `outbound_emails` đúng vì lý do khác với 4 cái kia.*
+> *Bốn cái kia có `add_index … unique=True` bù ngay trong cùng diff set. `outbound_emails` thì không có dòng*
+> *`add_index` nào; nó an toàn vì trên DB **đã sẵn** cả unique index `ix_outbound_emails_idempotency_key`*
+> *lẫn unique constraint `uq_outbound_emails_idempotency_key` trên cùng cột, nên bỏ cái constraint thừa vẫn*
+> *còn index giữ tính duy nhất.*
+
+##### ✅ Đã xử lý
+
+`__table_args__` của `OAuthConfig` khai lại `UniqueConstraint("provider", "is_active",
+name="uq_oauth_config_provider_active")`.
+
+Cùng đợt đóng luôn `uq_attendance_employee_date` — quả mìn P1 lộ ra sau khi sửa P0 (xem hộp cảnh báo ở §5).
+Chỗ đó `__table_args__` của `AttendanceRecord` là **tuple rỗng chỉ chứa hai dòng comment mô tả ràng buộc**;
+constraint thật chỉ tồn tại trong migration. Mất nó nghĩa là một nhân viên chấm công được nhiều bản ghi
+trong cùng một ngày.
 
 #### c) 3 cột mất timezone — `password_reset_tokens`
 
@@ -217,6 +307,10 @@ kế (rủi ro bảo mật) hoặc chết sớm (hỏng tính năng). Server ch�
 Đây là nhóm mà mình xếp **nguy hiểm nhất trong toàn bộ P1**: hậu quả thầm lặng, nằm trên đường bảo mật, và
 gần như không thể truy ngược sau khi dữ liệu đã bị chuyển đổi.
 
+##### ✅ Đã xử lý
+
+Cả ba khai `sa_column=Column(DateTime(timezone=True))` đúng như các model khác trong repo vẫn làm.
+
 ### 5.3 P2 — 3 diff — fail lúc apply
 
 | Diff | Model hay DB sai? | Ghi chú |
@@ -226,6 +320,38 @@ gần như không thể truy ngược sau khi dữ liệu đã bị chuyển đ�
 | `assistant_chat_sessions.employee_id` thêm FK | **DB sai (nhiều khả năng)** | FK có trong model mà thiếu trên DB — dấu hiệu một migration quên tạo. Apply sẽ fail nếu đang có dòng mồ côi |
 
 Nhóm này ồn ào nên ít nguy hiểm hơn P1, nhưng **cả 3 đều cần owner quyết**, không sửa máy móc được.
+
+#### ✅ Đã xử lý — owner duyệt, ba quyết định đi ba hướng khác nhau
+
+Lưu ý chung: **dữ liệu trên DB dev không giúp được gì ở đây** — cả ba bảng đều 0 dòng. Nên căn cứ là code và
+lịch sử migration, không phải `count(*)`.
+
+**1. `cv_documents.gmail_message_id` — model sai, bỏ `unique=True`.**
+Lập luận của báo cáo kiểm chứng được bằng code chứ không chỉ bằng suy đoán:
+`CVProcessor.process_cv_from_email()` lặp qua `attachments`, gọi `process_single_attachment()` cho từng cái,
+và mỗi lần ghi một `CVDocument` với **cùng một** `gmail_message_id`. Kiểu trả về nó khai là
+`list[CVDocument]`, và `CVDocumentRepository.get_by_gmail_message_id()` cũng trả về list. Ép UNIQUE là chặn
+thẳng email hai CV ngay từ đính kèm thứ hai. Giữ `unique=True` ở `RecruitmentInboxItem.gmail_message_id` —
+chỗ đó một email đúng là một item, và repo của nó trả về một object.
+
+**2. `organization_ai_configurations.api_key_enc` — DB sai, siết NOT NULL (migration 085).**
+`056` tạo cột NOT NULL; `057` nới ra nullable **trong lúc** thêm `server_default ''`. Ý định ở `057` là
+"mặc định rỗng", còn bỏ NOT NULL chỉ là đi kèm — bằng chứng là chính `downgrade()` của `057` khôi phục
+NOT NULL, tức nó chưa bao giờ coi nullable là trạng thái đúng. Về nghiệp vụ, config **được phép** tồn tại
+trước khi có key (tổ chức còn dùng deployment key), nhưng trạng thái đó viết là `''` chứ không phải NULL:
+service ghi `config.api_key_enc = ""`, và mọi chỗ đọc đều kiểm tra falsy (`if not config.api_key_enc`) nên
+`''` với NULL đã đồng nghĩa với ứng dụng. NOT NULL chỉ bỏ đi cách viết thứ hai của cùng một ý.
+
+**3. `assistant_chat_sessions.employee_id` — DB sai, thêm FK (migration 085).**
+`075` tạo bảng với FK trên `user_id` và index — nhưng không FK — trên `employee_id`, trong khi model khai
+`foreign_key="employees.id"` ngay từ đầu. Là quên, không phải quyết định: không bảng nào khác trong schema
+tham chiếu `employees` mà không có FK.
+
+**Migration `085` idempotent hai chiều.** Backfill `NULL → ''` chạy *trước* khi siết NOT NULL, nên DB nào
+đang có NULL thì được sửa chứ không bị từ chối. Dòng mồ côi thì **set NULL chứ không xoá** — session là lịch
+sử hội thoại thật, và cột vốn nullable theo thiết kế. Tạo FK có kiểm tra `pg_constraint` trước.
+`downgrade()` viết đủ cả hai chiều — không bỏ mặc như `082`. Đã chạy thật:
+`upgrade head` → `downgrade -1` → `upgrade head` sạch.
 
 ### 5.4 P3 — 20 diff — hiệu năng và rewrite
 
@@ -239,19 +365,24 @@ Nhóm này ồn ào nên ít nguy hiểm hơn P1, nhưng **cả 3 đều cần o
   **model đúng** — JSONB là kiểu nên dùng. Nhưng chuyển kiểu là **rewrite toàn bảng**, khoá bảng theo kích
   thước dữ liệu. Không mất dữ liệu; xếp P3 vì chi phí vận hành, không vì rủi ro.
 
-### 5.5 P4 — 68 diff — vô hại
+### 5.5 P4 — 58 diff — vô hại
 
-Ghi lại để không ai phải điều tra lại nhóm này:
+Ghi lại để không ai phải điều tra lại nhóm này. Con số tụt từ 68 xuống 58 vì **9 `add_fk`** (vế "recreate"
+của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 được đóng — không phải vì có gì mới được dọn ở
+đây.
 
 - **24 `TEXT` → `VARCHAR`.** SQLModel render `str` thành `AutoString`, ra `VARCHAR` **không có độ dài**. Trong
   PostgreSQL, `VARCHAR` không độ dài là **không giới hạn, tương đương `TEXT`**. Đã kiểm chứng thực nghiệm:
   ghi chuỗi 100 000 ký tự vào cột `TEXT`, chạy `ALTER COLUMN TYPE varchar`, đọc lại vẫn đủ 100 000 ký tự.
   **Không cắt cụt.** Đây là nhóm dễ bị báo động nhầm nhất — nhìn thì giống hệt lỗi `users.role`, nhưng khác
   hẳn về bản chất, vì `users.role` có **độ dài cụ thể** còn nhóm này thì không.
-- **9 FK add** — vế "recreate" của 9 cặp drop+recreate đã tính ở P1.a. Đếm riêng ở đây để tổng khớp 113;
-  tác hại thật đã tính một lần ở P1 rồi.
-- **19 diff đổi cách biểu diễn UNIQUE** — unique index ↔ unique constraint, tính duy nhất giữ nguyên
-  (xem cảnh báo ở §5.2.b).
+- ~~**9 FK add**~~ — vế "recreate" của 9 cặp drop+recreate đã tính ở P1.a. **Hết cùng P1.a.**
+- **18 diff đổi cách biểu diễn UNIQUE** — unique index ↔ unique constraint, tính duy nhất giữ nguyên
+  (xem cảnh báo ở §5.2.b). Trước là 19; `oauth_configs` tách khỏi nhóm này khi được xác định là mất thật.
+  Phân rã đầy đủ: `email_messages.gmail_message_id`, `evaluation_sets.version`, `whitelist_entries.value`
+  mỗi cái 3 diff (`remove_index` non-unique + `add_index` unique + `remove_constraint`);
+  `users.employee_id` 2; `outbound_emails.idempotency_key` 1; `departments.name`,
+  `employees.employee_code`, `positions.name` mỗi cái 2 (`remove_index` unique + `add_constraint`).
 - **6 diff đổi tên index** — `ix_link_proposals_*` → `ix_job_application_link_proposals_*`, cùng cột.
 - **5 comment** trên bảng/cột.
 - **4 index thêm mới** trên `interviews` / `interview_participants` — có ích, không hại.
@@ -265,35 +396,41 @@ Ghi lại để không ai phải điều tra lại nhóm này:
 
 Ước lượng cho một người đã quen repo. Đã tách theo nhóm để có thể mở phiên riêng từng phần.
 
-| Nhóm | Việc phải làm | Ước lượng | Chặn bởi |
+| Nhóm | Việc phải làm | Ước lượng | Trạng thái |
 |---|---|---:|---|
-| **P0** | Thêm 2 model thiếu vào `env.py`; quyết số phận `gmail_label_mappings` | 0.5–1 ngày | Cần owner quyết bảng thứ 3 |
-| **P1.a** | 9 FK → `sa_column=Column(ForeignKey(..., ondelete="CASCADE"))` | 1 ngày | Không |
-| **P1.b** | 1 `__table_args__` UNIQUE cho `oauth_configs` | 0.5 giờ | Không |
-| **P1.c** | 3 field → `Column(DateTime(timezone=True))` | 0.5 giờ | Không |
-| **P2** | 3 quyết định nghiệp vụ + backfill nếu cần | 0.5 ngày | **Cần owner cả 3** |
-| **P3** | Khai 14 index vào model; xác nhận 6 JSONB | 1 ngày | Không |
-| **P4** | 24 cột → `Column(Text)`; đồng bộ tên index/constraint | 1–1.5 ngày | Không |
-| | **Tổng** | **4–6 ngày** | |
+| **P0** | Thêm 2 model thiếu vào `env.py`; quyết số phận `gmail_label_mappings` | 0.5–1 ngày | ✅ xong |
+| **P1.a** | 9 FK → `ondelete="CASCADE"` | 1 ngày | ✅ xong |
+| **P1.b** | `__table_args__` UNIQUE cho `oauth_configs` (+`attendance_records`) | 0.5 giờ | ✅ xong |
+| **P1.c** | 3 field → `Column(DateTime(timezone=True))` | 0.5 giờ | ✅ xong |
+| **P2** | 3 quyết định nghiệp vụ + backfill nếu cần | 0.5 ngày | ✅ xong (migration `085`) |
+| **P3** | Khai 14 index vào model; xác nhận 6 JSONB | 1 ngày | còn |
+| **P4** | 24 cột → `Column(Text)`; đồng bộ tên index/constraint | 1–1.5 ngày | còn |
+| | **Còn lại** | **2–2.5 ngày** | |
 
-**Thứ tự đề xuất nếu chỉ làm được một phần:** `P1.c` → `P1.b` → `P0` → `P1.a`. P1.c và P1.b cộng lại đúng
-một giờ và gỡ được hai mối nguy âm thầm nhất. P0 tuy nặng nhất về hậu quả nhưng hai trong ba bảng chỉ cần
-thêm dòng import.
+**P4 tuy vô hại nhưng nên dọn cuối cùng** vì nó chiếm 74% số diff còn lại. Còn 58 dòng nhiễu thì không ai
+đọc nổi output autogenerate để phát hiện mìn thật mới xuất hiện.
 
-**P4 tuy vô hại nhưng nên dọn cuối cùng** vì nó chiếm 60% số diff. Còn 68 dòng nhiễu thì không ai đọc nổi
-output autogenerate để phát hiện mìn thật mới xuất hiện.
+Lưu ý cho ai làm P3: **6 diff JSON→JSONB là bên model đúng**, nên dọn chúng nghĩa là viết migration đổi kiểu
+cột thật — rewrite toàn bảng, khoá theo kích thước dữ liệu — chứ không phải sửa model. 14 index còn lại thì
+ngược lại, chỉ cần khai vào model.
 
 ---
 
 ## 7. Khuyến nghị vận hành
 
-Cho tới khi P0–P2 được dọn:
-
 > **Không chạy `alembic revision --autogenerate` rồi apply thẳng trên repo này.**
 > Viết migration bằng tay, hoặc nếu dùng autogenerate thì phải đọc lại từng dòng và đối chiếu với §5.
 
-Có thể cân nhắc thêm một CI gate chặn merge nếu số diff vượt ngưỡng hiện tại — biến 113 thành trần
-không được phép tăng. Ngoài phạm vi ticket này, nêu ra để owner cân nhắc.
+**Khuyến nghị này giữ nguyên, nhưng lý do đã đổi.** Trước đây apply thẳng là mất dữ liệu; giờ 78 diff còn lại
+không cái nào làm mất dữ liệu hay mất ràng buộc toàn vẹn. Rủi ro bây giờ là **nhiễu**: một migration
+autogenerate sẽ kéo theo 20 diff P3 mà 6 trong số đó rewrite toàn bảng, và giữa 78 dòng đó thì một quả mìn
+mới xuất hiện rất dễ trôi qua mắt reviewer.
+
+Đã có sẵn một phần hàng rào: `tests/test_alembic_metadata_complete.py` chặn đúng cơ chế đã gây ra P0 — bảng
+có model mà không ai import. Nó không bắt được các loại drift khác.
+
+Vẫn nên cân nhắc CI gate chặn merge nếu số diff vượt ngưỡng — biến **78** thành trần không được phép tăng.
+Ngoài phạm vi ticket này, nêu ra để owner cân nhắc.
 
 ---
 
@@ -307,13 +444,23 @@ createdb drift_audit
 DATABASE_URL='postgresql+asyncpg://<user>:<pass>@<host>:5432/drift_audit' \
   .venv/bin/alembic upgrade head
 
-# 2. So sánh. Dùng đúng danh sách import và tuỳ chọn mặc định của alembic/env.py,
+# 2. So sánh. Phải dùng đúng metadata và đúng tuỳ chọn của alembic/env.py,
 #    nếu không con số sẽ không khớp với autogenerate thật.
-#    compare_metadata(MigrationContext.configure(conn), SQLModel.metadata)
+#    compare_metadata(MigrationContext.configure(conn, opts={...}), SQLModel.metadata)
 ```
 
-Lưu ý khi đo: các diff `modify_*` trả về dưới dạng **list lồng trong list**, nên `len()` trên kết quả thô
-cho ra số top-level (112) chứ không phải số diff thật (113). Phải trải phẳng trước khi đếm.
+Hai chỗ dễ đo lệch:
+
+- **Metadata.** `env.py` không còn danh sách import tay; nó gọi
+  `src.shared.model_registry.import_all_entity_modules()`. Gọi đúng hàm đó (hoặc `exec` khối import của
+  `env.py`) trước khi đọc `SQLModel.metadata`.
+- **`include_object`.** `env.py` truyền `include_object` để loại `gmail_label_mappings` (§5.1). Không truyền
+  nó vào `MigrationContext.configure(..., opts=...)` thì sẽ đo dư đúng 2 diff (`remove_table` + `remove_index`)
+  mà autogenerate thật không sinh.
+
+Lưu ý khi đếm: các diff `modify_*` trả về dưới dạng **list lồng trong list**, nên `len()` trên kết quả thô
+cho ra số top-level chứ không phải số diff thật. Phải trải phẳng trước khi đếm. Ở lần đo đầu chênh lệch này
+là 112 với 113; ở trạng thái hiện tại thì không còn diff lồng nào nên cả hai đều là 78.
 
 ---
 
@@ -322,4 +469,10 @@ cho ra số top-level (112) chứ không phải số diff thật (113). Phải t
 - `backend/alembic/versions/048_create_outbound_emails_table.py` — FK gốc, đúng ngay từ đầu
 - `backend/alembic/versions/003_create_refresh_tokens_table.py` — `ondelete="CASCADE"` gốc
 - `backend/alembic/versions/084_*.py` — sự cố `users.role`, tiền lệ của cả báo cáo này
-- `backend/alembic/env.py` — danh sách import quyết định bảng nào "tồn tại" với autogenerate
+- `backend/alembic/versions/085_repair_ai_config_and_assistant_session_fk.py` — hai sửa chữa phía DB của P2
+- `backend/alembic/env.py` — nay import động qua `model_registry`, và `UNMANAGED_TABLES` /
+  `include_object` quyết định bảng nào nằm ngoài phạm vi so sánh
+- `backend/src/shared/model_registry.py` — quét AST tìm mọi class `table=True` trong `src/`
+- `backend/tests/test_alembic_metadata_complete.py` — bất biến chặn tái diễn P0
+- `backend/alembic/versions/008_create_gmail_tables.py` — nơi `gmail_label_mappings` ra đời;
+  commit `76e9143` là nơi model của nó biến mất mà bảng thì không
