@@ -1,12 +1,20 @@
 name: CI
 
 # Gate ordering reflects value, not convenience:
-#   blocking   -> smoke-import, undefined-names, test-collection, repo-integrity
-#   reporting  -> backend-quality, backend-tests (run, surface state, never block)
+#   required   -> smoke-import, undefined-names, test-collection, repo-integrity
+#                 (those four, plus `frontend`, are the five contexts enforced by
+#                 the ruleset on `main`; renaming one blocks every open PR)
+#   failing    -> schema-drift, backend-quality, backend-tests (a red step fails
+#                 the job honestly; not yet promoted to required status checks)
 #
-# The blocking gates are deliberately narrow. Each one catches a class of failure
+# The required gates are deliberately narrow. Each one catches a class of failure
 # that has already reached `main` in this repo. Do not widen them into a general
-# "make the repo clean" gate -- that is what the reporting jobs are for.
+# "make the repo clean" gate -- that is what gates 4a/4b are for.
+#
+# No backend job masks failures any more. `continue-on-error` used to sit on
+# gates 4a and 4b while they were red; it also made `gh run view --json` report
+# `success` for a step that exited 1, so CI state read as JSON was a lie. If a
+# gate goes red, fix the gate -- do not reintroduce `continue-on-error`.
 #
 # Action pinning: astral-sh/setup-uv stopped publishing floating major tags after
 # v7 -- `v8`, `v9` and `v10` do not exist as refs, only `v8.0.0`-style exact tags
@@ -88,13 +96,9 @@ jobs:
   # braces: it keeps the gate honest if an exemption is ever reintroduced,
   # while keeping target-version and the rest of ruff's settings intact.
   #
-  # NOT GREEN YET: `src` currently has 17 F821 hits outside the two files this
-  # PR fixed (assistant/application/tool_registry.py `get_message` x7,
-  # payslip/api/admin_router.py `admin_user` x6, employee_request/api/
-  # admin_router.py `admin_user` x2, gmail/api/error_handler.py `lang`,
-  # identity/api/admin_router.py `SelfDemotionError`). Until those are fixed
-  # this job blocks every PR. Fix them, or move this job to
-  # `continue-on-error: true` alongside gates 4a/4b.
+  # Green since the F821 backlog was paid down. Gate 4a now runs the full
+  # `ruff check` and fails on it, so this job is the narrow, fast subset that is
+  # safe to keep as a required status check.
   # ---------------------------------------------------------------------------
   undefined-names:
     name: Gate 2 - undefined names (F821)
@@ -127,14 +131,10 @@ jobs:
   # the whole run ("Interrupted"), so a red test suite and a suite that never ran
   # at all look identical from the outside. This job makes the difference visible.
   #
-  # NOT GREEN YET: three modules fail to collect on `AttributeError: type object
-  # 'UserRole' has no attribute 'ADMIN'` -- PR #281 renamed the enum member to
-  # SYSTEM_ADMIN/HR and left 14 `UserRole.ADMIN` references behind
-  # (tests/modules/onboarding/test_existence_before_authz_property.py,
-  # tests/modules/onboarding/test_non_admin_rejection_property.py,
-  # tests/modules/payslip/test_admin_payslip_api.py). Gate 4b's comment below
-  # already acknowledges this. Until it is fixed this job blocks every PR; fix
-  # the references, or move this job to `continue-on-error: true`.
+  # Green since the `UserRole.ADMIN` references left behind by PR #281 were
+  # fixed. Keep it separate from gate 4b even though 4b now fails on red too:
+  # collection is seconds, the suite is minutes, and the distinction between
+  # "tests failed" and "tests never ran" is worth its own signal.
   # ---------------------------------------------------------------------------
   test-collection:
     name: Gate 3 - test collection
@@ -198,19 +198,17 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Gate 6 -- the models may not drift further from the schema the migrations
-  # build. Runs the same pytest module the suite runs, on its own, and does NOT
-  # set continue-on-error.
+  # build. Runs the same pytest module the suite runs, on its own.
   #
-  # It needs its own job precisely because gate 4b does. The drift guard is an
-  # ordinary test, but 4b is `continue-on-error: true` and gate 3 only collects,
-  # so a fence living only in the suite reports `success` while a PR that drops
-  # an index sails through. This job is the one place a schema regression can
-  # actually turn something red.
+  # It got its own job back when gate 4b was `continue-on-error: true` and a
+  # fence living only in the suite reported `success` while a PR that dropped an
+  # index sailed through. 4b fails honestly now, so this job is no longer the
+  # only thing that can turn a schema regression red -- it is kept because it
+  # isolates the signal and lands in ~6s instead of behind the whole suite.
   #
   # Not yet a required status check -- that is the owner's call and the ruleset's
   # to make, and per the frontend job's comment a gate earns blocking status by
-  # being green across real PRs. Unlike 4a/4b it at least reports honestly in the
-  # meantime: `gh run view --json jobs` shows a real failure, not a masked one.
+  # being green across real PRs.
   #
   # Cheap: ~6s of work. Nearly all of the wall clock is uv sync and pulling the
   # pgvector image, which is why it is a whole job rather than a step bolted onto
@@ -241,14 +239,19 @@ jobs:
         run: uv run --frozen --no-sync pytest -q -rw tests/test_schema_drift_ceiling.py
 
   # ---------------------------------------------------------------------------
-  # Gate 4a (reporting) -- full lint and format state.
+  # Gate 4a -- full lint and format state.
   #
-  # Currently red. Every step is continue-on-error so the job reports the whole
-  # picture instead of stopping at the first failure, and so lint debt does not
-  # block merges while it is being paid down. Flip these to blocking once green.
+  # Green since the lint and format backlog was paid down, so the steps fail the
+  # job now. They used to be `continue-on-error: true` to keep that debt from
+  # blocking merges; the cost was that `gh run view --json` reported `success`
+  # for steps that exited 1. A red step here is a real red step.
+  #
+  # Consequence of dropping continue-on-error: `ruff check` failing skips
+  # `ruff format --check` instead of reporting both. That is the right trade --
+  # the point is now to stop a merge, not to draw a full picture of the debt.
   # ---------------------------------------------------------------------------
   backend-quality:
-    name: Gate 4a - backend lint/format (reporting)
+    name: Gate 4a - backend lint/format
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -267,19 +270,17 @@ jobs:
 
       - name: ruff check
         id: ruff_check
-        continue-on-error: true
         run: uv run --frozen --no-sync ruff check src tests
 
       - name: ruff format --check
         id: ruff_format
-        continue-on-error: true
         run: uv run --frozen --no-sync ruff format --check src tests
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### Backend lint/format (reporting only)"
+            echo "### Backend lint/format"
             echo ""
             echo "| Check | Outcome |"
             echo "| --- | --- |"
@@ -288,14 +289,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
-  # Gate 4b (reporting) -- the test suite itself.
+  # Gate 4b -- the test suite itself.
   #
-  # Reporting-only because it cannot currently run: collection aborts first (see
-  # gate 3). It stays here so the real state is visible, and so the day gate 3
-  # goes green this job immediately starts reporting actual test results.
+  # Was reporting-only back when collection aborted before a single test ran
+  # (see gate 3) and the suite had ~170 failures. Both are fixed, so a failing
+  # test fails this job.
   # ---------------------------------------------------------------------------
   backend-tests:
-    name: Gate 4b - backend tests (reporting)
+    name: Gate 4b - backend tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -315,19 +316,19 @@ jobs:
       # Several integration tests spin up containers via testcontainers; Docker is
       # preinstalled on ubuntu-latest runners.
       #
-      # The explicit `timeout` matters: a job-level timeout-minutes kill is NOT
-      # covered by continue-on-error and would turn this reporting-only job red.
-      # Bounding the command instead keeps a hung test a step failure.
+      # The explicit `timeout` is kept below the 45-minute job timeout on
+      # purpose: a hung test then dies as an ordinary step failure with the log
+      # intact and the Summary step still running, rather than as a job-level
+      # kill that reports nothing about which test hung.
       - name: pytest
         id: pytest
-        continue-on-error: true
         run: timeout 2100 uv run --frozen --no-sync pytest -q
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### Backend tests (reporting only)"
+            echo "### Backend tests"
             echo ""
             echo "\`pytest -q\` outcome: **${{ steps.pytest.outcome }}**"
           } >> "$GITHUB_STEP_SUMMARY"
