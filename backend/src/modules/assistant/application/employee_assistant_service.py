@@ -23,6 +23,7 @@ from src.modules.assistant.application.employee_tool_registry import (
 )
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
+from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,14 +113,17 @@ class EmployeeAssistantService:
         self,
         messages: list[ChatMessage],
         session: AsyncSession | None = None,
-        session_id: UUID | None = None,
+        chat_session: AssistantChatSession | None = None,
     ) -> ChatResponse:
         """Process a user message through the tool-calling loop.
 
         Args:
             messages: Full conversation history including the new user message.
             session: Optional DB session for logging tool call events.
-            session_id: Optional session UUID to correlate tool call events.
+            chat_session: The caller's own chat session, already resolved and
+                ownership-checked by the router. Taking the row rather than an
+                id is what keeps an unauthorized id from reaching this layer:
+                there is no lookup here to skip the owner filter.
 
         Returns:
             ChatResponse with updated messages and optional draft_action.
@@ -194,10 +198,10 @@ class EmployeeAssistantService:
                 )
 
                 # Record tool call event to DB if session is available
-                if session is not None and session_id is not None:
+                if session is not None and chat_session is not None:
                     await self._record_tool_event(
                         session=session,
-                        session_id=session_id,
+                        session_id=chat_session.id,
                         tool_name=tool_name,
                         duration_ms=tool_duration_ms,
                         success=success,
@@ -232,19 +236,8 @@ class EmployeeAssistantService:
             all_new_messages.append(ChatMessage(role="assistant", content=_TOOL_LOOP_FALLBACK))
 
         # Increment message_count for this exchange
-        if session is not None and session_id is not None:
-            from sqlmodel import select
-
-            from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
-
-            result = await session.execute(
-                select(AssistantChatSession).where(
-                    AssistantChatSession.id == session_id,
-                )
-            )
-            chat_session = result.scalar_one_or_none()
-            if chat_session is not None:
-                chat_session.message_count += 1
+        if session is not None and chat_session is not None:
+            chat_session.message_count += 1
 
         total_duration_ms = (time.monotonic() - round_trip_start) * 1000
         logger.info(

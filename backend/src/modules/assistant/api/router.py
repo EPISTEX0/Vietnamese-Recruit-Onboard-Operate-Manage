@@ -31,6 +31,7 @@ from src.modules.assistant.api.schemas import (
     SessionStartRequest,
     SessionStartResponse,
 )
+from src.modules.assistant.api.session_access import ChatSessionGuardDep, session_not_found
 from src.modules.assistant.application.assistant_service import (
     AssistantService,
     ChatMessage,
@@ -75,6 +76,7 @@ async def chat(
     _user: HRUserDep,
     assistant_service: AssistantServiceDep,
     audit_service: AuditServiceDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> ChatResponseSchema:
     """Chat with the AI Assistant.
@@ -104,12 +106,14 @@ async def chat(
         for m in body.messages
     ]
 
-    # Run the assistant with filtered tools
+    # Run the assistant with filtered tools. Telemetry is attached only to a
+    # session this caller owns; an id that is stale, unknown, or somebody
+    # else's resolves to None and simply records nothing.
     response = await assistant_service.chat(
         domain_messages,
         enabled_tool_names=enabled_tool_names,
         session=session,
-        session_id=uuid.UUID(body.session_id) if body.session_id else None,
+        chat_session=await session_guard.resolve_optional(body.session_id),
     )
 
     # Convert back to schema
@@ -149,6 +153,7 @@ async def chat_stream(
     body: ChatRequest,
     _user: HRUserDep,
     assistant_service: AssistantServiceDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> StreamingResponse:
     """Chat with the AI Assistant via SSE streaming.
@@ -177,6 +182,10 @@ async def chat_stream(
         for m in body.messages
     ]
 
+    # Resolved before the generator starts: the guard needs the request-scoped
+    # DB session, which is closed by the time the streaming body runs.
+    owned_session = await session_guard.resolve_optional(body.session_id)
+
     async def event_stream() -> typing.AsyncGenerator[bytes, None]:
         """Generate SSE-formatted bytes from the assistant chat_stream generator."""
         try:
@@ -184,7 +193,7 @@ async def chat_stream(
                 domain_messages,
                 enabled_tool_names=enabled_tool_names,
                 session=session,
-                session_id=uuid.UUID(body.session_id) if body.session_id else None,
+                chat_session=owned_session,
             ):
                 event_name = event["event"]
                 event_data = json.dumps(event["data"], ensure_ascii=False)
@@ -210,26 +219,47 @@ async def assistant_feedback(
     body: AssistantFeedbackRequest,
     _user: HRUserDep,
     audit_service: AuditServiceDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Record user feedback (thumbs up/down) for an assistant response."""
+    """Record user feedback (thumbs up/down) for an assistant response.
+
+    Raises 404 unless the session belongs to the caller — feedback is a write
+    keyed by a client-supplied id, so it needs the same ownership rule as
+    ``/session/end``.
+
+    A refusal is audited too. This handler audited every call before it had an
+    ownership rule, and dropping the audit precisely for rejected calls would
+    make the enumeration attempt this endpoint now blocks the one thing it
+    leaves no trace of.
+    """
+    chat_session = await session_guard.resolve_optional(body.session_id)
+
     await audit_service.log_action(
         admin=_user,
         action_type=AuditActionType.ASSISTANT_CHAT,
         details={
-            "event": "message_feedback",
+            "event": "message_feedback" if chat_session else "message_feedback_denied",
             "session_id": body.session_id,
             "message_index": body.message_index,
             "feedback_type": body.feedback_type,
             "optional_text": body.optional_text,
         },
     )
+
+    if chat_session is None:
+        # AuditLogRepository.create() only flushes; the success path below is
+        # what normally commits it. Raising here would roll the denial record
+        # back, so commit it first — nothing else is pending on this session.
+        await session.commit()
+        raise session_not_found()
+
     from src.modules.assistant.infrastructure.quality_models import (
         FeedbackType,
     )
 
     feedback_event = AssistantFeedbackEvent(
-        session_id=uuid.UUID(body.session_id),
+        session_id=chat_session.id,
         message_index=body.message_index,
         feedback_type=FeedbackType(body.feedback_type),
         optional_text=body.optional_text,
@@ -287,22 +317,17 @@ async def start_assistant_session(
 async def end_assistant_session(
     body: SessionEndRequest,
     _user: HRUserDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """End an AI Assistant chat session.
 
     Updates end_at timestamp and message_count.
     Called when the frontend ChatInterface unmounts.
-    """
-    from sqlmodel import select
 
-    result = await session.execute(
-        select(AssistantChatSession).where(
-            AssistantChatSession.id == uuid.UUID(body.session_id),
-        )
-    )
-    chat_session = result.scalar_one_or_none()
-    if chat_session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    Raises 404 unless the session belongs to the caller. Holding the HR role
+    is not ownership: it does not make another account's session yours.
+    """
+    chat_session = await session_guard.require(body.session_id)
     chat_session.end_at = datetime.now(UTC)
     await session.commit()

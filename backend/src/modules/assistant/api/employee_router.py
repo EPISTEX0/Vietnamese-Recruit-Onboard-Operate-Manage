@@ -27,6 +27,7 @@ from src.modules.assistant.api.employee_schemas import (
     SessionStartRequest,
     SessionStartResponse,
 )
+from src.modules.assistant.api.session_access import ChatSessionGuardDep
 from src.modules.assistant.application.assistant_service import ChatMessage
 from src.modules.assistant.application.context_builder import ContextBuilder
 from src.modules.assistant.application.employee_assistant_service import (
@@ -41,6 +42,7 @@ from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
 from src.modules.assistant.infrastructure.quality_models import (
     AssistantChatSession,
     AssistantFeedbackEvent,
+    FeedbackType,
 )
 from src.modules.attendance.container import (
     get_attendance_record_repository,
@@ -56,7 +58,8 @@ from src.modules.employee.domain.entities import Employee
 from src.modules.employee_request.application.leave_service import LeaveService
 from src.modules.employee_request.application.overtime_service import OvertimeService
 from src.modules.employee_request.container import get_leave_service, get_overtime_service
-from src.modules.identity.container import get_db_session
+from src.modules.identity.container import get_current_user, get_db_session
+from src.modules.identity.domain.entities import User
 from src.modules.payslip.application.payslip_service import PayslipService
 from src.modules.payslip.container import get_payslip_service
 
@@ -83,6 +86,11 @@ def _require_active_employee(
 
 
 ActiveEmployeeDep = Annotated[Employee, Depends(_require_active_employee)]
+
+# The employee's login account. ``_require_active_employee`` resolves the
+# Employee *from* this user, so FastAPI's per-request dependency cache means
+# asking for both costs one lookup, not two.
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
 async def get_employee_assistant_service(
@@ -134,6 +142,7 @@ async def employee_chat(
     body: ChatRequest,
     _employee: ActiveEmployeeDep,
     assistant_service: EmployeeAssistantServiceDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> ChatResponseSchema:
     """Chat with the Employee AI Assistant.
@@ -157,10 +166,12 @@ async def employee_chat(
         for m in body.messages
     ]
 
+    # Telemetry is attached only to a session this caller owns; an id that is
+    # stale, unknown, or somebody else's resolves to None and records nothing.
     response = await assistant_service.chat(
         domain_messages,
         session=session,
-        session_id=uuid.UUID(body.session_id) if body.session_id else None,
+        chat_session=await session_guard.resolve_optional(body.session_id),
     )
 
     new_messages = [
@@ -183,31 +194,35 @@ async def employee_chat(
         draft_action=draft_action,
     )
 
-    @employee_assistant_router.post("/feedback", status_code=204)
-    async def employee_assistant_feedback(
-        body: AssistantFeedbackRequest,
-        _employee: ActiveEmployeeDep,
-        session: AsyncSession = Depends(get_db_session),
-    ) -> None:
-        """Record employee feedback (thumbs up/down) for an assistant response."""
-        from src.modules.assistant.infrastructure.quality_models import (
-            FeedbackType,
-        )
 
-        feedback_event = AssistantFeedbackEvent(
-            session_id=uuid.UUID(body.session_id),
-            message_index=body.message_index,
-            feedback_type=FeedbackType(body.feedback_type),
-            optional_text=body.optional_text,
-        )
-        session.add(feedback_event)
-        await session.commit()
+@employee_assistant_router.post("/feedback", status_code=204)
+async def employee_assistant_feedback(
+    body: AssistantFeedbackRequest,
+    _employee: ActiveEmployeeDep,
+    session_guard: ChatSessionGuardDep,
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Record employee feedback (thumbs up/down) for an assistant response.
+
+    Raises 404 unless the session belongs to the caller.
+    """
+    chat_session = await session_guard.require(body.session_id)
+
+    feedback_event = AssistantFeedbackEvent(
+        session_id=chat_session.id,
+        message_index=body.message_index,
+        feedback_type=FeedbackType(body.feedback_type),
+        optional_text=body.optional_text,
+    )
+    session.add(feedback_event)
+    await session.commit()
 
 
 @employee_assistant_router.post("/session/start", response_model=SessionStartResponse)
 async def start_employee_assistant_session(
     body: SessionStartRequest,
     _employee: ActiveEmployeeDep,
+    _user: CurrentUserDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> SessionStartResponse:
     """Start an Employee AI Assistant chat session.
@@ -215,8 +230,12 @@ async def start_employee_assistant_session(
     Creates a record in assistant_chat_sessions.
     Called when the frontend ChatInterface mounts.
     """
+    # The two columns address two different tables: ``user_id`` is the login
+    # account (FK -> users.id, NOT NULL) and ``employee_id`` is the optional
+    # link to the personnel record (FK -> employees.id). They are never the
+    # same value, so each has to come from its own dependency.
     chat_session = AssistantChatSession(
-        user_id=uuid.UUID(str(_employee.id)),
+        user_id=uuid.UUID(str(_user.id)),
         assistant_type="employee",
         employee_id=uuid.UUID(str(_employee.id)),
     )
@@ -230,22 +249,18 @@ async def start_employee_assistant_session(
 async def end_employee_assistant_session(
     body: SessionEndRequest,
     _employee: ActiveEmployeeDep,
+    session_guard: ChatSessionGuardDep,
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """End an Employee AI Assistant chat session.
 
     Updates end_at timestamp and message_count.
     Called when the frontend ChatInterface unmounts.
-    """
-    from sqlmodel import select
 
-    result = await session.execute(
-        select(AssistantChatSession).where(
-            AssistantChatSession.id == uuid.UUID(body.session_id),
-        )
-    )
-    chat_session = result.scalar_one_or_none()
-    if chat_session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    Raises 404 unless the session belongs to the caller. This handler is where
+    the reported IDOR lived: it resolved the id with no owner filter, so any
+    authenticated employee could end an HR account's session.
+    """
+    chat_session = await session_guard.require(body.session_id)
     chat_session.end_at = datetime.now(UTC)
     await session.commit()

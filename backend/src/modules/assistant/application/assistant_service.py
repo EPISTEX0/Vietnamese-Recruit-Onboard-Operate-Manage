@@ -26,6 +26,7 @@ from src.modules.assistant.application.tool_registry import ToolRegistry
 from src.modules.assistant.domain.tools import TOOL_DEFINITIONS, get_openai_tools
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
+from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,7 +121,7 @@ class AssistantService:
         messages: list[ChatMessage],
         enabled_tool_names: set[str] | None = None,
         session: AsyncSession | None = None,
-        session_id: UUID | None = None,
+        chat_session: AssistantChatSession | None = None,
     ) -> ChatResponse:
         """Process a user message through the tool-calling loop.
 
@@ -128,7 +129,10 @@ class AssistantService:
             messages: Full conversation history including the new user message.
             enabled_tool_names: If provided, only these tools are sent to the LLM.
             session: Optional DB session for logging tool call events.
-            session_id: Optional session UUID to correlate tool call events.
+            chat_session: The caller's own chat session, already resolved and
+                ownership-checked by the router. Taking the row rather than an
+                id is what keeps an unauthorized id from reaching this layer:
+                there is no lookup here to skip the owner filter.
 
         Returns:
             ChatResponse with updated messages and optional draft_action.
@@ -200,10 +204,10 @@ class AssistantService:
                 )
 
                 # Record tool call event to DB if session is available
-                if session is not None and session_id is not None:
+                if session is not None and chat_session is not None:
                     await self._record_tool_event(
                         session=session,
-                        session_id=session_id,
+                        session_id=chat_session.id,
                         tool_name=tool_name,
                         duration_ms=tool_duration_ms,
                         success=success,
@@ -242,19 +246,8 @@ class AssistantService:
             all_new_messages.append(ChatMessage(role="assistant", content=_TOOL_LOOP_FALLBACK))
 
         # Increment message_count for this exchange
-        if session is not None and session_id is not None:
-            from sqlmodel import select
-
-            from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
-
-            result = await session.execute(
-                select(AssistantChatSession).where(
-                    AssistantChatSession.id == session_id,
-                )
-            )
-            chat_session = result.scalar_one_or_none()
-            if chat_session is not None:
-                chat_session.message_count += 1
+        if session is not None and chat_session is not None:
+            chat_session.message_count += 1
 
         total_duration_ms = (time.monotonic() - round_trip_start) * 1000
         logger.info(
@@ -274,7 +267,7 @@ class AssistantService:
         messages: list[ChatMessage],
         enabled_tool_names: set[str] | None = None,
         session: AsyncSession | None = None,
-        session_id: UUID | None = None,
+        chat_session: AssistantChatSession | None = None,
     ) -> typing.AsyncGenerator[dict[str, typing.Any], None]:
         """Process a user message and stream SSE events via async generator.
 
@@ -290,7 +283,10 @@ class AssistantService:
             messages: Full conversation history including the new user message.
             enabled_tool_names: If provided, only these tools are sent to the LLM.
             session: Optional DB session for logging tool call events.
-            session_id: Optional session UUID to correlate tool call events.
+            chat_session: The caller's own chat session, already resolved and
+                ownership-checked by the router. Taking the row rather than an
+                id is what keeps an unauthorized id from reaching this layer:
+                there is no lookup here to skip the owner filter.
 
         Yields:
             Dicts with ``event`` and ``data`` keys for SSE serialisation.
@@ -370,10 +366,10 @@ class AssistantService:
                     success,
                 )
 
-                if session is not None and session_id is not None:
+                if session is not None and chat_session is not None:
                     await self._record_tool_event(
                         session=session,
-                        session_id=session_id,
+                        session_id=chat_session.id,
                         tool_name=tool_name,
                         duration_ms=tool_duration_ms,
                         success=success,
@@ -415,21 +411,8 @@ class AssistantService:
             yield {"event": "text_delta", "data": {"content": _TOOL_LOOP_FALLBACK}}
 
         # Increment message_count
-        if session is not None and session_id is not None:
-            from sqlmodel import select
-
-            from src.modules.assistant.infrastructure.quality_models import (
-                AssistantChatSession,
-            )
-
-            result = await session.execute(
-                select(AssistantChatSession).where(
-                    AssistantChatSession.id == session_id,
-                )
-            )
-            chat_session = result.scalar_one_or_none()
-            if chat_session is not None:
-                chat_session.message_count += 1
+        if session is not None and chat_session is not None:
+            chat_session.message_count += 1
 
         if draft_action:
             yield {"event": "draft_action", "data": draft_action}
