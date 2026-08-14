@@ -8,6 +8,7 @@ and ARQ task functions for the worker.
 from __future__ import annotations
 
 import logging
+import time
 from functools import lru_cache
 
 import arq
@@ -62,26 +63,52 @@ def get_kb_minio_client() -> MinIOClient:
 # ---------------------------------------------------------------------------
 
 _arq_pool: ArqRedis | None = None
+_arq_last_failure_at: float | None = None
+
+# How long a failed connection is remembered before the next attempt.
+#
+# Every knowledge-base endpoint awaits get_arq_redis() through
+# get_document_service, including the read-only ones. Without this cooldown a
+# Redis outage cost each request the full arq connect budget -- several
+# seconds against a closed port -- so a degraded queue turned into a stalled
+# API. Short enough that a recovered Redis is picked up promptly.
+ARQ_RETRY_COOLDOWN_SECONDS = 30.0
 
 
 async def get_arq_redis() -> ArqRedis | None:
     """Get or create the ARQ Redis connection pool for enqueuing jobs.
 
-    Returns None if the Redis connection fails (non-fatal for document uploads).
+    Returns None if the Redis connection fails (non-fatal for document
+    uploads). A failure is remembered for ``ARQ_RETRY_COOLDOWN_SECONDS`` so
+    callers are not made to wait on a dial that just timed out; after that the
+    next call tries again and picks up a recovered Redis.
     """
-    global _arq_pool
+    global _arq_pool, _arq_last_failure_at
     if _arq_pool is not None:
         return _arq_pool
+
+    if (
+        _arq_last_failure_at is not None
+        and time.monotonic() - _arq_last_failure_at < ARQ_RETRY_COOLDOWN_SECONDS
+    ):
+        return None
 
     try:
         settings = get_kb_settings()
         redis_settings = RedisSettings.from_dsn(settings.redis_url)
         _arq_pool = await arq.create_pool(redis_settings, default_queue_name="kb-worker")
-        logger.info("ARQ Redis pool created for knowledge-base worker.")
-        return _arq_pool
     except Exception:
-        logger.exception("Failed to create ARQ Redis pool — uploads will not be enqueued.")
+        _arq_last_failure_at = time.monotonic()
+        logger.exception(
+            "Failed to create ARQ Redis pool — uploads will not be enqueued. "
+            "Retrying in at most %.0fs.",
+            ARQ_RETRY_COOLDOWN_SECONDS,
+        )
         return None
+
+    _arq_last_failure_at = None
+    logger.info("ARQ Redis pool created for knowledge-base worker.")
+    return _arq_pool
 
 
 # ---------------------------------------------------------------------------
