@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 from uuid import UUID
@@ -387,7 +388,13 @@ class InterviewSchedulerService:
         calendar_id = await self._resolve_org_calendar_id()
         spec = CalendarEventSpec(
             summary=f"Interview with {candidate.name}",
-            description=notes,
+            # Rebuilt from the interview's own mode/link, not from ``notes``
+            # alone: for a custom_link interview the join URL lives in here.
+            description=self._build_event_description(
+                notes,
+                mode=interview.meeting_mode,
+                meeting_link=interview.meeting_link,
+            ),
             start=start_resolved,
             end=end_resolved,
             timezone=timezone,
@@ -412,7 +419,14 @@ class InterviewSchedulerService:
         interview.start_at = start_resolved
         interview.end_at = end_resolved
         interview.timezone = timezone
-        interview.calendar_etag = result_event.etag
+        # Guarded like ``calendar_updated`` beside it: a response without an
+        # etag means we no longer know the remote version, but blanking the
+        # stored one would make every later patch unconditional and switch off
+        # 412 conflict detection without a sound. Keeping the last known etag
+        # keeps the next write conditional -- at worst it loses a race loudly,
+        # which is what the conflict-capture path is for.
+        if result_event.etag:
+            interview.calendar_etag = result_event.etag
         if result_event.updated:
             interview.calendar_updated = result_event.updated
         self._session.add(interview)
@@ -447,11 +461,7 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without a commit the
-        # entry is discarded when the session closes, leaving a successful action
-        # with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return candidate
 
@@ -530,11 +540,7 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without a commit the
-        # entry is discarded when the session closes, leaving a successful action
-        # with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return interview
 
@@ -629,8 +635,7 @@ class InterviewSchedulerService:
                 change_summary=(f"Interview cancellation failed on {trigger}; event {event_id}"),
                 success=False,
             )
-            if self._session is not None:
-                await self._session.commit()
+            await self._commit_audit()
             return
 
         await self._mark_interview_cancelled(interview)
@@ -648,8 +653,33 @@ class InterviewSchedulerService:
             change_summary=(f"Interview event {event_id} cancelled on {trigger}"),
             success=True,
         )
-        if self._session is not None:
+        await self._commit_audit()
+
+    async def _commit_audit(self) -> None:
+        """Commit the audit row just written, without letting it fail the action.
+
+        ``log_audit`` promises swallow-and-continue (R17.5): an audit failure is
+        logged and ignored. What its try/except cannot undo is the state a failed
+        ``session.flush()`` leaves behind -- SQLAlchemy marks the transaction as
+        needing a rollback, so the very next ``commit()`` raises
+        ``PendingRollbackError``. Committing bare here would therefore convert a
+        swallowed audit failure into a 500 for an action that already committed
+        its own write further up, breaking the same promise from the outside.
+
+        Every caller commits its real work *before* auditing, so discarding just
+        the audit is the correct recovery.
+        """
+        if self._session is None:
+            return
+        try:
             await self._session.commit()
+        except Exception:  # noqa: BLE001 - an audit write must never fail the action
+            logger.warning(
+                "Audit commit failed; the action itself already committed and stands",
+                exc_info=True,
+            )
+            with suppress(Exception):
+                await self._session.rollback()
 
     async def _mark_interview_cancelled(self, interview: Interview) -> None:
         """Record the Interview as cancelled on our side and commit.
@@ -703,11 +733,7 @@ class InterviewSchedulerService:
             change_summary="Interview completed",
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without a commit the
-        # entry is discarded when the session closes, leaving a successful action
-        # with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return interview
 
@@ -835,12 +861,7 @@ class InterviewSchedulerService:
         # supplies its own URL, and minting a Google conference for either would
         # hand attendees a second, wrong way to join.
         request_meet = mode == MeetingMode.GOOGLE_MEET
-        # CalendarEventSpec has no ``location`` field, so a custom link travels
-        # in the description -- which is where the pre-refactor flow put it and
-        # what the adapter actually renders onto the event.
-        description = notes
-        if mode == MeetingMode.CUSTOM_LINK:
-            description = f"{notes or ''}\nMeeting link: {meeting_link}".strip()
+        description = self._build_event_description(notes, mode=mode, meeting_link=meeting_link)
         spec = CalendarEventSpec(
             summary=f"Interview: {round_name} - {candidate.name}",
             description=description,
@@ -931,11 +952,7 @@ class InterviewSchedulerService:
             change_summary=(f"Interview created: {round_name} for candidate {candidate.name}"),
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without this commit the
-        # interview_created entry is discarded when the session closes, leaving
-        # the interview with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return interview
 
@@ -949,9 +966,9 @@ class InterviewSchedulerService:
         start: datetime,
         end: datetime,
         timezone: str,
-        mode: str = "online",
+        mode: str = MeetingMode.GOOGLE_MEET,
         meeting_link: str | None = None,
-        interviewer_ids: list[UUID],
+        interviewer_ids: list[UUID] | None = None,
         external_participant_emails: list[str] | None = None,
         notes: str | None = None,
     ) -> Interview:
@@ -1018,11 +1035,7 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without a commit the
-        # entry is discarded when the session closes, leaving a successful action
-        # with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return new_interview
 
@@ -1313,8 +1326,7 @@ class InterviewSchedulerService:
             change_summary=change_text,
             success=True,
         )
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
         return conflict
 
@@ -1363,8 +1375,7 @@ class InterviewSchedulerService:
                 change_summary="Interview schedule failed: Calendar event creation error",
                 success=False,
             )
-            if self._session is not None:
-                await self._session.commit()
+            await self._commit_audit()
             raise CalendarEventCreateFailedError() from exc
 
     async def _patch_calendar_event(
@@ -1458,8 +1469,7 @@ class InterviewSchedulerService:
                 change_summary="Interview reschedule failed: Calendar event patch error",
                 success=False,
             )
-            if self._session is not None:
-                await self._session.commit()
+            await self._commit_audit()
             raise CalendarEventUpdateFailedError(
                 details={
                     "calendar_event_id": event_id,
@@ -1726,6 +1736,35 @@ class InterviewSchedulerService:
 
     # ─── Private: Request validation ──────────────────────────────────
 
+    @staticmethod
+    def _build_event_description(
+        notes: str | None,
+        *,
+        mode: str,
+        meeting_link: str | None,
+    ) -> str | None:
+        """Compose the event description, carrying a custom join link with it.
+
+        :class:`CalendarEventSpec` has no ``location`` field, so a
+        ``custom_link`` interview's join URL travels inside the description.
+        That makes the description load-bearing: every write that rebuilds it
+        has to put the link back, or a plain reschedule silently deletes the
+        only way attendees have to join. ``google_meet`` needs no such care --
+        its conference lives in ``conferenceData``, which a patch preserves.
+
+        Args:
+            notes: The interview notes, if any.
+            mode: The interview's meeting mode.
+            meeting_link: The custom join URL, when the mode has one.
+
+        Returns:
+            The description to send to Calendar, or ``None`` when there is
+            nothing to say.
+        """
+        if mode == MeetingMode.CUSTOM_LINK and meeting_link:
+            return f"{notes or ''}\nMeeting link: {meeting_link}".strip()
+        return notes
+
     def _validate_schedule_request(
         self,
         *,
@@ -1961,11 +2000,7 @@ class InterviewSchedulerService:
             ),
             success=True,
         )
-        # ``log_audit`` only stages the row (add + flush); without a commit the
-        # entry is discarded when the session closes, leaving a successful action
-        # with no audit trail.
-        if self._session is not None:
-            await self._session.commit()
+        await self._commit_audit()
 
     # ─── Private: Calendar conflict capture ───────────────────────────
 

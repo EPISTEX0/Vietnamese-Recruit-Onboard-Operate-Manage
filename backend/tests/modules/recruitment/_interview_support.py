@@ -72,7 +72,7 @@ from src.modules.recruitment.application.interview_scheduler_service import (
     CalendarPort,
     InterviewSchedulerService,
 )
-from src.modules.recruitment.domain.entities import Candidate, Interview
+from src.modules.recruitment.domain.entities import Candidate, Interview, InterviewParticipant
 from src.modules.recruitment.domain.enums import CandidateStatus
 from src.modules.recruitment.domain.value_objects import (
     CalendarEvent,
@@ -540,6 +540,16 @@ class FakeInterviewRepository:
         self._session.add(interview)
         return interview
 
+    async def create(self, interview: Interview) -> Interview:
+        """Stage a new Interview the same way ``update`` stages a change."""
+        self._session.add(interview)
+        return interview
+
+    async def add_participant(self, participant: InterviewParticipant) -> InterviewParticipant:
+        """Record an InterviewParticipant so tests can assert on invitees."""
+        self._session.participants.append(participant)
+        return participant
+
 
 class FakeCalendarSession:
     """Minimal async session modelling commit/rollback + employee lookup.
@@ -573,6 +583,7 @@ class FakeCalendarSession:
         """
         self.employees: dict[UUID, Employee] = {e.id: e for e in (employees or [])}
         self.interviews: dict[UUID, Interview] = {iv.id: iv for iv in (interviews or [])}
+        self.participants: list[InterviewParticipant] = []
         self.commit_count = 0
         self.rollback_count = 0
         self._candidate_repo: FakeCandidateRepository | None = None
