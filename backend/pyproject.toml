@@ -92,6 +92,10 @@ ignore_missing_imports = true
 module = "src.modules.recruitment.infrastructure.repositories"
 disable_error_code = ["unused-ignore"]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
