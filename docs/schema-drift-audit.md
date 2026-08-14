@@ -478,6 +478,9 @@ dễ trôi qua mắt reviewer.
 Đã có sẵn một phần hàng rào: `tests/test_alembic_metadata_complete.py` chặn đúng cơ chế đã gây ra P0 — bảng
 có model mà không ai import. Nó không bắt được các loại drift khác.
 
+> **Cập nhật:** hàng rào này **đã dựng** — `backend/tests/test_schema_drift_ceiling.py`, chạy trong suite.
+> Hai đoạn dưới đây giữ nguyên vì lập luận vẫn đúng; chỉ phần "chưa có" là hết hạn.
+
 Vẫn nên cân nhắc CI gate chặn merge nếu số diff vượt ngưỡng — biến **64** thành trần không được phép tăng.
 Ngoài phạm vi ticket này, nêu ra để owner cân nhắc.
 
@@ -486,6 +489,51 @@ sẽ lặng lẽ quay lại 65 — đúng cái cơ chế đã tạo ra chính nh
 `entities.py` + `docs/` nên không thêm test được trong đợt này. Cái trần diff ở trên chính là hàng rào rẻ
 nhất phủ được cả nhóm này lẫn mọi drift mới, và nên làm trước khi P4 được dọn — sau đó ngưỡng sẽ về gần 0
 và mọi thay đổi ngoài ý muốn đều lộ ngay.
+
+### 7.1. Hàng rào đã dựng: tập diff được chấp nhận, không phải con số
+
+Đề xuất ở trên là một **con số trần**. Cái đã làm là một **tập fingerprint**:
+`backend/tests/schema_drift_baseline.txt` liệt kê từng diff trong 64 diff dưới dạng
+`operation table object`. Cùng chi phí chạy, nhưng con số không nói được điều gì cả — "65 > 64" bắt người
+đọc tự dựng lại harness mới biết cái gì vừa trôi — còn tập thì gọi đúng tên. Và con số đỏ y hệt nhau khi ai
+đó **dọn** drift, thứ mà cả tài liệu này đang cố khuyến khích.
+
+Nên hai chiều được đối xử khác nhau, có chủ ý:
+
+- fingerprint **mới** không có trong baseline → **fail**, kèm tên đối tượng và việc autogenerate sẽ làm gì
+  với DB (`would DROP this index -- silent performance loss`);
+- fingerprint trong baseline **biến mất** → chỉ **warning** kèm danh sách dòng cần xoá. Chặn merge vì ai đó
+  trả bớt nợ là hàng rào người ta sẽ tìm cách đi vòng.
+
+Cách đo giống hệt §8: container pgvector riêng → `alembic upgrade head` → `compare_metadata` trong **tiến
+trình con** (`tests/schema_drift_probe.py`) đọc metadata và `include_object` bằng cách `exec` đúng khối
+import của `env.py`, nên hai bên không thể lệch nhau âm thầm. Container riêng chứ không dùng
+`postgres_async_url` dùng chung: mọi test khác đều với tới DB đó, một `CREATE TABLE` sót lại sẽ hiện ra ở
+đây thành drift ma. Giá của sự cô lập đó là ~5s.
+
+Với `modify_*`, fingerprint mang theo cả **giá trị cũ và mới** chứ không chỉ tên cột. Nếu chỉ khoá theo cột
+thì `users.avatar_url` vốn đã là `TEXT -> VARCHAR` được chấp nhận, nên thu model về `VARCHAR(10)` — một
+`ALTER` cắt cụt dữ liệu thật — sẽ rơi trúng dòng baseline cũ và **lọt**. 35 trong 64 dòng là `modify_*` nên
+đây không phải trường hợp hiếm. Ngoại lệ duy nhất là `modify_comment`: đổi cách nào cũng vô hại, và văn bản
+tự do thì sẽ làm baseline nhiễu mỗi lần sửa chữ.
+
+Chi phí: **~6s** cho cả 4 test.
+
+**Nó chạy ở hai nơi, và cần cả hai.** Trong suite (rẻ, lập trình viên thấy ngay khi chạy pytest), và ở
+**`Gate 6 - schema drift`** — job CI riêng, *không* `continue-on-error`. Lý do phải có job riêng chính là
+Gate 4b: đó là job duy nhất chạy pytest và nó đang `continue-on-error: true`, còn Gate 3 chỉ `--collect-only`.
+Một hàng rào chỉ nằm trong suite thì GitHub vẫn báo `success` cho PR làm mất index. Gate 6 chưa phải required
+status check — đó là quyết định của owner và của ruleset — nhưng khác 4a/4b, nó đỏ thật trong
+`gh run view --json`.
+
+Đã mutation-test: xoá `index=True` của `employees.department_id` → toàn bộ 2574 test còn lại vẫn xanh, chỉ
+`test_no_new_drift_between_models_and_migrated_schema` đỏ, và nó nêu đúng
+`remove_index employees ix_employees_department_id`. Đó là bằng chứng cho khẳng định ở đoạn trên: trước hàng
+rào này, không có gì trong repo giữ nhóm 14 index đó.
+
+Một chỗ hở còn lại, ghi ra thay vì giấu: từ lúc drift được dọn đến lúc dòng baseline tương ứng bị xoá, tái
+tạo đúng diff đó là miễn phí. Không phép đo đơn lẻ nào phân biệt được "đã dọn, chưa cập nhật baseline" với
+"dọn rồi lại làm hỏng"; chặn merge lúc dọn là đánh đổi tệ hơn. Warning nêu đúng dòng cần xoá, xoá là đóng.
 
 ---
 

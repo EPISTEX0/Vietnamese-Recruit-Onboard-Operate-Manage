@@ -197,6 +197,50 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Gate 6 -- the models may not drift further from the schema the migrations
+  # build. Runs the same pytest module the suite runs, on its own, and does NOT
+  # set continue-on-error.
+  #
+  # It needs its own job precisely because gate 4b does. The drift guard is an
+  # ordinary test, but 4b is `continue-on-error: true` and gate 3 only collects,
+  # so a fence living only in the suite reports `success` while a PR that drops
+  # an index sails through. This job is the one place a schema regression can
+  # actually turn something red.
+  #
+  # Not yet a required status check -- that is the owner's call and the ruleset's
+  # to make, and per the frontend job's comment a gate earns blocking status by
+  # being green across real PRs. Unlike 4a/4b it at least reports honestly in the
+  # meantime: `gh run view --json jobs` shows a real failure, not a masked one.
+  #
+  # Cheap: ~6s of work. Nearly all of the wall clock is uv sync and pulling the
+  # pgvector image, which is why it is a whole job rather than a step bolted onto
+  # gate 5 -- gate 5 is a required check and must stay fast and boring.
+  # ---------------------------------------------------------------------------
+  schema-drift:
+    name: Gate 6 - schema drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+        with:
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen --extra dev
+
+      # `-W error::UserWarning` is deliberately NOT set: a cleaned-up baseline
+      # entry warns on purpose, and paying down drift must not fail this job.
+      # `-rw` keeps those warnings visible in the log instead of buried.
+      - name: pytest tests/test_schema_drift_ceiling.py
+        run: uv run --frozen --no-sync pytest -q -rw tests/test_schema_drift_ceiling.py
+
+  # ---------------------------------------------------------------------------
   # Gate 4a (reporting) -- full lint and format state.
   #
   # Currently red. Every step is continue-on-error so the job reports the whole
