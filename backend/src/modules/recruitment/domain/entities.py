@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
@@ -508,23 +508,32 @@ class JobApplicationLinkProposal(SQLModel, table=True):
     """A cross-thread link that has no effect until HR resolves it."""
 
     __tablename__ = "job_application_link_proposals"
+    __table_args__ = (
+        # Declared here, not as ``index=True`` on the fields: 063 named all three
+        # after the short form ``link_proposals`` while the table is
+        # ``job_application_link_proposals``, and one of them after
+        # ``target_application_id`` while the column is
+        # ``target_job_application_id``. ``index=True`` derives the name from the
+        # table and column, so it renders three differently-named twins and
+        # autogenerate proposes dropping the three real indexes to create them.
+        # Same shape as the ``ix_kb_*`` group in knowledge_base/domain/entities.py.
+        Index("ix_link_proposals_inbox_item_id", "recruitment_inbox_item_id"),
+        Index("ix_link_proposals_target_application_id", "target_job_application_id"),
+        Index("ix_link_proposals_status", "status"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     recruitment_inbox_item_id: UUID = Field(
         foreign_key="recruitment_inbox_items.id",
         ondelete="CASCADE",
         nullable=False,
-        index=True,
     )
     target_job_application_id: UUID = Field(
         foreign_key="job_applications.id",
         ondelete="CASCADE",
         nullable=False,
-        index=True,
     )
-    status: str = Field(
-        default=LinkProposalStatus.PENDING, max_length=20, nullable=False, index=True
-    )
+    status: str = Field(default=LinkProposalStatus.PENDING, max_length=20, nullable=False)
     proposed_by_user_id: UUID = Field(foreign_key="users.id", nullable=False)
     resolved_by_user_id: UUID | None = Field(default=None, foreign_key="users.id")
     resolved_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
