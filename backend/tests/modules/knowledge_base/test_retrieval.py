@@ -224,6 +224,9 @@ class TestContextBuilderKBIntegration:
         self, mock_session: AsyncMock, mock_retrieval: AsyncMock
     ) -> None:
         """HR context does NOT call retrieval when no user_query provided."""
+        mock_retrieval.retrieve.return_value = (
+            '---\n[TÀI LIỆU NỘI BỘ LIÊN QUAN]\n(Nội quy): "Nội dung mẫu"\n---\n'
+        )
         builder = ContextBuilder(
             session=mock_session,
             retrieval_service=mock_retrieval,
@@ -232,11 +235,15 @@ class TestContextBuilderKBIntegration:
         result = await builder.build_hr_context(user_query=None)
 
         mock_retrieval.retrieve.assert_not_called()
+        assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
     async def test_hr_context_no_kb_when_empty_query(
         self, mock_session: AsyncMock, mock_retrieval: AsyncMock
     ) -> None:
         """HR context does NOT call retrieval when query is empty/whitespace."""
+        mock_retrieval.retrieve.return_value = (
+            '---\n[TÀI LIỆU NỘI BỘ LIÊN QUAN]\n(Nội quy): "Nội dung mẫu"\n---\n'
+        )
         builder = ContextBuilder(
             session=mock_session,
             retrieval_service=mock_retrieval,
@@ -245,6 +252,7 @@ class TestContextBuilderKBIntegration:
         result = await builder.build_hr_context(user_query="   ")
 
         mock_retrieval.retrieve.assert_not_called()
+        assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
     async def test_hr_context_no_kb_when_service_none(self, mock_session: AsyncMock) -> None:
         """HR context degrades gracefully when no retrieval service."""
@@ -372,7 +380,8 @@ class TestEmployeeKBSecurityIsolation:
         # Verify kb_types was passed as ["employee"] to repo — never ["hr"]
         call_args = repo.search_similar_chunks.call_args
         assert call_args.kwargs["kb_types"] == ["employee"], (
-            f"Employee retrieval must only query employee tables, got {call_args.kwargs['kb_types']}"
+            "Employee retrieval must only query employee tables, "
+            f"got {call_args.kwargs['kb_types']}"
         )
 
     async def test_employee_context_never_queries_hr_kb(
@@ -416,7 +425,8 @@ class TestEmployeeKBSecurityIsolation:
     async def test_repo_search_with_employee_kb_type_returns_only_employee_results(
         self, repo: MagicMock, settings: KnowledgeBaseSettings
     ) -> None:
-        """Verify the contract: when repo receives kb_types=["employee"], it only searches employee tables.
+        """Verify the contract: when repo receives kb_types=["employee"], it only
+        searches employee tables.
 
         This is a contract test — the actual table-level isolation is enforced by
         the repository dispatching to the correct entity classes.
