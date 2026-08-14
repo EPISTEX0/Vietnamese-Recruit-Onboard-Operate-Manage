@@ -11,18 +11,18 @@ colors:
   page: "#f8fafc"
   on-primary: "#ffffff"
 typography:
-    sans:
-      fontFamily: Be Vietnam Pro
-      fontSize: 1rem
-      lineHeight: 1.6
-    h1:
-      fontFamily: Be Vietnam Pro
-      fontSize: 1.25rem
-      fontWeight: 600
-    label:
-      fontFamily: Be Vietnam Pro
-      fontSize: 0.875rem
-      fontWeight: 500
+  sans:
+    fontFamily: Be Vietnam Pro
+    fontSize: 1rem
+    lineHeight: 1.6
+  h1:
+    fontFamily: Be Vietnam Pro
+    fontSize: 1.25rem
+    fontWeight: 600
+  label:
+    fontFamily: Be Vietnam Pro
+    fontSize: 0.875rem
+    fontWeight: 500
   mono:
     fontFamily: JetBrains Mono
     fontSize: 0.875rem
@@ -56,15 +56,9 @@ dây frontend xoay quanh domain model (xem
 [`docs/adr/0006-ai-studio-design-system.md`](./docs/adr/0006-ai-studio-design-system.md)).
 
 Đặc trưng: tông slate làm nền, một accent duy nhất **indigo** cho action và icon,
-font **Inter** cho mọi text hiển thị và **JetBrains Mono** cho code / mã nội bộ /
-audit. Card bo góc lớn (`rounded-2xl`), shadow mềm, negative space vừa phải —
-đọc được, không trang trí.
-
-> **Lưu ý legacy:** hệ thống *Heritage* trước đây (warm limestone `#F7F5F2`,
-> accent terracotta `#B8422E`, font Fraunces/Public Sans/Space Grotesk) là
-> design system cũ (Next.js 14, Tailwind 3), đã được backup và **không còn là
-> nguồn sự thật**. Khi thêm UI mới, tuân theo AI Studio ở tài liệu này, không
-> theo Heritage.
+font **Be Vietnam Pro** cho mọi text hiển thị và **JetBrains Mono** cho code /
+mã nội bộ / audit. Card bo góc lớn (`rounded-2xl`), shadow mềm, negative space
+vừa phải — đọc được, không trang trí.
 
 ## Colors
 
@@ -83,18 +77,20 @@ Quy ước: nền trang `bg-slate-50/50`, body text `text-slate-800` (xem
 
 ## Typography
 
-- **sans / body:** MiSans 1rem, lineHeight 1.6 — font chính cho toàn bộ giao diện.
-- **h1:** MiSans Semibold 1.25rem (text-xl), weight 600.
-- **label / caption:** MiSans Medium 0.875rem (text-sm), weight 500.
+- **sans / body:** Be Vietnam Pro 1rem, lineHeight 1.6 — font chính cho toàn bộ giao diện.
+- **h1:** Be Vietnam Pro Semibold 1.25rem (text-xl), weight 600.
+- **label / caption:** Be Vietnam Pro Medium 0.875rem (text-sm), weight 500.
 - **mono:** JetBrains Mono 0.875rem — cho `code`, mã NV, audit id, qua `--font-mono`.
 
-Cả hai font tải qua `next/font/local` (MiSans) và `next/font/google` (JetBrains Mono) trong `frontend/app/layout.tsx` và gắn vào
-CSS variable `--font-sans` / `--font-mono`; body dùng `font-sans`.
+Cả hai font tải qua `next/font/google` trong `frontend/app/layout.tsx` và gắn vào CSS variable
+`--font-sans` / `--font-mono`; body dùng `font-sans`. Be Vietnam Pro khai `subsets: ['vietnamese', 'latin']`
+với weight 400/500/600/700 — đủ cho dấu tiếng Việt, đừng đổi sang font thiếu subset `vietnamese`.
 
 ## Do's and Don'ts
 
 - **Do** dùng indigo làm accent duy nhất cho action/icon — không trộn accent thứ hai.
 - **Do** dùng `rounded-2xl` cho card, shadow mềm — giữ cảm giác sản phẩm dụng cụ.
 - **Do** ưu tiên tiếng Việt trong nhãn giao diện (deployment cho doanh nghiệp VN).
-- **Don't** mang accent terracotta hay font Fraunces của Heritage sang `frontend/`.
+- **Don't** mang accent hay font của design system cũ vào `frontend/` — lịch sử chuyển đổi nằm ở
+  [`docs/adr/0006-ai-studio-design-system.md`](./docs/adr/0006-ai-studio-design-system.md), không phải ở đây.
 - **Don't** dùng gradient trang trí hoặc làm nền — hệ thống này phẳng có chủ đích. **Ngoại lệ:** gradient accent `from-indigo-600 to-indigo-500` được phép trên CTA đặc biệt (vd: nút "Trợ lý AI") để tạo điểm nhấn.

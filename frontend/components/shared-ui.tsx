@@ -3,7 +3,7 @@
  *
  * Merged from lib/dashboard-ui.tsx + components/operate.tsx (2025-Q2 restructure).
  * Follows AI Studio design system: slate/indigo, rounded-2xl cards, rounded-full
- * pill buttons, Inter + JetBrains Mono. Vietnamese labels default.
+ * pill buttons, Be Vietnam Pro + JetBrains Mono. Vietnamese labels default.
  *
  * v3: i18n — defaults use useTranslations for locale-aware fallback text.
  */

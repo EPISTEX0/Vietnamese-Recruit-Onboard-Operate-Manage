@@ -10,6 +10,8 @@ CSS-first, card bo `rounded-2xl`, shadow mềm. Hệ thống **Heritage** cũ
 Grotesk) thuộc về `frontend/` (Next.js 14, Tailwind 3) và không còn là design
 system nguồn sự thật; `frontend/` được giữ làm backup legacy.
 
+> **Đã thay đổi.** Hai chi tiết trong đoạn trên không còn đúng — xem [ADR 0013](./0013-vietnamese-typography-and-single-frontend-directory.md). Font sans giờ là **Be Vietnam Pro** thay cho Inter (JetBrains Mono giữ nguyên), và `vroom-hr/` không còn tồn tại: app AI Studio nằm ở `frontend/`, không còn thư mục Heritage legacy nào. Phần còn lại của ADR này (nền slate, một accent indigo duy nhất, Tailwind v4 CSS-first, card `rounded-2xl`) vẫn nguyên giá trị.
+
 Quyết định này chốt DESIGN.md với code thực và ngắt sự lệch giữa tài liệu và
 triển khai: DESIGN.md trước đây mô tả Heritage dù frontend chính đã là AI Studio.
 

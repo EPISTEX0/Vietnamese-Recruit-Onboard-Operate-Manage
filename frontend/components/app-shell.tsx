@@ -4,7 +4,7 @@
  * Extracted from app/(dashboard)/layout.tsx and app/(employee)/layout.tsx
  * (~85% duplicate). All visual differences are parameterized as props.
  *
- * Follows AI Studio design system: slate/indigo, rounded-full pill, Inter + JetBrains Mono.
+ * Follows AI Studio design system: slate/indigo, rounded-full pill, Be Vietnam Pro + JetBrains Mono.
  *
  * v2: Added nav grouping (navGroups), mobile hamburger menu.
  * v3: i18n — replaced hardcoded text with useTranslations.
@@ -151,7 +151,6 @@ export default function AppShell({
 
   // Close sidebar + clear optimistic path + navigation flag on route change
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSidebarOpen(false);
     setOptimisticPath(null);
     setIsNavigating(false);
