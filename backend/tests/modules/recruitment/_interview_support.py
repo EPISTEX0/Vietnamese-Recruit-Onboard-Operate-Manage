@@ -16,10 +16,14 @@ Seams provided
   ``CalendarEventUpdateFailedError``, or an ``httpx.HTTPStatusError`` with
   status ``401`` to drive the token-refresh path). Scripting is configurable
   per instance via outcome queues.
-* :class:`FakeCandidateRepository` and :class:`FakeCalendarSession` - in-memory
-  candidate persistence with explicit staging + commit/rollback semantics (for
-  the atomic-rollback property) and an employee lookup compatible with how
+* :class:`FakeCandidateRepository`, :class:`FakeInterviewRepository`, and
+  :class:`FakeCalendarSession` - in-memory candidate/interview persistence with
+  explicit staging + commit/rollback semantics (for the atomic-rollback
+  property) and an employee lookup compatible with how
   :meth:`InterviewSchedulerService._resolve_interviewers` reads ``select(Employee)``.
+  Calendar state (event id, scheduled start, applied timezone) lives on
+  :class:`Interview`, so tests seed it with ``build_calendar_harness(interviews=...)``
+  and read it back via ``harness.scheduled_interview(candidate_id)``.
 * :class:`SpyAuditSink` - a stand-in for the module-level ``log_audit`` that
   records audit entries and can be configured to raise (to test R12.5 - audit
   failure must never roll back the action). Tests install it with
@@ -39,11 +43,13 @@ Requirements: 11.1
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 from zoneinfo import available_timezones
 
@@ -53,6 +59,15 @@ from hypothesis import strategies as st
 from src.modules.employee.domain.entities import Employee
 from src.modules.identity.api.schemas import GoogleTokens, GrantStatus
 from src.modules.identity.domain.entities import OAuthGrant
+from src.modules.recruitment.application import (
+    candidate_lifecycle_service as candidate_lifecycle_service_module,
+)
+from src.modules.recruitment.application import (
+    interview_scheduler_service as interview_scheduler_service_module,
+)
+from src.modules.recruitment.application.candidate_lifecycle_service import (
+    CandidateLifecycleService,
+)
 from src.modules.recruitment.application.interview_scheduler_service import (
     CalendarPort,
     InterviewSchedulerService,
@@ -90,12 +105,18 @@ class RecordedCalendarCall:
             create calls.
         spec: The :class:`CalendarEventSpec` for create/patch calls; ``None``
             for delete calls.
+        if_match: The etag the service sent as the conditional-write
+            precondition, or ``None`` for an unconditional call. Recorded so
+            tests can assert that a reschedule really does condition its patch
+            on the stored etag -- without it the restored conditional write
+            could be deleted again and every test would stay green.
     """
 
     method: str
     access_token: str
     event_id: str | None
     spec: CalendarEventSpec | None
+    if_match: str | None = None
 
 
 # A scripted outcome for a create/patch call: an event to return, an exception
@@ -235,7 +256,11 @@ class FakeCalendarPort:
     ) -> CalendarEvent:
         """Record a patch call and return/raise its scripted outcome."""
         call = RecordedCalendarCall(
-            method="patch_event", access_token=access_token, event_id=event_id, spec=spec
+            method="patch_event",
+            access_token=access_token,
+            event_id=event_id,
+            spec=spec,
+            if_match=if_match,
         )
         self.calls.append(call)
         outcome = self._take(self._patch_outcomes)
@@ -243,10 +268,20 @@ class FakeCalendarPort:
             return self._default_event(spec, event_id=event_id)
         return self._resolve_event(outcome, call)
 
-    async def delete_event(self, access_token: str, event_id: str, calendar_id: str) -> None:
+    async def delete_event(
+        self,
+        access_token: str,
+        event_id: str,
+        calendar_id: str,
+        if_match: str | None = None,
+    ) -> None:
         """Record a delete call and raise its scripted outcome, if any."""
         call = RecordedCalendarCall(
-            method="delete_event", access_token=access_token, event_id=event_id, spec=None
+            method="delete_event",
+            access_token=access_token,
+            event_id=event_id,
+            spec=None,
+            if_match=if_match,
         )
         self.calls.append(call)
         outcome = self._take(self._delete_outcomes)
@@ -447,10 +482,63 @@ _SNAPSHOT_FIELDS: tuple[str, ...] = (
     "archived_at",
 )
 
+# Interview fields the snapshot tracks. Since the calendar-scheduling refactor
+# these -- not the Candidate's -- are the calendar state the interview flows
+# read and write, so the atomic-rollback and reschedule-failure properties are
+# asserted against them.
+_INTERVIEW_SNAPSHOT_FIELDS: tuple[str, ...] = (
+    "status",
+    "start_at",
+    "end_at",
+    "timezone",
+    "calendar_event_id",
+    "calendar_id",
+    "calendar_etag",
+    "calendar_updated",
+    "meeting_mode",
+    "meeting_link",
+    "needs_relink",
+)
+
 
 def _snapshot_candidate(candidate: Candidate) -> dict[str, Any]:
     """Capture the mutable interview/status fields of a Candidate."""
     return {name: getattr(candidate, name) for name in _SNAPSHOT_FIELDS}
+
+
+def _snapshot_interview(interview: Interview) -> dict[str, Any]:
+    """Capture the mutable calendar/scheduling fields of an Interview."""
+    return {name: getattr(interview, name) for name in _INTERVIEW_SNAPSHOT_FIELDS}
+
+
+class FakeInterviewRepository:
+    """In-memory ``InterviewRepository`` stand-in over the session's store.
+
+    :class:`InterviewSchedulerService` reads interviews two ways: through
+    ``select(Interview)`` on the session (``_get_interview_by_event_id``) and
+    through ``self._interview_repo`` (``_get_scheduled_interview``,
+    ``_get_interview_or_raise``). Both must see the same rows -- an Interview
+    that ``schedule_interview`` staged with ``session.add`` has to be visible to
+    the very next ``reschedule_interview`` -- so this repository holds no state
+    of its own and reads straight out of :class:`FakeCalendarSession`.
+    """
+
+    def __init__(self, session: FakeCalendarSession) -> None:
+        """Initialize the repository over the session holding the interviews."""
+        self._session = session
+
+    async def find_by_candidate_id(self, candidate_id: UUID) -> list[Interview]:
+        """Return every live Interview belonging to a Candidate."""
+        return [iv for iv in self._session.interviews.values() if iv.candidate_id == candidate_id]
+
+    async def get_by_id(self, interview_id: UUID) -> Interview | None:
+        """Return the live Interview for ``interview_id``, or ``None``."""
+        return self._session.interviews.get(interview_id)
+
+    async def update(self, interview: Interview) -> Interview:
+        """Stage an Interview mutation (visible on commit, undone on rollback)."""
+        self._session.add(interview)
+        return interview
 
 
 class FakeCalendarSession:
@@ -471,23 +559,38 @@ class FakeCalendarSession:
     unchanged - no monkeypatching of ``_resolve_interviewers`` is required.
     """
 
-    def __init__(self, employees: Sequence[Employee] | None = None) -> None:
-        """Initialize the session and seed the employee lookup table.
+    def __init__(
+        self,
+        employees: Sequence[Employee] | None = None,
+        interviews: Sequence[Interview] | None = None,
+    ) -> None:
+        """Initialize the session and seed the employee/interview lookups.
 
         Args:
             employees: Employees available to the interviewer lookup.
+            interviews: Interviews that already exist (committed state), i.e.
+                Candidates that are already scheduled on the calendar.
         """
         self.employees: dict[UUID, Employee] = {e.id: e for e in (employees or [])}
-        self.interviews: dict[UUID, Interview] = {}
+        self.interviews: dict[UUID, Interview] = {iv.id: iv for iv in (interviews or [])}
         self.commit_count = 0
         self.rollback_count = 0
         self._candidate_repo: FakeCandidateRepository | None = None
         self._staged_candidate_ids: set[UUID] = set()
+        self._committed_interviews: dict[UUID, dict[str, Any]] = {
+            iv.id: _snapshot_interview(iv) for iv in (interviews or [])
+        }
+        self._staged_interview_ids: set[UUID] = set()
 
     def add(self, instance: object) -> None:
-        """Store Interview entities for query; ignore other types."""
+        """Stage an Interview (visible on commit, undone on rollback).
+
+        Other entity types (``InterviewParticipant``, audit rows) are ignored:
+        no property under test reads them back through the session.
+        """
         if isinstance(instance, Interview):
             self.interviews[instance.id] = instance
+            self._staged_interview_ids.add(instance.id)
 
     def bind_candidate_repo(self, repo: FakeCandidateRepository) -> None:
         """Associate the candidate repository for commit/rollback coordination."""
@@ -497,19 +600,40 @@ class FakeCalendarSession:
         """Mark a Candidate as having uncommitted staged mutations."""
         self._staged_candidate_ids.add(candidate_id)
 
+    def committed_interview_snapshot(self, interview_id: UUID) -> dict[str, Any] | None:
+        """Return the last *committed* field snapshot for an Interview."""
+        snap = self._committed_interviews.get(interview_id)
+        return dict(snap) if snap is not None else None
+
     async def commit(self) -> None:
-        """Promote staged Candidate mutations into committed state."""
+        """Promote staged Candidate and Interview mutations into committed state."""
         self.commit_count += 1
         if self._candidate_repo is not None:
             self._candidate_repo._commit_staged(self._staged_candidate_ids)
         self._staged_candidate_ids.clear()
+        for interview_id in self._staged_interview_ids:
+            live = self.interviews.get(interview_id)
+            if live is not None:
+                self._committed_interviews[interview_id] = _snapshot_interview(live)
+        self._staged_interview_ids.clear()
 
     async def rollback(self) -> None:
-        """Discard staged Candidate mutations, restoring committed state."""
+        """Discard staged Candidate and Interview mutations, restoring committed state."""
         self.rollback_count += 1
         if self._candidate_repo is not None:
             self._candidate_repo._rollback_staged(self._staged_candidate_ids)
         self._staged_candidate_ids.clear()
+        for interview_id in self._staged_interview_ids:
+            snap = self._committed_interviews.get(interview_id)
+            live = self.interviews.get(interview_id)
+            if snap is None:
+                # Never committed: the row did not exist before this transaction,
+                # so a rollback must make it vanish entirely.
+                self.interviews.pop(interview_id, None)
+            elif live is not None:
+                for field_name, value in snap.items():
+                    setattr(live, field_name, value)
+        self._staged_interview_ids.clear()
 
     async def execute(self, statement: Any) -> _FakeEmployeeResult | _FakeInterviewResult:
         """Execute an interviewer ``select(Employee)`` or ``select(Interview)`` against seeded data.
@@ -769,6 +893,68 @@ class FakeCalendarGrantChecker:
         return self._refreshed_tokens
 
 
+class FakeOrgConnectionRepository:
+    """In-memory ``OrganizationGoogleConnectionRepository`` stand-in.
+
+    Since interviews are booked on the Organization's *selected recruitment
+    calendar*, this connection -- not the acting HR user's personal OAuth grant
+    -- is what authorizes a Calendar write. It is therefore the seam the guard in
+    ``_ensure_org_connection_active`` / ``_resolve_org_calendar_id`` reads, and
+    the one a test drives to model "the Organization cannot write to Calendar".
+
+    Two independent ways to make the connection unusable:
+
+    * ``connected=False`` -- no connection row at all (``get_singleton`` returns
+      ``None``), i.e. Google was never linked;
+    * ``status="revoked"`` (anything other than ``"connected"``) -- a row exists
+      but the link is no longer live.
+    """
+
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        status: str = "connected",
+        selected_calendar_id: str | None = "recruitment@company.vn",
+        access_token_enc: str = "enc:test-access-token",
+        refresh_token_enc: str = "enc:test-refresh-token",
+        client_secret_enc: str = "enc:test-secret",
+        token_expires_at: datetime | None = None,
+    ) -> None:
+        """Initialize the connection seam.
+
+        Args:
+            connected: When false, ``get_singleton`` returns ``None`` (no
+                connection row exists at all).
+            status: The connection status; anything but ``"connected"`` makes
+                the guard reject.
+            selected_calendar_id: The recruitment calendar id; ``None`` models
+                "connected but no calendar selected yet".
+            access_token_enc: Encrypted access token.
+            refresh_token_enc: Encrypted refresh token.
+            client_secret_enc: Encrypted OAuth client secret.
+            token_expires_at: Access-token expiry, if any.
+        """
+        self._connected = connected
+        self.connection = SimpleNamespace(
+            status=status,
+            selected_calendar_id=selected_calendar_id,
+            access_token_enc=access_token_enc,
+            refresh_token_enc=refresh_token_enc,
+            client_secret_enc=client_secret_enc,
+            token_expires_at=token_expires_at,
+        )
+        self.upserts: list[Any] = []
+
+    async def get_singleton(self) -> Any | None:
+        """Return the Organization's Google connection, or ``None`` if unlinked."""
+        return self.connection if self._connected else None
+
+    async def upsert_singleton(self, connection: Any) -> None:
+        """Record a connection write (e.g. a refreshed access token)."""
+        self.upserts.append(connection)
+
+
 class FakeTokenCipher:
     """``TokenCipher`` stand-in that maps ciphertext to plaintext.
 
@@ -950,12 +1136,18 @@ def make_interview(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     timezone: str = "Asia/Ho_Chi_Minh",
-    calendar_event_id: str = "evt-default",
+    calendar_event_id: str | None = "evt-default",
+    calendar_id: str | None = "recruitment@company.vn",
     calendar_etag: str | None = '"etag-v1"',
     meeting_mode: str = "google_meet",
     interview_id: UUID | None = None,
 ) -> Interview:
     """Build an Interview for calendar-related tests.
+
+    This is how a test gives a Candidate an already-scheduled calendar event:
+    since the scheduling refactor the event reference, the scheduled start, and
+    the applied timezone live here rather than on :class:`Candidate`. Pass the
+    result to ``build_calendar_harness(interviews=[...])``.
 
     Args:
         candidate_id: The owning Candidate id.
@@ -965,6 +1157,7 @@ def make_interview(
         end_at: Interview end (defaults to 1 hour after start).
         timezone: IANA timezone.
         calendar_event_id: The Google Calendar event id.
+        calendar_id: The Google Calendar the event lives on.
         calendar_etag: The etag for conditional writes.
         meeting_mode: Meeting mode (google_meet, in_person, custom_link).
         interview_id: Explicit id (defaults to a fresh UUID).
@@ -983,12 +1176,23 @@ def make_interview(
         end_at=end,
         timezone=timezone,
         calendar_event_id=calendar_event_id,
+        calendar_id=calendar_id,
         calendar_etag=calendar_etag,
         meeting_mode=meeting_mode,
     )
 
 
 # ─── Service builder ───────────────────────────────────────────────────
+
+
+@contextmanager
+def _patch_audit_sinks(sink: SpyAuditSink) -> Iterator[SpyAuditSink]:
+    """Replace the module-level ``log_audit`` in both services with ``sink``."""
+    with (
+        patch.object(interview_scheduler_service_module, "log_audit", sink),
+        patch.object(candidate_lifecycle_service_module, "log_audit", sink),
+    ):
+        yield sink
 
 
 @dataclass
@@ -1003,6 +1207,8 @@ class CalendarServiceHarness:
         service: The :class:`InterviewSchedulerService` under test.
         calendar: The :class:`FakeCalendarPort` recording adapter calls.
         candidate_repo: The in-memory candidate repository.
+        interview_repo: The in-memory interview repository (shares the session's
+            interview store).
         session: The fake session coordinating commit/rollback + employee lookup.
         audit_sink: The :class:`SpyAuditSink` capturing audit entries.
         grant_repo: The fake OAuth grant repository.
@@ -1013,8 +1219,10 @@ class CalendarServiceHarness:
     """
 
     service: InterviewSchedulerService
+    lifecycle: CandidateLifecycleService
     calendar: FakeCalendarPort
     candidate_repo: FakeCandidateRepository
+    interview_repo: FakeInterviewRepository
     session: FakeCalendarSession
     audit_sink: SpyAuditSink
     grant_repo: FakeOAuthGrantRepository
@@ -1023,11 +1231,45 @@ class CalendarServiceHarness:
     clock: FixedClock
     user_id: UUID
 
+    def audit_patch(self) -> AbstractContextManager[SpyAuditSink]:
+        """Route every audit write in both services to :attr:`audit_sink`.
+
+        A terminal transition writes its ``candidate_rejected`` /
+        ``candidate_archived`` entry through ``candidate_lifecycle_service``'s
+        ``log_audit`` while the interview cancellation writes
+        ``interview_event_cancelled`` / ``interview_cancel_failed`` through
+        ``interview_scheduler_service``'s, so both module-level names have to be
+        replaced for one sink to see the whole story. The real helper would call
+        ``session.add``/``flush``, which the fake session does not implement.
+        """
+        return _patch_audit_sinks(self.audit_sink)
+
+    async def scheduled_interview(self, candidate_id: UUID) -> Interview | None:
+        """Return the Candidate's live scheduled Interview, or ``None``.
+
+        The calendar state a Candidate used to carry inline (event id, start,
+        timezone) now lives here, so the properties that used to read
+        ``candidate.calendar_event_id`` read this instead.
+        """
+        for interview in await self.interview_repo.find_by_candidate_id(candidate_id):
+            if interview.status == "scheduled":
+                return interview
+        return None
+
+    async def interviews_for(self, candidate_id: UUID) -> list[Interview]:
+        """Return every live Interview belonging to a Candidate, any status."""
+        return await self.interview_repo.find_by_candidate_id(candidate_id)
+
+    def committed_interview_snapshot(self, interview_id: UUID) -> dict[str, Any] | None:
+        """Return the last *committed* field snapshot for an Interview."""
+        return self.session.committed_interview_snapshot(interview_id)
+
 
 def build_calendar_harness(
     *,
     candidates: Sequence[Candidate],
     employees: Sequence[Employee] = (),
+    interviews: Sequence[Interview] = (),
     calendar: FakeCalendarPort | None = None,
     audit_sink: SpyAuditSink | None = None,
     grant: OAuthGrant | None | _Default = _DEFAULT,
@@ -1052,6 +1294,10 @@ def build_calendar_harness(
     Args:
         candidates: Candidates seeded into the repository (committed state).
         employees: Employees available to the interviewer lookup.
+        interviews: Interviews seeded into the session (committed state) -- this
+            is how a Candidate is given an already-scheduled calendar event, now
+            that the event reference lives on ``Interview`` rather than
+            ``Candidate``. Build them with :func:`make_interview`.
         calendar: A pre-configured :class:`FakeCalendarPort`; a default one is
             created when omitted.
         audit_sink: A pre-configured :class:`SpyAuditSink`; a default one is
@@ -1075,8 +1321,9 @@ def build_calendar_harness(
     calendar = calendar or FakeCalendarPort()
     audit_sink = audit_sink or SpyAuditSink()
 
-    session = FakeCalendarSession(employees=employees)
+    session = FakeCalendarSession(employees=employees, interviews=interviews)
     candidate_repo = FakeCandidateRepository(session, candidates)
+    interview_repo = FakeInterviewRepository(session)
 
     if isinstance(grant, _Default):
         resolved_grant: OAuthGrant | None = make_oauth_grant(
@@ -1090,33 +1337,25 @@ def build_calendar_harness(
     crypto = FakeTokenCipher()
 
     if isinstance(connection_repo, _Default):
-
-        class _FakeOrgConnRepo:
-            async def get_singleton(self):
-                from types import SimpleNamespace
-
-                return SimpleNamespace(
-                    status="connected",
-                    selected_calendar_id="recruitment@company.vn",
-                    access_token_enc="enc:test-access-token",
-                    refresh_token_enc="enc:test-refresh-token",
-                    client_secret_enc="enc:test-secret",
-                    token_expires_at=None,
-                )
-
-            async def upsert_singleton(self, conn):
-                pass
-
-        resolved_conn_repo = _FakeOrgConnRepo()
+        resolved_conn_repo: Any = FakeOrgConnectionRepository()
     else:
         resolved_conn_repo = connection_repo
 
     org_settings_repo = AsyncMock()
     org_settings_repo.get_timezone = AsyncMock(return_value=org_timezone)
 
+    lifecycle = CandidateLifecycleService(
+        candidate_repo=candidate_repo,  # type: ignore[arg-type]
+        cv_document_repo=AsyncMock(),
+        job_opening_repo=AsyncMock(),
+        minio_client=AsyncMock(),
+        session=session,  # type: ignore[arg-type]
+        user_id=acting_user_id,
+    )
+
     service = InterviewSchedulerService(
         candidate_repo=candidate_repo,  # type: ignore[arg-type]
-        interview_repo=AsyncMock(),
+        interview_repo=interview_repo,  # type: ignore[arg-type]
         session=session,  # type: ignore[arg-type]
         user_id=acting_user_id,
         calendar_port=calendar,
@@ -1125,10 +1364,17 @@ def build_calendar_harness(
         crypto=crypto,
     )
 
+    # The lifecycle delegates interview cancellation back to the scheduler, the
+    # same way the container wires them, so a reject/archive driven through the
+    # harness exercises the real R8 path rather than a stub.
+    lifecycle._interview_canceller = service
+
     return CalendarServiceHarness(
         service=service,
+        lifecycle=lifecycle,
         calendar=calendar,
         candidate_repo=candidate_repo,
+        interview_repo=interview_repo,
         session=session,
         audit_sink=audit_sink,
         grant_repo=grant_repo,
