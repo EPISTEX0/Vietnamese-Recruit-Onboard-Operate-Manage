@@ -1,26 +1,27 @@
 # Accepted model-vs-schema drift. One fingerprint per line: `operation table object`.
 #
-# Every line here is a difference `alembic revision --autogenerate` would emit today
-# between `SQLModel.metadata` and a database at `alembic upgrade head`. They are
-# recorded, not approved: `docs/schema-drift-audit.md` sections 5.4 and 5.5 argue each
-# one is harmless (no data loss, no integrity loss). The dangerous drift -- P0/P1/P2,
-# plus the 14 performance indexes -- is already closed and is deliberately absent.
+# This file holds NO fingerprints, and that is the passing state. `SQLModel.metadata`
+# and a database at `alembic upgrade head` now describe the same schema, so
+# `alembic revision --autogenerate` emits nothing. Every one of the 64 diffs this file
+# used to list was closed rather than accepted -- `docs/schema-drift-audit.md` section
+# 5.6 has the group-by-group table of which side was wrong and why.
 #
 # `tests/test_schema_drift_ceiling.py` fails on any fingerprint NOT in this list, and
-# only warns when a line here has been cleaned up. Text after `#` is a human note and
-# is not compared; the fingerprint is the whole line before it.
+# only warns when a line here has been cleaned up. With the list empty the fence is at
+# its strongest setting: *any* difference between the models and the migration chain is
+# a failure, and the failure names the object and says what applying it would do.
 #
-# `modify_*` fingerprints carry the old and new value on purpose. Keyed on the column
-# alone, `users.avatar_url` is an accepted `TEXT -> VARCHAR`, and narrowing the model to
-# `VARCHAR(10)` -- an ALTER that truncates live data -- would reuse that same line and
-# pass. `modify_comment` is the exception: prose, and harmless either way.
+# ADDING A LINE HERE WEAKENS THE FENCE. It means "I looked at this diff and it is not a
+# landmine", which is sometimes the right call -- but the bar is higher than it was at
+# 64 lines, because a real problem no longer has a crowd of accepted noise to hide in.
+# Put the reason in the `#` note. Removing lines is always safe.
 #
-# Adding a line means "I looked at this diff and it is not a landmine". Removing lines
-# is always safe. Measured at head 085, 2026-08-14: 64 diffs, 48 tables in metadata.
-
-modify_type cv_documents confirmed_fields JSON -> JSONB
-modify_type cv_documents field_provenance JSON -> JSONB
-modify_type recruitment_inbox_items attachments_metadata JSON -> JSONB
-modify_type recruitment_inbox_items correction_history JSON -> JSONB
-modify_type recruitment_inbox_items evidence JSON -> JSONB
-modify_type recruitment_inbox_items source_hints JSON -> JSONB
+# Format notes, for whoever adds the next line:
+#   * text after `#` is a human note and is not compared; the fingerprint is the whole
+#     line before it;
+#   * `modify_*` fingerprints carry the old and new value on purpose. Keyed on the
+#     column alone, an accepted `TEXT -> VARCHAR` would also match narrowing the model
+#     to `VARCHAR(10)` -- an ALTER that truncates live data. `modify_comment` is the
+#     exception: prose, and harmless either way.
+#
+# Measured at head 087, 2026-08-14: 0 diffs, 48 tables in metadata.

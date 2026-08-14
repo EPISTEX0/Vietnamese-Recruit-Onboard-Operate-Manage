@@ -172,9 +172,22 @@ def _accepted_fingerprints() -> list[str]:
 
 
 def test_baseline_file_is_readable() -> None:
-    """The baseline is the whole comparison; an empty one would make the guard vacuous."""
+    """The baseline must be present and free of duplicates. Empty is allowed.
+
+    This used to also assert the file held at least two fingerprints, on the
+    reading that an empty baseline would make the guard vacuous. That reading
+    inverted when the last accepted diff was closed. An empty baseline is the
+    *strictest* setting this fence has -- every diff the probe finds is now new
+    drift, so emptying the file cannot make anything pass; it makes everything
+    fail. Keeping the assertion would have made "the models match the migration
+    chain exactly" the one state the guard rejects.
+
+    The vacuity it was reaching for is real, and is caught where it actually
+    lives: ``test_probe_sees_the_whole_model`` fails if the measurement itself
+    comes back near-empty, which is the only way a green here means nothing.
+    """
+    assert BASELINE_PATH.is_file(), f"{BASELINE_REL} is missing -- the guard has no baseline"
     accepted = _accepted_fingerprints()
-    assert len(accepted) > 1, f"{BASELINE_REL} holds no fingerprints"
     assert len(set(accepted)) == len(accepted), (
         f"{BASELINE_REL} has duplicate fingerprints: "
         f"{sorted({f for f in accepted if accepted.count(f) > 1})}"
