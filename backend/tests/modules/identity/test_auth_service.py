@@ -74,7 +74,6 @@ async def test_setup_race_rolls_back_and_returns_stable_error() -> None:
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     organization = MagicMock()
-    organization.get_setup_status = AsyncMock(return_value=False)
     organization.create_for_setup = AsyncMock(
         side_effect=IntegrityError("insert", {}, Exception("singleton conflict"))
     )

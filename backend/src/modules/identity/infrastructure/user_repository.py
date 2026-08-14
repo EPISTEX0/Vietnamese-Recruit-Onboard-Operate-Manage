@@ -70,9 +70,11 @@ class UserRepository:
     async def count_system_admins(self) -> int:
         """Count SYSTEM_ADMIN accounts in the system.
 
-        This is the first-run setup gate: ``setup_first_run`` creates a
-        SYSTEM_ADMIN as the very first account (ADR-0009 section 3), so a
-        non-zero count means the organization has already been bootstrapped.
+        This is *not* the first-run setup gate -- ``count_users`` is. Zero
+        system admins on a deployment that still holds accounts is a degraded
+        state recovered by promotion (migration ``084``,
+        ``ensure_super_admin``), not by re-running setup, so the count only
+        tells operators through the log which state they are in.
         """
         statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
         result = await self.session.execute(statement)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
     from src.modules.recruitment.infrastructure.org_settings_repository import (
         OrganizationSettingsRepository,
     )
+
+
+logger = logging.getLogger(__name__)
 
 
 class AccountAlreadyExistsError(AuthError):
@@ -74,32 +78,55 @@ class AuthService:
         self._session = session
 
     async def get_setup_status(self) -> bool:
-        """Return True when the Organization singleton has been initialized."""
-        if self._organization_repository is None:
-            return (await self._user_repository.count_users()) > 0
-        return (
-            await self._organization_repository.get_setup_status()
-            and (await self._user_repository.count_system_admins()) > 0
-        )
+        """Return True once the deployment holds any account at all.
+
+        First-run setup mints a ``SYSTEM_ADMIN`` with no authentication, so what
+        gates it is a security decision. The gate is the ``users`` table and
+        nothing else: setup is the bootstrap for a deployment that has no way in
+        because it has no accounts.
+
+        It is deliberately *not* keyed on the ``organization_settings`` row.
+        That row is created by ordinary settings reads and survives the accounts
+        it was created alongside, so keying on it failed in both directions --
+        it refused setup on a deployment whose ``users`` table had been emptied,
+        and it allowed setup on a deployment with a live ``SYSTEM_ADMIN`` whose
+        settings row happened to be missing.
+
+        Nor is it keyed on ``count_system_admins() == 0``: a deployment holding
+        real accounts and real employee data has already been bootstrapped, and
+        losing its administrators is repaired by *promoting* a named existing
+        account -- what migration ``084`` and ``ensure_super_admin`` do through
+        ``AUTH_SUPER_ADMIN_EMAIL`` -- not by letting an anonymous caller mint a
+        fresh administrator over that data.
+        """
+        return (await self._user_repository.count_users()) > 0
 
     async def setup_first_run(
         self, organization_name: str, name: str, email: str, password: str
     ) -> LocalAuthResult:
-        """Create the Organization and first HR account atomically."""
+        """Create the Organization and the deployment's first SYSTEM_ADMIN."""
         if self._organization_repository is None:
             raise RuntimeError("Organization repository is not configured")
         if await self.get_setup_status():
+            await self._log_setup_refusal()
             raise SetupAlreadyCompletedError()
 
-        # The unique singleton key is the serialization point for concurrent
-        # bootstrap requests. A losing request must not leak the transaction's
-        # partial Organization row or expose a session.
         try:
+            # Claiming the Organization singleton is what serializes concurrent
+            # bootstraps: a fresh INSERT collides on the unique singleton key,
+            # and an existing row is claimed under a row lock.
             await self._organization_repository.create_for_setup(organization_name)
+            # Re-read the gate now that the claim is held. A request that waited
+            # on the row lock may have been overtaken while it waited, and on
+            # that path there is no INSERT left to collide with. A losing
+            # request must not leak the partial Organization row or a session.
+            already_bootstrapped = await self.get_setup_status()
         except (IntegrityError, ValueError) as exc:
-            if self._session is not None:
-                await self._session.rollback()
+            await self._rollback_setup()
             raise SetupAlreadyCompletedError() from exc
+        if already_bootstrapped:
+            await self._rollback_setup()
+            raise SetupAlreadyCompletedError()
 
         try:
             user = await self._user_repository.create_local_account(
@@ -110,8 +137,7 @@ class AuthService:
                 must_change_password=False,
             )
         except Exception:
-            if self._session is not None:
-                await self._session.rollback()
+            await self._rollback_setup()
             raise
 
         # Commit the two setup records before issuing any authenticated session.
@@ -121,6 +147,32 @@ class AuthService:
         if self._session is not None:
             await self._session.commit()
         return result
+
+    async def _rollback_setup(self) -> None:
+        """Discard the in-flight setup transaction, when a session is wired."""
+        if self._session is not None:
+            await self._session.rollback()
+
+    async def _log_setup_refusal(self) -> None:
+        """Record *why* setup was refused without telling the caller.
+
+        Every refusal answers ``409 AUTH_SETUP_ALREADY_COMPLETED`` on purpose.
+        ``/setup`` is unauthenticated, so an answer that distinguished "an admin
+        exists" from "accounts exist but no admin" would tell an anonymous
+        caller exactly when a deployment's administrative namespace is empty.
+
+        An operator locked out of a populated deployment still needs to know the
+        way back, so the distinction -- and the promotion path that resolves it
+        -- goes to the log instead.
+        """
+        if (await self._user_repository.count_system_admins()) > 0:
+            return
+        logger.warning(
+            "First-run setup refused: this deployment holds accounts but no "
+            "system_admin. Recover by promoting an existing account -- set "
+            "AUTH_SUPER_ADMIN_EMAIL to its address and restart -- rather than "
+            "by creating a new administrator through setup."
+        )
 
     async def login(self, email: str, password: str) -> LocalAuthResult:
         """Authenticate local account with email/password."""

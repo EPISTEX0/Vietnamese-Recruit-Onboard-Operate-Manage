@@ -50,24 +50,40 @@ class OrganizationSettingsRepository:
         """Return the configured default IANA timezone for the Organization."""
         return self._settings.default_organization_timezone
 
-    async def get_setup_status(self) -> bool:
-        """Return whether the Organization has been initialized."""
-        return (await self._get_row()) is not None
-
     async def create_for_setup(self, name: str) -> OrganizationSettings:
-        """Create or initialize the singleton Organization during setup."""
-        settings_row = await self._get_row()
+        """Claim the singleton Organization row for a first-run or recovery setup.
+
+        An existing row is *adopted*, never rejected. A named settings row can
+        outlive every account -- and the row itself is seeded by ``get_timezone``
+        and friends long before anyone names the organization -- so its presence
+        says nothing about whether the deployment has been bootstrapped. Only the
+        ``users`` table says that, and :class:`AuthService` is what reads it.
+
+        Claiming the row is also the serialization point for concurrent
+        bootstraps. With no row, the unique ``singleton_key`` lets exactly one
+        INSERT win. With a row, ``SELECT ... FOR UPDATE`` lets exactly one
+        claimant hold it at a time -- which is why the caller has to re-read its
+        own gate once this returns.
+
+        Configuration already on the row -- timezone, allowed domains,
+        attendance networks -- is preserved. Recovery restores administrative
+        access; it is not a factory reset.
+
+        Args:
+            name: The organization name the setup form supplied.
+
+        Returns:
+            The claimed OrganizationSettings singleton, flushed but not committed.
+        """
+        settings_row = await self._get_row(for_update=True)
         if settings_row is None:
             settings_row = OrganizationSettings(
                 singleton_key="default",
                 name=name,
                 timezone="Asia/Ho_Chi_Minh",
             )
-        elif settings_row.name:
-            raise ValueError("Organization setup already completed")
         else:
             settings_row.name = name
-            settings_row.timezone = "Asia/Ho_Chi_Minh"
         self.session.add(settings_row)
         await self.session.flush()
         return settings_row
@@ -120,13 +136,20 @@ class OrganizationSettingsRepository:
         await self.session.flush()
         return settings_row.timezone
 
-    async def _get_row(self) -> OrganizationSettings | None:
+    async def _get_row(self, *, for_update: bool = False) -> OrganizationSettings | None:
         """Read the single OrganizationSettings row if it exists.
+
+        Args:
+            for_update: Take a row lock, so a concurrent reader asking for the
+                same lock waits until this transaction ends. Only ``setup``
+                needs it; the ordinary settings reads must not block on it.
 
         Returns:
             The OrganizationSettings entity if present, None otherwise.
         """
         statement = select(OrganizationSettings).limit(1)
+        if for_update:
+            statement = statement.with_for_update()
         result = await self.session.execute(statement)
         return result.scalars().first()
 
