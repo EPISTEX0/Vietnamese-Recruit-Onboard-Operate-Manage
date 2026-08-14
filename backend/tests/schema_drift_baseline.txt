@@ -20,7 +20,6 @@
 
 modify_type cv_documents confirmed_fields JSON -> JSONB
 modify_type cv_documents field_provenance JSON -> JSONB
-modify_type email_messages processing_status VARCHAR(20) -> VARCHAR(30)
 modify_type recruitment_inbox_items attachments_metadata JSON -> JSONB
 modify_type recruitment_inbox_items correction_history JSON -> JSONB
 modify_type recruitment_inbox_items evidence JSON -> JSONB
