@@ -11,9 +11,13 @@ That is what happened to ``POST /api/ess/assistant/feedback``.  This test reads
 the router's own route table, so it fails the moment a handler stops being
 registered, whatever the reason.
 
-One route the client calls is genuinely absent rather than mis-indented —
-``/chat/stream`` — and it is recorded here as a strict xfail rather than left
-out, so the file states the whole contract instead of only the part it passes.
+``/chat/stream`` was absent for a different reason — nothing implemented it —
+and was recorded here as a strict xfail until it was.  It is now an ordinary
+entry in the list below, which is the point of having written it down: the
+client posts to it on every message, so its absence was a 404 on every employee
+chat turn rather than a missing streaming nicety.  What the endpoint actually
+streams is asserted in ``test_ess_chat_stream_integration.py``; this file only
+holds the line that it exists.
 """
 
 from __future__ import annotations
@@ -25,27 +29,28 @@ os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
 os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
 os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
 
+import re  # noqa: E402
+from pathlib import Path  # noqa: E402
+
 import pytest  # noqa: E402
 
 from src.modules.assistant.api.employee_router import (  # noqa: E402
     employee_assistant_router,
 )
 
+# backend/tests/modules/assistant -> repo root -> the ESS client.
+_ESS_CLIENT = (
+    Path(__file__).resolve().parents[4] / "frontend" / "lib" / "api" / "employee-assistant.ts"
+)
+
 # Paths the frontend ESS assistant client (``frontend/lib/api/employee-assistant.ts``)
 # posts to. Anything listed here must resolve to a handler.
 _EXPECTED_POST_PATHS = [
     "/api/ess/assistant/chat",
+    "/api/ess/assistant/chat/stream",
     "/api/ess/assistant/feedback",
     "/api/ess/assistant/session/start",
     "/api/ess/assistant/session/end",
-]
-
-# The client posts here too, and the ESS router does not implement it — see
-# ``test_known_missing_ess_route``. Kept as its own list rather than quietly
-# dropped from the one above, so this file cannot report full coverage of the
-# client's calls while the single route that breaks that claim goes unmentioned.
-_MISSING_POST_PATHS = [
-    "/api/ess/assistant/chat/stream",
 ]
 
 
@@ -64,24 +69,28 @@ def test_ess_route_is_registered(path: str) -> None:
     assert path in _registered_post_paths()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ESS /chat/stream is unimplemented: EmployeeAssistantService has no "
-        "chat_stream, so this needs a streaming service method, not a route. "
-        "AiChat sends every message through the stream path, so ESS chat 404s."
-    ),
-)
-@pytest.mark.parametrize("path", _MISSING_POST_PATHS)
-def test_known_missing_ess_route(path: str) -> None:
-    """A route the client calls that the ESS router does not serve.
+def test_every_path_the_client_posts_to_is_covered_here() -> None:
+    """The expected-path list matches what the client actually posts.
 
-    Recorded as a strict xfail so the gap is visible in test output instead of
-    being an absence nobody reads. ``strict=True`` means implementing the
-    endpoint turns this into an XPASS failure, which is the prompt to move the
-    path into ``_EXPECTED_POST_PATHS``.
+    ``test_ess_route_is_registered`` can only check paths somebody remembered
+    to list, so it would keep passing if a sixth endpoint were added to the
+    client and never to the router — the exact shape of the ``/chat/stream``
+    gap.  This reads the client's own source instead, so the list cannot fall
+    behind it silently.
     """
-    assert path in _registered_post_paths()
+    client_source = _ESS_CLIENT.read_text(encoding="utf-8")
+
+    # The client builds its URLs as `${BASE}/suffix`; BASE is the router prefix.
+    posted = {
+        f"/api/ess/assistant{match}"
+        for match in re.findall(r"\$\{BASE\}(/[a-z/-]*)", client_source)
+    }
+
+    assert posted, f"found no ${{BASE}} calls in {_ESS_CLIENT} — has the client moved?"
+    assert posted <= set(_EXPECTED_POST_PATHS), (
+        f"the ESS client calls paths this file does not check: "
+        f"{sorted(posted - set(_EXPECTED_POST_PATHS))}"
+    )
 
 
 def test_handlers_are_defined_at_module_level() -> None:

@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.assistant.api.employee_schemas import (
@@ -28,6 +29,7 @@ from src.modules.assistant.api.employee_schemas import (
     SessionStartResponse,
 )
 from src.modules.assistant.api.session_access import ChatSessionGuardDep
+from src.modules.assistant.api.sse import sse_response
 from src.modules.assistant.application.assistant_service import ChatMessage
 from src.modules.assistant.application.context_builder import ContextBuilder
 from src.modules.assistant.application.employee_assistant_service import (
@@ -192,6 +194,52 @@ async def employee_chat(
     return ChatResponseSchema(
         messages=new_messages,
         draft_action=draft_action,
+    )
+
+
+@employee_assistant_router.post("/chat/stream")
+async def employee_chat_stream(
+    body: ChatRequest,
+    _employee: ActiveEmployeeDep,
+    assistant_service: EmployeeAssistantServiceDep,
+    session_guard: ChatSessionGuardDep,
+    session: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """Chat with the Employee AI Assistant via SSE streaming.
+
+    Same logic as ``POST /chat``, streamed. This is the path ``AiChat`` uses for
+    every message the employee sends — ``/chat`` exists but the client never
+    calls it — so while this endpoint was missing, ESS chat answered 404 to
+    every turn rather than merely lacking a streaming nicety.
+
+    Requires an active Employee session. All tool calls are scoped to the
+    authenticated employee's own data.
+    """
+    last_msg = body.messages[-1]
+    if last_msg.role != "user":
+        raise HTTPException(status_code=422, detail="Last message must be from user")
+
+    domain_messages = [
+        ChatMessage(
+            role=m.role,
+            content=m.content,
+        )
+        for m in body.messages
+    ]
+
+    # Resolved before the generator starts, so the ownership check happens
+    # while a failure can still become an HTTP status rather than a mid-stream
+    # error event. An id that is stale, unknown, or somebody else's resolves to
+    # None here and the turn proceeds recording no telemetry.
+    owned_session = await session_guard.resolve_optional(body.session_id)
+
+    return sse_response(
+        assistant_service.chat_stream(
+            domain_messages,
+            session=session,
+            chat_session=owned_session,
+        ),
+        log_label="ESS chat",
     )
 
 

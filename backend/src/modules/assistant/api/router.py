@@ -9,9 +9,7 @@ held in frontend memory; backend processes each turn statelessly.
 
 from __future__ import annotations
 
-import json
 import logging
-import typing
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -32,6 +30,7 @@ from src.modules.assistant.api.schemas import (
     SessionStartResponse,
 )
 from src.modules.assistant.api.session_access import ChatSessionGuardDep, session_not_found
+from src.modules.assistant.api.sse import sse_response
 from src.modules.assistant.application.assistant_service import (
     AssistantService,
     ChatMessage,
@@ -182,35 +181,19 @@ async def chat_stream(
         for m in body.messages
     ]
 
-    # Resolved before the generator starts: the guard needs the request-scoped
-    # DB session, which is closed by the time the streaming body runs.
+    # Resolved before the generator starts, so the ownership check happens
+    # while a failure can still become an HTTP status rather than a mid-stream
+    # error event.
     owned_session = await session_guard.resolve_optional(body.session_id)
 
-    async def event_stream() -> typing.AsyncGenerator[bytes, None]:
-        """Generate SSE-formatted bytes from the assistant chat_stream generator."""
-        try:
-            async for event in assistant_service.chat_stream(
-                domain_messages,
-                enabled_tool_names=enabled_tool_names,
-                session=session,
-                chat_session=owned_session,
-            ):
-                event_name = event["event"]
-                event_data = json.dumps(event["data"], ensure_ascii=False)
-                yield f"event: {event_name}\ndata: {event_data}\n\n".encode()
-        except Exception as exc:
-            logger.exception("chat_stream error")
-            error_data = json.dumps({"error": str(exc)}, ensure_ascii=False)
-            yield f"event: error\ndata: {error_data}\n\n".encode()
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+    return sse_response(
+        assistant_service.chat_stream(
+            domain_messages,
+            enabled_tool_names=enabled_tool_names,
+            session=session,
+            chat_session=owned_session,
+        ),
+        log_label="HR chat",
     )
 
 

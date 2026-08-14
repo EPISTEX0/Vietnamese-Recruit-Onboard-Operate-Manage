@@ -22,6 +22,11 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from src.modules.assistant.application.context_builder import ContextBuilder
+from src.modules.assistant.application.streaming_loop import (
+    MAX_TOOL_ITERATIONS,
+    TOOL_LOOP_FALLBACK,
+    stream_tool_loop,
+)
 from src.modules.assistant.application.tool_registry import ToolRegistry
 from src.modules.assistant.domain.tools import TOOL_DEFINITIONS, get_openai_tools
 from src.modules.assistant.infrastructure.config import AssistantSettings
@@ -34,12 +39,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Safety cap to prevent infinite tool-calling loops
-_MAX_TOOL_ITERATIONS = 5
+# Safety cap and exhaustion message. Defined in ``streaming_loop`` — the module
+# both assistants share — and re-exported here under the names this module has
+# always used, so ``chat`` and ``chat_stream`` cannot drift apart on either.
+_MAX_TOOL_ITERATIONS = MAX_TOOL_ITERATIONS
 
-_TOOL_LOOP_FALLBACK = (
-    "Xin lỗi, trợ lý đã xử lý quá nhiều bước. Vui lòng thử lại với câu hỏi cụ thể hơn."
-)
+_TOOL_LOOP_FALLBACK = TOOL_LOOP_FALLBACK
 
 # System prompt — static, hardcoded per grill decision
 _SYSTEM_PROMPT = """You are the AI Assistant for Vroom HR, a Vietnamese HR management platform.
@@ -279,6 +284,10 @@ class AssistantService:
         - ``draft_action`` — a Draft Action was generated
         - ``done`` — stream complete
 
+        The loop itself is :func:`stream_tool_loop`, shared with the ESS
+        assistant. All this method decides is what the HR assistant puts in
+        front of it: its own system prompt and the admin-configured tool subset.
+
         Args:
             messages: Full conversation history including the new user message.
             enabled_tool_names: If provided, only these tools are sent to the LLM.
@@ -294,130 +303,16 @@ class AssistantService:
 
         openai_messages = await self._build_messages(messages, enabled_tool_names)
 
-        draft_action: dict[str, typing.Any] | None = None
-        all_new_messages: list[ChatMessage] = []
-
-        for _iteration in range(_MAX_TOOL_ITERATIONS):
-            tool_calls_result: list[dict[str, typing.Any]] | None = None
-            content_parts: list[str] = []
-
-            async for chunk in self._llm_client.chat_stream(
-                messages=openai_messages,
-                tools=get_openai_tools(enabled_tool_names),
-            ):
-                if chunk.content_delta:
-                    content_parts.append(chunk.content_delta)
-                    yield {"event": "text_delta", "data": {"content": chunk.content_delta}}
-                if chunk.done:
-                    if chunk.final_content is not None:
-                        content_parts.append(chunk.final_content)
-                    tool_calls_result = chunk.tool_calls_acc
-
-            final_content = "".join(content_parts) if content_parts else None
-
-            if not tool_calls_result:
-                # Text response — done with the tool loop
-                assistant_msg = ChatMessage(
-                    role="assistant",
-                    content=final_content or "",
-                )
-                all_new_messages.append(assistant_msg)
-                break
-
-            # Tool calls — execute each tool
-            assistant_msg = ChatMessage(
-                role="assistant",
-                content=final_content,
-                tool_calls=tool_calls_result,
-            )
-            all_new_messages.append(assistant_msg)
-
-            assistant_openai: dict[str, typing.Any] = {
-                "role": "assistant",
-                "content": final_content,
-                "tool_calls": tool_calls_result,
-            }
-            openai_messages.append(assistant_openai)
-
-            for tc in tool_calls_result:
-                tool_name = tc["function"]["name"]
-                try:
-                    tool_args = json.loads(tc["function"]["arguments"])
-                except json.JSONDecodeError:
-                    tool_args = {}
-
-                yield {
-                    "event": "tool_start",
-                    "data": {"name": tool_name, "arguments": tc["function"]["arguments"]},
-                }
-
-                tool_start = time.monotonic()
-                success = True
-                try:
-                    result_str = await self._tool_registry.execute(tool_name, tool_args)
-                except Exception:
-                    success = False
-                    result_str = json.dumps({"error": f"Tool execution failed: {tool_name}"})
-                tool_duration_ms = (time.monotonic() - tool_start) * 1000
-                logger.debug(
-                    "Tool %s took %.0f ms (success=%s)",
-                    tool_name,
-                    tool_duration_ms,
-                    success,
-                )
-
-                if session is not None and chat_session is not None:
-                    await self._record_tool_event(
-                        session=session,
-                        session_id=chat_session.id,
-                        tool_name=tool_name,
-                        duration_ms=tool_duration_ms,
-                        success=success,
-                    )
-
-                if self._tool_registry.is_draft_tool(tool_name):
-                    try:
-                        result_data = json.loads(result_str)
-                        if "draft_action" in result_data:
-                            draft_action = result_data["draft_action"]
-                    except json.JSONDecodeError:
-                        pass
-
-                tool_msg = ChatMessage(
-                    role="tool",
-                    content=result_str,
-                    tool_call_id=tc["id"],
-                    name=tool_name,
-                )
-                all_new_messages.append(tool_msg)
-
-                openai_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc["id"],
-                        "content": result_str,
-                    }
-                )
-
-                yield {
-                    "event": "tool_end",
-                    "data": {"name": tool_name, "result": result_str},
-                }
-
-        # Fallback when loop exhausts without a text response
-        has_text_response = any(m.role == "assistant" and m.content for m in all_new_messages)
-        if not has_text_response:
-            all_new_messages.append(ChatMessage(role="assistant", content=_TOOL_LOOP_FALLBACK))
-            yield {"event": "text_delta", "data": {"content": _TOOL_LOOP_FALLBACK}}
-
-        # Increment message_count
-        if session is not None and chat_session is not None:
-            chat_session.message_count += 1
-
-        if draft_action:
-            yield {"event": "draft_action", "data": draft_action}
-
-        yield {"event": "done", "data": {}}
+        async for event in stream_tool_loop(
+            llm_client=self._llm_client,
+            tool_registry=self._tool_registry,
+            openai_messages=openai_messages,
+            openai_tools=get_openai_tools(enabled_tool_names),
+            session=session,
+            chat_session=chat_session,
+            log_prefix="HR assistant",
+        ):
+            yield event
 
     async def _record_tool_event(
         self,

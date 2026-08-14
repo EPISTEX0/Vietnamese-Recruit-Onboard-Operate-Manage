@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -20,6 +21,11 @@ from src.modules.assistant.application.assistant_service import ChatMessage, Cha
 from src.modules.assistant.application.context_builder import ContextBuilder
 from src.modules.assistant.application.employee_tool_registry import (
     EmployeeToolRegistry,
+)
+from src.modules.assistant.application.streaming_loop import (
+    MAX_TOOL_ITERATIONS,
+    TOOL_LOOP_FALLBACK,
+    stream_tool_loop,
 )
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
@@ -39,11 +45,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MAX_TOOL_ITERATIONS = 5
+# Shared with the HR assistant rather than re-declared, so the two cannot
+# disagree about how many tool rounds are allowed or what to say when they run
+# out — they used to hold identical copies of both.
+_MAX_TOOL_ITERATIONS = MAX_TOOL_ITERATIONS
 
-_TOOL_LOOP_FALLBACK = (
-    "Xin lỗi, trợ lý đã xử lý quá nhiều bước. Vui lòng thử lại với câu hỏi cụ thể hơn."
-)
+_TOOL_LOOP_FALLBACK = TOOL_LOOP_FALLBACK
 
 _EMPLOYEE_SYSTEM_PROMPT = """You are the Employee Assistant for Vroom HR.
 
@@ -251,6 +258,59 @@ class EmployeeAssistantService:
             messages=all_new_messages,
             draft_action=draft_action,
         )
+
+    async def chat_stream(
+        self,
+        messages: list[ChatMessage],
+        session: AsyncSession | None = None,
+        chat_session: AssistantChatSession | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Process a user message and stream SSE events via async generator.
+
+        Runs the same tool-calling loop as :meth:`chat` and emits the same
+        events as the HR assistant — ``text_delta``, ``tool_start``,
+        ``tool_end``, ``draft_action``, ``done`` — because it is literally the
+        same loop (:func:`stream_tool_loop`). The frontend has one stream reader
+        for both assistants, so a second event vocabulary here would be a bug
+        even if it were internally consistent.
+
+        The tool registry is built per call with the authenticated employee's
+        id, exactly as :meth:`chat` builds it: ADR-0013 scoping does not weaken
+        because the transport changed.
+
+        Args:
+            messages: Full conversation history including the new user message.
+            session: Optional DB session for logging tool call events.
+            chat_session: The caller's own chat session, already resolved and
+                ownership-checked by the router. Taking the row rather than an
+                id is what keeps an unauthorized id from reaching this layer:
+                there is no lookup here to skip the owner filter.
+
+        Yields:
+            Dicts with ``event`` and ``data`` keys for SSE serialisation.
+        """
+        tool_registry = EmployeeToolRegistry(
+            employee_id=self._employee_id,
+            employee_service=self._employee_service,
+            document_service=self._document_service,
+            attendance_repo=self._attendance_repo,
+            leave_service=self._leave_service,
+            overtime_service=self._overtime_service,
+            payslip_service=self._payslip_service,
+        )
+
+        openai_messages = await self._build_messages(messages, tool_registry)
+
+        async for event in stream_tool_loop(
+            llm_client=self._llm_client,
+            tool_registry=tool_registry,
+            openai_messages=openai_messages,
+            openai_tools=tool_registry.get_openai_tools(),
+            session=session,
+            chat_session=chat_session,
+            log_prefix="Employee assistant",
+        ):
+            yield event
 
     async def _build_messages(
         self,
