@@ -16,11 +16,28 @@ from sqlmodel import Field, SQLModel
 # ``ix_hr_knowledge_base_chunks_document_id`` instead, and autogenerate would
 # propose dropping the real index to create a differently-named twin.
 #
-# There is deliberately no index on either ``embedding`` column: the database
-# has none (checked with ``pg_am`` — the schema holds zero non-btree indexes),
-# so the model matching it is the correct state. Whether these tables *should*
-# carry an ivfflat/hnsw index is a real performance question, but it is a new
-# index on the database side, not model drift, and is out of this ticket.
+# The two ``embedding`` indexes are pgvector HNSW, which needs both
+# ``postgresql_using`` (the access method) and ``postgresql_ops`` (the opclass
+# tying the index to the ``<=>`` operator ``search_similar_chunks`` uses). 088
+# created them; that revision has the numbers behind hnsw-not-ivfflat and the
+# default build parameters.
+#
+# **Neither keyword is checked by the drift fence.** ``compare_metadata``
+# compares an index by name, columns and uniqueness only; dropping
+# ``postgresql_using``, dropping ``postgresql_ops``, or swapping the opclass to
+# ``vector_l2_ops`` each still measures 0 diffs against a database holding the
+# real hnsw/cosine index (verified by mutating this file against a migrated
+# database). Only deleting the ``Index(...)`` outright registers, as
+# ``remove_index``. So these two keywords are load-bearing but unfenced by
+# `tests/test_schema_drift_ceiling.py`, and
+# `tests/modules/knowledge_base/test_embedding_index.py` guards them directly
+# instead -- on this side by reading the declarations below, and on the database
+# side by reading ``pg_am``/``pg_opclass``.
+#
+# They are not decorative: nothing calls ``SQLModel.metadata.create_all``, so
+# they never build anything, but ``alembic revision --autogenerate`` renders
+# them into any future migration it writes for these tables. Without them it
+# would emit a plain btree index on a 1024-dimensional vector column.
 #
 # ``sa_type=Text`` below is load-bearing: a bare ``str`` renders SQLModel's
 # ``AutoString``, i.e. ``VARCHAR`` with no length. That behaves exactly like
@@ -84,7 +101,15 @@ class KnowledgeBaseChunk(SQLModel, table=True):
     """
 
     __tablename__ = "hr_knowledge_base_chunks"
-    __table_args__ = (Index("ix_kb_chunks_document_id", "document_id"),)
+    __table_args__ = (
+        Index("ix_kb_chunks_document_id", "document_id"),
+        Index(
+            "ix_kb_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(
@@ -159,7 +184,15 @@ class EmployeeKnowledgeBaseChunk(SQLModel, table=True):
     """
 
     __tablename__ = "employee_knowledge_base_chunks"
-    __table_args__ = (Index("ix_emp_kb_chunks_document_id", "document_id"),)
+    __table_args__ = (
+        Index("ix_emp_kb_chunks_document_id", "document_id"),
+        Index(
+            "ix_emp_kb_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     document_id: uuid.UUID = Field(

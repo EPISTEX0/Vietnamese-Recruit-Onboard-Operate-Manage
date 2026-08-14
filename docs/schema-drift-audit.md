@@ -696,7 +696,29 @@ trong khi tách ra thì ~6s là biết. Gate 6 giờ **là** required status che
 `remove_index employees ix_employees_department_id`. Đó là bằng chứng cho khẳng định ở đoạn trên: trước hàng
 rào này, không có gì trong repo giữ nhóm 14 index đó.
 
-Một chỗ hở, ghi ra thay vì giấu — **và nay đã đóng vì baseline rỗng**: từ lúc drift được dọn đến lúc dòng
+**Chỗ hở thứ hai, đo được và chưa đóng: `compare_metadata` không so access method và không so opclass.**
+Phát hiện khi khai hai index HNSW của KB ở `088`. Mutation trên model, đo lại bằng `schema_drift_probe`
+trên DB đã `upgrade head` (DB giữ index hnsw/`vector_cosine_ops` thật):
+
+| Model bị sửa thành | Probe báo |
+|---|---|
+| bỏ `postgresql_using="hnsw"` (model thành btree) | **0 diff** |
+| đổi opclass sang `vector_l2_ops` | **0 diff** |
+| bỏ hẳn `postgresql_ops` | **0 diff** |
+| xoá cả `Index(...)` | 2 diff, `remove_index ... _embedding_hnsw` |
+
+Nghĩa là hàng rào chỉ giữ **tên index và cột**, không giữ *loại* index. Với btree thì không có gì để mất —
+mọi index trong repo trước `088` đều là btree. Với pgvector thì mất đúng thứ có giá trị: một index khai sai
+opclass sẽ **không bao giờ được planner chọn** cho `<=>`, và probe vẫn xanh. Hai keyword đó cũng không vô
+hại về sau — không chỗ nào gọi `SQLModel.metadata.create_all`, nhưng `alembic revision --autogenerate` render
+chúng vào bất kỳ migration nào nó sinh cho hai bảng này.
+
+Không nới hàng rào và cũng không nhét vào baseline: chỗ hở này được giữ bằng test riêng,
+`backend/tests/modules/knowledge_base/test_embedding_index.py` — một phía đọc `pg_am`/`pg_opclass` trên DB
+đã migrate, một phía đọc `dialect_options` của chính model. Nếu sau này có thêm index non-btree, đó là mẫu
+cần lặp lại; `compare_metadata` sẽ không báo giúp.
+
+Một chỗ hở nữa, ghi ra thay vì giấu — **và nay đã đóng vì baseline rỗng**: từ lúc drift được dọn đến lúc dòng
 baseline tương ứng bị xoá, tái tạo đúng diff đó là miễn phí. Không phép đo đơn lẻ nào phân biệt được "đã dọn, chưa cập nhật baseline" với
 "dọn rồi lại làm hỏng"; chặn merge lúc dọn là đánh đổi tệ hơn. Warning nêu đúng dòng cần xoá, xoá là đóng.
 
