@@ -68,7 +68,6 @@
 .pi
 .codegraph
 .mcp.json
-.mise.toml
 
 # ---- Docs & compose files (no build stage reads them) ----
 docs
