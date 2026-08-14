@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.minio_support import start_kb_object_storage
 from tests.postgres_support import PGVECTOR_IMAGE as _PGVECTOR_IMAGE
 from tests.postgres_support import make_postgres_container
 
@@ -103,3 +104,23 @@ def postgres_async_url() -> Iterator[str]:
         async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
         _run_alembic_upgrade_head(async_url)
         yield async_url
+
+
+@pytest.fixture(scope="session")
+def kb_object_storage() -> Iterator[str]:
+    """Start MinIO once per session and point the ``KB_*`` settings at it.
+
+    Session-scoped like ``postgres_async_url``: the knowledge-base tests only
+    need *a* bucket, and paying container startup per module would multiply a
+    fixed cost for no extra coverage.
+
+    Skipping when Docker is unreachable is the safety net for machines that
+    cannot run containers -- not the normal path. Anywhere Docker works, the
+    knowledge-base tests run for real.
+    """
+    docker = pytest.importorskip("docker")
+
+    if not _docker_available(docker):
+        pytest.skip("Docker is not available for object-storage round-trip tests")
+
+    yield from start_kb_object_storage()

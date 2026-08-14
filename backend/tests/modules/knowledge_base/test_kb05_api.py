@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.minio_support import kb_bucket_status
+from tests.container_cache_support import reset_cached_app_containers
 from tests.postgres_support import make_postgres_container
 
 if TYPE_CHECKING:
@@ -77,19 +77,17 @@ def _make_admin_user() -> User:
 
 
 @pytest.fixture(scope="module")
-def kb_client() -> Iterator[TestClient]:
+def kb_client(kb_object_storage: str) -> Iterator[TestClient]:
     """Start pgvector PostgreSQL, run migrations, wire a TestClient with auth override.
 
     Overrides ``require_hr`` so all endpoints are authenticated as admin.
+
+    These endpoints upload and replace files, so PostgreSQL alone is not
+    enough; ``kb_object_storage`` supplies the MinIO container and bucket the
+    request handlers need.
     """
     if not _docker_available():
         pytest.skip("Docker is not available for the KB-05 integration test")
-
-    # These endpoints upload and replace files, so PostgreSQL alone is not
-    # enough; without a bucket every test here dies inside a request handler.
-    storage_available, storage_reason = kb_bucket_status()
-    if not storage_available:
-        pytest.skip(storage_reason)
 
     with make_postgres_container() as postgres:
         sync_url = postgres.get_connection_url()
@@ -104,6 +102,12 @@ def kb_client() -> Iterator[TestClient]:
             "AUTH_JWT_SECRET_KEY", "test-secret-key-for-integration-tests"
         )
         os.environ["AUTH_JWT_ALGORITHM"] = "HS256"
+
+        # The exports above only reach the app if the container's cached
+        # settings and engine are rebuilt from them. Without this the module
+        # passes alone and fails in a full-suite run, where something earlier
+        # has already cached an engine pointed at the ambient ``.env``.
+        reset_cached_app_containers()
 
         import importlib
 
@@ -123,7 +127,13 @@ def kb_client() -> Iterator[TestClient]:
         app.dependency_overrides.clear()
 
         os.environ.pop("DATABASE_URL", None)
+        os.environ.pop("AUTH_DATABASE_URL", None)
         os.environ.pop("AUTH_AUTO_SEED_SAMPLE_DATA", None)
+
+        # The container that these settings point at is about to stop, so the
+        # cached engine must go with it rather than being handed to whichever
+        # test runs next.
+        reset_cached_app_containers()
 
 
 # ---------------------------------------------------------------------------

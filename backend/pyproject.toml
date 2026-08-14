@@ -37,6 +37,11 @@ dev = [
     "hypothesis>=6.100.0",
     "respx>=0.21.0",
     "testcontainers>=4.0.0",
+    # tests/minio_support.py drives the MinIO test container with boto3 —
+    # the same stack the product's aioboto3 client sits on. It already
+    # arrives via aioboto3 -> aiobotocore[boto3]; declared here because the
+    # tests import it directly rather than by accident.
+    "boto3>=1.34.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
 ]
