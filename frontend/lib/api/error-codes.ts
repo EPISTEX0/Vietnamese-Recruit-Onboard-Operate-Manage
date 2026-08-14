@@ -108,7 +108,6 @@
       PAYSLIP_ALREADY_EXISTS: "Phiếu lương đã tồn tại cho nhân viên và kỳ này",
       PAYSLIP_ALREADY_PUBLISHED: "Phiếu lương đã được phát hành, không thể sửa.",
       PAYSLIP_NOT_DRAFT: "Chỉ phiếu lương bản nháp mới có thể thực hiện thao tác này.",
-      PAYROLL_ERROR: "Lỗi module lương",
       PERIOD_NOT_FOUND: "Không tìm thấy kỳ lương",
       SALARY_NOT_CONFIGURED: "Chưa cấu hình lương cho nhân viên",
 
@@ -137,11 +136,6 @@
       USER_NOT_FOUND: "Không tìm thấy người dùng.",
       LAST_ADMIN_ERROR: "Không thể hạ quyền admin cuối cùng",
       SUPER_ADMIN_PROTECTED: "Không thể thay đổi vai trò của Super Admin.",
-
-      // ── Self-Service ──
-      ESS_ERROR: "Lỗi hệ thống tự phục vụ",
-      ESS_FORBIDDEN: "Không thể truy cập tài nguyên này",
-      ESS_NOT_FOUND: "Không tìm thấy tài nguyên",
     };
 
     export function getErrorMessage(code: string): string {

@@ -610,10 +610,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Invalid period month format. Use YYYY-MM format",
     },
     # Payroll (broader)
-    "PAYROLL_ERROR": {
-        "vi": "Lỗi module lương",
-        "en": "Payroll module error",
-    },
     "PERIOD_NOT_FOUND": {
         "vi": "Không tìm thấy kỳ lương",
         "en": "Pay period not found",
@@ -806,18 +802,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "UNKNOWN_ERROR": {
         "vi": "Đã xảy ra lỗi không xác định. Vui lòng thử lại.",
         "en": "An unknown error occurred. Please try again.",
-    },
-    "ESS_ERROR": {
-        "vi": "Lỗi hệ thống tự phục vụ",
-        "en": "Self-service system error",
-    },
-    "ESS_FORBIDDEN": {
-        "vi": "Không thể truy cập tài nguyên này",
-        "en": "Cannot access this resource",
-    },
-    "ESS_NOT_FOUND": {
-        "vi": "Không tìm thấy tài nguyên",
-        "en": "Resource not found",
     },
     # Extra codes synced from frontend
     "NOT_FOUND": {
