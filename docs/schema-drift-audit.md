@@ -22,13 +22,13 @@
 > **Đợt này tìm ra một quả mìn P4 xếp nhầm hạng.** `email_messages.processing_status` được §5.5 ghi là
 > "nới rộng, an toàn" kèm ghi chú *đáng kiểm tra riêng*. Kiểm rồi: cột đang là `VARCHAR(20)` còn ứng dụng
 > ghi `"classification_failed"` — 21 ký tự — nên **mọi lần đánh dấu email phân loại thất bại đều fail từ
-> 2026-05-20**. Xem [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+> 2026-05-20**. Xem [§5.6.g](#g-1-nới-rộng-varchar20--30--quả-mìn-p4-xếp-nhầm-hạng).
 >
 > Khuyến nghị "không chạy autogenerate rồi apply thẳng" ở [§7](#7-khuyến-nghị-vận-hành) **đã hết hiệu lực
 > theo nghĩa cũ** — autogenerate bây giờ sinh ra một migration rỗng. Xem [§7.2](#72-khuyến-nghị-sau-khi-drift--0).
 
 Bản gốc của tài liệu này chỉ **liệt kê và phân loại**, không sửa gì ngoài một FK trỏ sai tên bảng
-(mục [Điều kiện tiên quyết](#điều-kiện-tiên-quyết-một-fk-trỏ-sai-tên-bảng)). Các mục §5.1–§5.3 bên dưới
+(mục [Điều kiện tiên quyết](#2-điều-kiện-tiên-quyết-một-fk-trỏ-sai-tên-bảng)). Các mục §5.1–§5.3 bên dưới
 giữ nguyên phần mô tả gốc và bổ sung phần **đã xử lý thế nào** — cố ý không xoá phần chẩn đoán, vì
 lập luận mới là thứ đáng đọc lại chứ không phải kết quả.
 
@@ -425,7 +425,7 @@ phải thứ mà một sửa đổi model làm bằng cách im lặng.
 > **✅ Đã đóng hết ở [§5.6](#56-đợt-cuối-64--0--nhóm-nào-sai-ở-bên-nào), và một mục dưới đây sai.**
 > Mục cuối (`email_messages.processing_status`) tự nó ghi *"Đáng kiểm tra riêng"* — kiểm rồi, và nó
 > **không vô hại**: cột đang chặn một giá trị ứng dụng ghi thật, hỏng từ 2026-05-20. Giữ nguyên văn bên
-> dưới thay vì sửa lén, vì chỗ sai là chỗ đáng đọc: xem [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+> dưới thay vì sửa lén, vì chỗ sai là chỗ đáng đọc: xem [§5.6.g](#g-1-nới-rộng-varchar20--30--quả-mìn-p4-xếp-nhầm-hạng).
 
 Ghi lại để không ai phải điều tra lại nhóm này. Con số tụt từ 68 xuống 58 vì **9 `add_fk`** (vế "recreate"
 của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 được đóng — không phải vì có gì mới được dọn ở
@@ -449,7 +449,7 @@ của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 đư�
 - **1 nới rộng cột** — `email_messages.processing_status` `VARCHAR(20)` → `VARCHAR(30)`. Nới rộng an toàn.
   Model nhiều khả năng đúng: có giá trị status đang dài quá 20 ký tự thì đây chính là `users.role` tập hai,
   chỉ khác là lần này model đã đi trước. **Đáng kiểm tra riêng.**
-  → **Đã kiểm: đúng là có.** `classification_failed` dài 21 ký tự. Migration `086`. [§5.6.g](#g-1-nới-rộng-varchar-20--30--quả-mìn-p4-xếp-nhầm-hạng).
+  → **Đã kiểm: đúng là có.** `classification_failed` dài 21 ký tự. Migration `086`. [§5.6.g](#g-1-nới-rộng-varchar20--30--quả-mìn-p4-xếp-nhầm-hạng).
 
 ### 5.6 Đợt cuối: 64 → 0 — nhóm nào sai ở bên nào
 
