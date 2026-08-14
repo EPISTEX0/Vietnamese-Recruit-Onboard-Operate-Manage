@@ -109,9 +109,9 @@ def test_082_upgrade_is_untouched(source_082: str) -> None:
     upgrade = source_082.split("def upgrade()")[1].split("def downgrade()")[0]
     statements = [line.strip() for line in upgrade.splitlines() if "op.execute" in line]
 
-    assert statements == [
-        "op.execute(\"UPDATE users SET role = 'hr' WHERE role = 'admin'\")"
-    ], f"082.upgrade() has been modified: {statements}"
+    assert statements == ["op.execute(\"UPDATE users SET role = 'hr' WHERE role = 'admin'\")"], (
+        f"082.upgrade() has been modified: {statements}"
+    )
 
 
 def test_084_is_idempotent_on_existing_system_admin(source_084: str) -> None:
@@ -125,8 +125,7 @@ def test_084_prefers_configured_super_admin_over_fallback(source_084: str) -> No
     env_lookup = source_084.index("AUTH_SUPER_ADMIN_EMAIL")
     fallback = source_084.index("ORDER BY created_at")
     assert env_lookup < fallback, (
-        "084 must consult AUTH_SUPER_ADMIN_EMAIL before falling back to the "
-        "oldest HR account."
+        "084 must consult AUTH_SUPER_ADMIN_EMAIL before falling back to the oldest HR account."
     )
 
 

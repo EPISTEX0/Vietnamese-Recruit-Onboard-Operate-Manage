@@ -381,9 +381,7 @@ def test_route_access_matrix(method: str, path: str, dependant: Dependant) -> No
         )
         return
 
-    assert resolved is intended, (
-        f"{key}: intended {intended.value}, wired {resolved.value}"
-    )
+    assert resolved is intended, f"{key}: intended {intended.value}, wired {resolved.value}"
 
 
 def test_ungated_register_has_no_stale_entries() -> None:
@@ -425,9 +423,7 @@ def test_no_hr_route_is_gated_by_system_admin() -> None:
         for m, p, d in ALL_ROUTES
         if _intended_access(m, p) is Access.HR and _resolved_access(d) is Access.SYSTEM_ADMIN
     ]
-    assert not inverted, (
-        f"HR business endpoints locked behind SYSTEM_ADMIN: {inverted}"
-    )
+    assert not inverted, f"HR business endpoints locked behind SYSTEM_ADMIN: {inverted}"
 
 
 # ---------------------------------------------------------------------------

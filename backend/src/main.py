@@ -95,9 +95,7 @@ async def _bootstrap_super_admin() -> None:
         else:
             # Check if any system_admin exists in the database.
             statement = (
-                select(func.count())
-                .select_from(User)
-                .where(User.role == UserRole.SYSTEM_ADMIN)
+                select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
             )
             result = await session.execute(statement)
             admin_count = result.scalar_one()

@@ -59,9 +59,7 @@ class TestAuthSettingsEnvPrefix:
 
         assert settings.frontend_url == "http://custom:4000"
 
-    def test_forgot_password_limits_mapped_from_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_forgot_password_limits_mapped_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for key, value in _REQUIRED_ENV.items():
             monkeypatch.setenv(key, value)
         monkeypatch.setenv("AUTH_RATE_LIMIT_FORGOT_PASSWORD_IP_MAX", "7")

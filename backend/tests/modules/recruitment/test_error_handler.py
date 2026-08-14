@@ -187,9 +187,7 @@ class TestCandidateNotFoundError:
 
     @pytest.mark.anyio
     async def test_accept_language_en_returns_english_message(self, client: AsyncClient):
-        response = await client.get(
-            "/test/candidate-not-found", headers={"Accept-Language": "en"}
-        )
+        response = await client.get("/test/candidate-not-found", headers={"Accept-Language": "en"})
         data = response.json()
         assert data["message"] == "Candidate not found"
 

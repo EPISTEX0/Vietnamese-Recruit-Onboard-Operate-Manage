@@ -112,8 +112,11 @@ class TestCheckRateLimit:
     @patch("src.modules.identity.infrastructure.rate_limiter.time.time")
     @patch("src.modules.identity.infrastructure.rate_limiter.secrets.token_hex")
     async def test_member_is_unique_per_request(
-        self, mock_token_hex: MagicMock, mock_time: MagicMock,
-        rate_limiter: RateLimiter, mock_redis: AsyncMock,
+        self,
+        mock_token_hex: MagicMock,
+        mock_time: MagicMock,
+        rate_limiter: RateLimiter,
+        mock_redis: AsyncMock,
     ) -> None:
         """Same timestamp still yields a distinct member (no zset collision)."""
         mock_time.return_value = 1000.0

@@ -116,9 +116,7 @@ class OAuthGrant(SQLModel, table=True):
     __tablename__ = "oauth_grants"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(
-        foreign_key="users.id", ondelete="CASCADE", nullable=False, index=True
-    )
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", nullable=False, index=True)
     provider: str = Field(default="google", max_length=50, nullable=False)
     access_token_enc: str = Field(nullable=False)
     refresh_token_enc: str = Field(nullable=False)
@@ -148,9 +146,7 @@ class RefreshToken(SQLModel, table=True):
     __tablename__ = "refresh_tokens"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(
-        foreign_key="users.id", ondelete="CASCADE", nullable=False, index=True
-    )
+    user_id: UUID = Field(foreign_key="users.id", ondelete="CASCADE", nullable=False, index=True)
     token_hash: str = Field(max_length=64, unique=True, nullable=False, index=True)
     expires_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -375,6 +371,7 @@ class AuditLog(SQLModel, table=True):
 
 class PasswordResetToken(SQLModel, table=True):
     """Represents a password reset token for a user."""
+
     __tablename__ = "password_reset_tokens"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)

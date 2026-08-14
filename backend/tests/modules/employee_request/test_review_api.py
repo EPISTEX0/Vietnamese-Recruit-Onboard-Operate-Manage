@@ -366,9 +366,7 @@ class TestListReviewQueueFilters:
 
         app = _build_app(admin_user=admin, mock_repo=mock_repo)
         client = TestClient(app)
-        response = client.get(
-            "/api/hr/employee-requests?date_from=2026-06-01&date_to=2026-06-30"
-        )
+        response = client.get("/api/hr/employee-requests?date_from=2026-06-01&date_to=2026-06-30")
 
         assert response.status_code == 200
         mock_repo.get_all_filtered.assert_awaited_once()

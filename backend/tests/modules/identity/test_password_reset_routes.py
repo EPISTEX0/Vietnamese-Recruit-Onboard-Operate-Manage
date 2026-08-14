@@ -213,9 +213,7 @@ class TestResetPasswordTokenInfoEndpoint:
         """A usable token reports valid=True."""
         mock_password_reset_service.validate_token = AsyncMock(return_value=True)
 
-        response = client.get(
-            "/api/auth/reset-password-token-info", params={"token": "abc123"}
-        )
+        response = client.get("/api/auth/reset-password-token-info", params={"token": "abc123"})
 
         assert response.status_code == 200
         assert response.json() == {"valid": True}
@@ -227,9 +225,7 @@ class TestResetPasswordTokenInfoEndpoint:
         """An unknown/used/expired token reports valid=False."""
         mock_password_reset_service.validate_token = AsyncMock(return_value=False)
 
-        response = client.get(
-            "/api/auth/reset-password-token-info", params={"token": "bogus"}
-        )
+        response = client.get("/api/auth/reset-password-token-info", params={"token": "bogus"})
 
         assert response.status_code == 200
         assert response.json() == {"valid": False}
@@ -257,9 +253,7 @@ class TestResetPasswordEndpoint:
         self, client: TestClient, mock_password_reset_service: AsyncMock
     ) -> None:
         """InvalidResetTokenError propagates as HTTP 400."""
-        mock_password_reset_service.reset_password = AsyncMock(
-            side_effect=InvalidResetTokenError()
-        )
+        mock_password_reset_service.reset_password = AsyncMock(side_effect=InvalidResetTokenError())
 
         response = client.post(
             "/api/auth/reset-password",

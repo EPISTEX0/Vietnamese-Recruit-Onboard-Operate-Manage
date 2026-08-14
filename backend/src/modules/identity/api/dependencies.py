@@ -17,9 +17,7 @@ from src.modules.identity.infrastructure.user_repository import UserRepository
 
 # Type alias mirroring the AuthServiceDep pattern used by the auth router:
 # an Annotated type binding PasswordResetService to its DI provider.
-PasswordResetServiceDep = Annotated[
-    PasswordResetService, Depends(get_password_reset_service)
-]
+PasswordResetServiceDep = Annotated[PasswordResetService, Depends(get_password_reset_service)]
 
 
 async def get_current_user(

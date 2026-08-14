@@ -177,9 +177,7 @@ class OutboundEmail(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     idempotency_key: str = Field(max_length=64, unique=True, nullable=False, index=True)
-    candidate_id: UUID | None = Field(
-        default=None, foreign_key="candidates.id", nullable=True
-    )
+    candidate_id: UUID | None = Field(default=None, foreign_key="candidates.id", nullable=True)
     subject: str = Field(max_length=998, nullable=False)
     body_html: str = Field(nullable=False)
     cc_recipients: str | None = Field(default=None, nullable=True)  # noqa: E501  # JSON array of CC email addresses

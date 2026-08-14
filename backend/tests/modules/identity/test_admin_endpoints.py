@@ -154,9 +154,7 @@ class TestChangeUserRole:
         mock_role_service = AsyncMock(spec=RoleService)
         promoted_target = _make_user(email="target@example.com", role=UserRole.SYSTEM_ADMIN)
         promoted_target.id = target.id
-        mock_role_service.change_role = AsyncMock(
-            return_value=(promoted_target, UserRole.USER)
-        )
+        mock_role_service.change_role = AsyncMock(return_value=(promoted_target, UserRole.USER))
 
         # Mock AuditService
         mock_audit_service = AsyncMock(spec=AuditService)
@@ -334,9 +332,7 @@ class TestChangeUserRole:
         mock_role_service = AsyncMock(spec=RoleService)
         promoted_target = _make_user(email="target@example.com", role=UserRole.SYSTEM_ADMIN)
         promoted_target.id = target.id
-        mock_role_service.change_role = AsyncMock(
-            return_value=(promoted_target, UserRole.USER)
-        )
+        mock_role_service.change_role = AsyncMock(return_value=(promoted_target, UserRole.USER))
 
         mock_audit_service = AsyncMock(spec=AuditService)
         mock_audit_service.log_action = AsyncMock(return_value=_make_audit_log())

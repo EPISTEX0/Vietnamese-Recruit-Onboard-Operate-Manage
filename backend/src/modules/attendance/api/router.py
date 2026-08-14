@@ -52,6 +52,7 @@ def _require_hr(user: User = Depends(get_current_user)) -> User:
         raise AccessDeniedError()
     return user
 
+
 @attendance_router.get("/settings/network", response_model=NetworkAllowlistResponse)
 async def get_network_allowlist(
     user: User = Depends(get_current_user),

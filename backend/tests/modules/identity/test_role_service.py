@@ -80,8 +80,6 @@ def _make_mock_session(user_result=None, admin_count: int = 2):
     return session
 
 
-
-
 def _make_actor(email: str = "sysadmin@example.com") -> User:
     """Create the acting system admin performing a role change."""
     return _make_user(email=email, role=UserRole.SYSTEM_ADMIN)

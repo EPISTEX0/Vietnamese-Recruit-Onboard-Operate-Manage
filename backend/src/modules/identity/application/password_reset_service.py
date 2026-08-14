@@ -179,9 +179,7 @@ class PasswordResetService:
                 ),
             )
         except Exception:
-            logger.error(
-                "Failed to send password reset email for user %s", user.id, exc_info=True
-            )
+            logger.error("Failed to send password reset email for user %s", user.id, exc_info=True)
             return False
 
         if self._session is not None:

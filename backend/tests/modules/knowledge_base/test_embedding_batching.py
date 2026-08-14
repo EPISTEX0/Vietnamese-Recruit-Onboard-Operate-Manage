@@ -62,11 +62,7 @@ def _recording_provider(batches: list[list[str]]):
         batches.append(texts)
         return httpx.Response(
             200,
-            json={
-                "embeddings": [
-                    [float(_index_of(text))] * VECTOR_WIDTH for text in texts
-                ]
-            },
+            json={"embeddings": [[float(_index_of(text))] * VECTOR_WIDTH for text in texts]},
         )
 
     return handler
@@ -121,9 +117,7 @@ class TestCallEmbeddingServiceBatching:
     @respx.mock
     async def test_no_request_is_made_for_empty_input(self) -> None:
         """An empty chunk list is a caller bug upstream, not an HTTP round trip."""
-        route = respx.post(f"{EMBED_URL}/embed").mock(
-            side_effect=_recording_provider([])
-        )
+        route = respx.post(f"{EMBED_URL}/embed").mock(side_effect=_recording_provider([]))
 
         assert await call_embedding_service([], EMBED_URL) == []
         assert not route.called
@@ -155,9 +149,7 @@ class TestCallEmbeddingServiceBatching:
             calls["n"] += 1
             if calls["n"] == 1:
                 sent = json.loads(request.content)["texts"]
-                return httpx.Response(
-                    200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)}
-                )
+                return httpx.Response(200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)})
             return httpx.Response(500, json={"detail": "boom"})
 
         respx.post(f"{EMBED_URL}/embed").mock(side_effect=flaky_provider)
@@ -172,9 +164,7 @@ class TestCallEmbeddingServiceBatching:
 
         def slow_provider(request: httpx.Request) -> httpx.Response:
             sent = json.loads(request.content)["texts"]
-            return httpx.Response(
-                200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)}
-            )
+            return httpx.Response(200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)})
 
         respx.post(f"{EMBED_URL}/embed").mock(side_effect=slow_provider)
 
@@ -208,16 +198,12 @@ class TestCallEmbeddingServiceBatching:
             seen_timeouts.append(request.extensions["timeout"]["read"])
             clock["now"] += 50.0  # Each request burns 50s of the budget.
             sent = json.loads(request.content)["texts"]
-            return httpx.Response(
-                200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)}
-            )
+            return httpx.Response(200, json={"embeddings": [[0.0] * VECTOR_WIDTH] * len(sent)})
 
         respx.post(f"{EMBED_URL}/embed").mock(side_effect=slow_provider)
 
         with pytest.raises(TimeoutError, match="ngân sách"):
-            await call_embedding_service(
-                texts, EMBED_URL, timeout=120.0, total_timeout=120.0
-            )
+            await call_embedding_service(texts, EMBED_URL, timeout=120.0, total_timeout=120.0)
 
         # Three batches fit in the 120s budget (0s, 50s, 100s); the fourth is
         # refused rather than started.
@@ -229,9 +215,7 @@ class TestCallEmbeddingServiceBatching:
     @respx.mock
     async def test_rejects_a_batch_size_the_service_would_refuse(self) -> None:
         """Callers cannot opt into a batch size that guarantees a 422."""
-        route = respx.post(f"{EMBED_URL}/embed").mock(
-            side_effect=_recording_provider([])
-        )
+        route = respx.post(f"{EMBED_URL}/embed").mock(side_effect=_recording_provider([]))
 
         with pytest.raises(ValueError, match="batch_size"):
             await call_embedding_service(
@@ -307,9 +291,7 @@ class TestLargeDocumentIngest:
 
         inserted = repo.insert_chunks.await_args.args[0]
         assert len(inserted) == len(expected_chunks)
-        assert [entity.chunk_index for entity in inserted] == list(
-            range(len(expected_chunks))
-        )
+        assert [entity.chunk_index for entity in inserted] == list(range(len(expected_chunks)))
         # The stub encodes each chunk's length into its vector, so this proves
         # vector i really belongs to chunk i after reassembly.
         for entity in inserted:

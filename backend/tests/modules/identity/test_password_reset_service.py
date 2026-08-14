@@ -99,9 +99,7 @@ class TestCreateResetToken:
 
         assert result is True
         # Previous active tokens invalidated before the new one is stored.
-        service._test_token_repo.invalidate_all_active_for_user.assert_awaited_once_with(
-            user.id
-        )
+        service._test_token_repo.invalidate_all_active_for_user.assert_awaited_once_with(user.id)
         # Raw token appears only in the email link; DB stores its SHA-256 hash.
         raw_token = _raw_token_from_email(service._test_send_service)
         stored_hash = service._test_token_repo.create.await_args.kwargs["token_hash"]
@@ -163,9 +161,7 @@ class TestCreateResetToken:
         assert result is False
         assert any("Failed to send password reset email" in r.message for r in caplog.records)
 
-    async def test_negative_path_burns_anti_enumeration_delay(
-        self, service, monkeypatch
-    ) -> None:
+    async def test_negative_path_burns_anti_enumeration_delay(self, service, monkeypatch) -> None:
         """Missing/inactive/passwordless accounts sleep before answering so
         response timing does not reveal account existence (ADR 0010)."""
         sleep_calls = []

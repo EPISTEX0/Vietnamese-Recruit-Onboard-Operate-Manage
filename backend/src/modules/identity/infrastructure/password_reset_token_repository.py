@@ -74,9 +74,7 @@ class PasswordResetTokenRepository:
         Returns:
             The PasswordResetToken entity if found, None otherwise.
         """
-        statement = select(PasswordResetToken).where(
-            PasswordResetToken.token_hash == token_hash
-        )
+        statement = select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
         result = await self.session.execute(statement)
         return result.scalars().first()
 
