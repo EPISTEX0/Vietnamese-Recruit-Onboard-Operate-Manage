@@ -263,11 +263,32 @@ class KnowledgeBaseRepository:
         Joins with the appropriate document table to filter by kb_type and retrieve
         the document's display_name for citation formatting.
 
-        When kb_types includes both 'hr' and 'employee', queries both table sets
-        via UNION ALL and returns the top_k results overall.
+        **Two statements, not one.** The first is the approximate one, shaped so
+        pgvector can answer it from the HNSW index on ``embedding`` (revision
+        088) -- median 1.34 ms against 87.2 ms for the exact form on 50 000
+        rows. If any branch comes back short of its own ``LIMIT``, the
+        exact form runs instead and its rows are the ones returned.
+        ``_ranked_chunks_statement`` builds both and explains why the second is
+        deliberately unindexable, and why the fallback is not optional.
 
-        Cosine similarity = 1 - cosine_distance.
-        We filter where cosine_distance < (1 - similarity_threshold).
+        The fallback is why the speed-up is not paid for in silent wrong
+        answers, and it never costs more than the old behaviour did: it fires
+        only when a branch is short, which is either a knowledge base too small
+        to be slow, or the case where the old code's full scan was the only
+        correct answer anyway.
+
+        Cosine similarity = 1 - cosine_distance. The threshold and the final
+        ``top_k`` are applied in Python, over at most ``top_k`` rows per branch.
+        Keeping them out of SQL is not tidiness: as a ``WHERE`` predicate the
+        threshold cuts the planner's row estimate (50 000 down to 16 667) far
+        enough that the sequential-scan path wins on estimated cost even with
+        the ORDER BY correct, which measured 90.6 ms -- no better than doing
+        neither. Filtering after ``LIMIT`` cannot change the answer: the
+        threshold is a predicate on distance and the rows are ordered by
+        distance, so what it keeps is a prefix of that order.
+
+        ``tests/modules/knowledge_base/test_embedding_index.py`` holds all of
+        this -- the shape of each statement, and the fallback itself.
 
         Args:
             query_embedding: The embedding vector of the query text.
@@ -288,49 +309,17 @@ class KnowledgeBaseRepository:
 
         max_distance = 1.0 - similarity_threshold
 
-        # Build a subquery for each kb_type and UNION ALL
-        subqueries = []
-        for kbt in kb_types:
-            doc_entity = _get_doc_entity(kbt)
-            chunk_entity = _get_chunk_entity(kbt)
+        statement = _ranked_chunks_statement(query_embedding, kb_types, top_k, indexable=True)
+        rows = (await self._session.execute(statement)).all()
 
-            subq = (
-                select(
-                    chunk_entity.id.label("chunk_id"),
-                    chunk_entity.document_id.label("document_id"),
-                    chunk_entity.chunk_index.label("chunk_index"),
-                    chunk_entity.content.label("content"),
-                    chunk_entity.token_count.label("token_count"),
-                    chunk_entity.created_at.label("chunk_created_at"),
-                    doc_entity.display_name.label("display_name"),
-                    (1.0 - chunk_entity.embedding.cosine_distance(query_embedding)).label(
-                        "similarity"
-                    ),
-                )
-                .join(
-                    doc_entity,
-                    chunk_entity.document_id == doc_entity.id,
-                )
-                .where(
-                    chunk_entity.embedding.isnot(None),
-                    doc_entity.status == "ready",
-                    chunk_entity.embedding.cosine_distance(query_embedding) < max_distance,
-                )
-            )
-            subqueries.append(subq)
-
-        if len(subqueries) == 1:
-            stmt = (
-                subqueries[0]
-                .order_by(subqueries[0].selected_columns.similarity.desc())
-                .limit(top_k)
-            )
-        else:
-            union_stmt = union_all(*subqueries).subquery()
-            stmt = select(union_stmt).order_by(union_stmt.c.similarity.desc()).limit(top_k)
-
-        result = await self._session.execute(stmt)
-        rows = result.all()
+        if len(rows) < top_k * len(kb_types):
+            # At least one branch came back short of its own LIMIT. Either the
+            # knowledge base genuinely holds fewer than `top_k` eligible chunks
+            # -- the ordinary state while it is small, where the exact scan
+            # costs microseconds -- or the index scan was starved. Nothing here
+            # can tell those apart, and only one of them is safe to believe.
+            statement = _ranked_chunks_statement(query_embedding, kb_types, top_k, indexable=False)
+            rows = (await self._session.execute(statement)).all()
 
         # Reconstruct chunk-like objects from rows.
         # We return tuples of (chunk_dict, display_name, similarity) since we can't
@@ -349,4 +338,96 @@ class KnowledgeBaseRepository:
                 self.token_count = row.token_count
                 self.created_at = row.chunk_created_at
 
-        return [(_ChunkProxy(row), row.display_name, float(row.similarity)) for row in rows]
+        # The threshold and the final `top_k` are applied here rather than in
+        # SQL. In SQL the threshold has to be a predicate, and a predicate on
+        # the distance is exactly what pushes the planner off the index (see the
+        # docstring); in Python it is a filter over at most `top_k` rows per
+        # branch. `distance` rather than `similarity` comes back from the query
+        # for the same reason -- `1 - distance` in the SELECT list would have to
+        # be repeated in the ORDER BY. The callers' contract is unchanged:
+        # cosine similarity, high is close.
+        kept = [row for row in rows if float(row.distance) < max_distance]
+        kept.sort(key=lambda row: float(row.distance))
+        return [
+            (_ChunkProxy(row), row.display_name, 1.0 - float(row.distance)) for row in kept[:top_k]
+        ]
+
+
+def _ranked_chunks_statement(
+    query_embedding: list[float],
+    kb_types: list[str],
+    top_k: int,
+    *,
+    indexable: bool,
+):
+    """Build the nearest-``top_k``-chunks statement, in one of two orderings.
+
+    One branch per knowledge base, each ranked and limited on its own so each
+    can be answered from its own table's index, then UNION ALL'd. Ranking per
+    branch cannot lose a row the combined query would have kept: the overall
+    ``top_k`` is always a subset of the union of the per-branch ``top_k``.
+
+    ``indexable`` picks the ORDER BY, and that single choice decides whether the
+    query is an approximate index scan or an exact one:
+
+    * ``True``  -> ``ORDER BY embedding <=> :q`` -- the bare ascending distance,
+      the one form pgvector can answer from the HNSW index (revision 088).
+      Median on 50 000 rows: 1.34 ms against 87.2 ms for the exact form.
+    * ``False`` -> ``ORDER BY 1 - (embedding <=> :q) DESC`` -- the identical row
+      order, which no pgvector index can serve because the operator is wrapped.
+      This is *not* a leftover; it is how the exact scan is guaranteed. Forcing
+      it any other way (``enable_seqscan``, a distance predicate in ``WHERE``)
+      would leave the choice to the planner, and the whole point of this branch
+      is to not depend on the planner.
+
+    The caller runs the approximate form first and falls back to the exact one
+    when a branch returns fewer rows than its own ``LIMIT``. That is necessary
+    because an HNSW scan yields a bounded candidate set (~400 tuples at the
+    default ``ef_search``) and ``documents.status = 'ready'`` is applied to
+    those candidates *after* the index has chosen them. If every candidate
+    belongs to a document that is not ready, the branch returns nothing while an
+    exact scan would return the right rows -- reproduced on pgvector 0.8.6 with
+    1 000 chunks under an ``error`` document sitting nearer the query than any
+    ready chunk: 0 rows from the approximate form, 3 from the exact one.
+    ``hnsw.iterative_scan`` is pgvector's remedy for filtered ANN and does not
+    close this: measured at ``strict_order`` and ``relaxed_order``, with
+    ``scan_mem_multiplier`` up to 64, the scan stopped at 532 candidates and
+    still returned 0 rows. That state is reachable -- ``ingest()`` inserts
+    chunks and only then sets ``ready``, and its ``except`` handler sets
+    ``error`` and returns normally, so the worker commits the chunks alongside
+    the ``error`` status.
+    """
+    branches = []
+    for kbt in kb_types:
+        doc_entity = _get_doc_entity(kbt)
+        chunk_entity = _get_chunk_entity(kbt)
+        # One expression object, used in both the SELECT list and the ORDER BY,
+        # so the rendered ORDER BY is the bare `embedding <=> $1` pgvector matches.
+        distance = chunk_entity.embedding.cosine_distance(query_embedding)
+        ordering = distance if indexable else (1.0 - distance).desc()
+
+        branches.append(
+            select(
+                chunk_entity.id.label("chunk_id"),
+                chunk_entity.document_id.label("document_id"),
+                chunk_entity.chunk_index.label("chunk_index"),
+                chunk_entity.content.label("content"),
+                chunk_entity.token_count.label("token_count"),
+                chunk_entity.created_at.label("chunk_created_at"),
+                doc_entity.display_name.label("display_name"),
+                distance.label("distance"),
+            )
+            .join(doc_entity, chunk_entity.document_id == doc_entity.id)
+            .where(
+                chunk_entity.embedding.isnot(None),
+                doc_entity.status == "ready",
+            )
+            .order_by(ordering)
+            .limit(top_k)
+        )
+
+    if len(branches) == 1:
+        return branches[0]
+    # Each branch is wrapped before the UNION ALL: a branch carries its own
+    # ORDER BY and LIMIT, which UNION ALL cannot hold directly.
+    return union_all(*(branch.subquery().select() for branch in branches))
