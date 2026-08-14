@@ -18,10 +18,6 @@
 # Adding a line means "I looked at this diff and it is not a landmine". Removing lines
 # is always safe. Measured at head 085, 2026-08-14: 64 diffs, 48 tables in metadata.
 
-add_index interview_participants ix_interview_participants_employee_id                                # (employee_id)
-add_index interview_participants ix_interview_participants_type                                       # (type)
-add_index interviews ix_interviews_calendar_id                                                        # (calendar_id)
-add_index interviews ix_interviews_status                                                             # (status)
 modify_type cv_documents confirmed_fields JSON -> JSONB
 modify_type cv_documents field_provenance JSON -> JSONB
 modify_type email_messages processing_status VARCHAR(20) -> VARCHAR(30)

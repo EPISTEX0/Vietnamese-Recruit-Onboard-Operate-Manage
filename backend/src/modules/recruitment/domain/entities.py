@@ -346,14 +346,26 @@ class Interview(SQLModel, table=True):
     candidate_id: UUID = Field(
         foreign_key="candidates.id", ondelete="CASCADE", index=True, nullable=False
     )
-    # status: scheduled, completed, cancelled
-    status: str = Field(default="scheduled", max_length=30, nullable=False, index=True)
+    # status: scheduled, completed, cancelled.
+    #
+    # Deliberately *not* indexed, and neither is ``calendar_id`` below. 046 and
+    # 072 wrote this table by hand and did index ``candidate_id`` and
+    # ``calendar_event_id`` -- so which columns get an index was a decision that
+    # was actually made, and these were left out of it. Nothing in the code
+    # queries either one: the only ``status`` predicate is inside the correlated
+    # EXISTS in retention_job.py, already anchored by ``ix_interviews_candidate_id``
+    # and filtering the handful of rows that index returns, and ``calendar_id`` is
+    # never a WHERE clause anywhere (``CalendarSyncCursor.calendar_id``, a
+    # different table, is the one that gets looked up and 073 indexed it).
+    # ``index=True`` here never created an index on any deployed database; it only
+    # made autogenerate offer to create one.
+    status: str = Field(default="scheduled", max_length=30, nullable=False)
     round_name: str = Field(max_length=255, nullable=False)
     start_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     end_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     timezone: str = Field(max_length=64, nullable=False)
     calendar_event_id: str | None = Field(default=None, max_length=1024, index=True)
-    calendar_id: str | None = Field(default=None, max_length=1024, index=True)
+    calendar_id: str | None = Field(default=None, max_length=1024)
     remote_location: str | None = Field(default=None, max_length=1024)
     needs_relink: bool = Field(default=False, nullable=False)
     calendar_etag: str | None = Field(default=None, max_length=255)
@@ -382,13 +394,18 @@ class InterviewParticipant(SQLModel, table=True):
     interview_id: UUID = Field(
         foreign_key="interviews.id", ondelete="CASCADE", index=True, nullable=False
     )
-    type: str = Field(max_length=20, nullable=False, index=True)  # candidate, employee, external
+    # candidate, employee, external. Not indexed, and neither is ``employee_id``:
+    # 046 indexed ``interview_id`` (the one column this table is ever queried by,
+    # in ``InterviewRepository.get_participants``) and left these two alone.
+    # Both are write-only from the database's point of view -- ``type`` is set on
+    # insert and read back off a fetched row, never used as a predicate.
+    type: str = Field(max_length=20, nullable=False)
     email: str = Field(max_length=255, nullable=False)
     name: str | None = Field(
         default=None,
         max_length=255,
     )
-    employee_id: UUID | None = Field(default=None, foreign_key="employees.id", index=True)
+    employee_id: UUID | None = Field(default=None, foreign_key="employees.id")
     response_status: str | None = Field(
         default=None, max_length=30
     )  # needsAction, accepted, declined, tentative
