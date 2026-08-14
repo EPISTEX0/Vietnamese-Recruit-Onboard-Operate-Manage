@@ -1,21 +1,21 @@
 # Báo cáo drift giữa model SQLModel và schema thật
 
 **Đo lần đầu:** 2026-08-14 (head `084`, **113 diff**) · **Đo lại:** 2026-08-14 sau khi dọn
-(head `085`, **78 diff**) · **Phạm vi:** toàn bộ `backend/src/modules/*/domain/entities.py`
+(head `085`, **64 diff**) · **Phạm vi:** toàn bộ `backend/src/modules/*/domain/entities.py`
 
-> ## Trạng thái: P0, P1, P2 đã đóng. Còn P3 và P4.
+> ## Trạng thái: P0, P1, P2 đã đóng. P3 còn 6 diff JSONB. Còn P4.
 >
 > | Mức | Lúc báo cáo | Hiện tại | |
 > |---|---:|---:|---|
 > | **P0** | 9 | **0** | ✅ đóng |
 > | **P1** | 13 | **0** | ✅ đóng (+1 diff mới lộ ra cũng đã đóng) |
 > | **P2** | 3 | **0** | ✅ đóng |
-> | **P3** | 20 | 20 | chưa làm |
+> | **P3** | 20 | 6 | 14 index đã khai vào model; còn 6 `JSON → JSONB` |
 > | **P4** | 68 | 58 | chưa làm |
-> | | **113** | **78** | |
+> | | **113** | **64** | |
 >
-> **Số quả mìn còn lại: 0.** 78 diff còn lại đều không gây mất dữ liệu và không mất ràng buộc toàn vẹn —
-> chứng minh ở [§5.4](#54-p3--20-diff--hiệu-năng-và-rewrite) và [§5.5](#55-p4--58-diff--vô-hại).
+> **Số quả mìn còn lại: 0.** 64 diff còn lại đều không gây mất dữ liệu và không mất ràng buộc toàn vẹn —
+> chứng minh ở [§5.4](#54-p3--20-diff--6--hiệu-năng-và-rewrite) và [§5.5](#55-p4--58-diff--vô-hại).
 >
 > Khuyến nghị "không chạy autogenerate rồi apply thẳng" ở [§7](#7-khuyến-nghị-vận-hành) **vẫn còn hiệu lực**,
 > chỉ là lý do đã đổi: giờ là vì nhiễu, không còn vì nguy hiểm.
@@ -139,9 +139,9 @@ và hậu quả chỉ lộ ra hàng tuần sau — nên P1 **nguy hiểm hơn P2
 | **P0** | **9** | DROP 3 bảng (+6 index của chúng) | ✅ đóng |
 | **P1** | **13** (+1) | 9 FK mất `ON DELETE CASCADE`, 1 mất UNIQUE, 3 cột mất timezone | ✅ đóng |
 | **P2** | **3** | 1 `NOT NULL`, 1 UNIQUE mới, 1 FK mới | ✅ đóng |
-| **P3** | **20** | 14 mất index hiệu năng, 6 rewrite JSON→JSONB | còn |
+| **P3** | **20** → 6 | ~~14 mất index hiệu năng~~ ✅, 6 rewrite JSON→JSONB còn | một phần |
 | **P4** | **68** → 58 | Vô hại (chi tiết §5.5) | còn |
-| | **113** → **78** | | |
+| | **113** → **64** | | |
 
 **Số quả mìn = 25** (P0 + P1 + P2) — tức khoảng **22%** số diff sẽ gây hại nếu autogenerate được apply.
 **Hiện tại con số đó là 0.**
@@ -353,17 +353,65 @@ sử hội thoại thật, và cột vốn nullable theo thiết kế. Tạo FK 
 `downgrade()` viết đủ cả hai chiều — không bỏ mặc như `082`. Đã chạy thật:
 `upgrade head` → `downgrade -1` → `upgrade head` sạch.
 
-### 5.4 P3 — 20 diff — hiệu năng và rewrite
+### 5.4 P3 — 20 diff → 6 — hiệu năng và rewrite
 
-- **14 index hiệu năng bị mất.** DB có, model không khai. Gồm `ix_audit_logs_{action_type,created_at}`,
-  `ix_employees_{department_id,position_id}`, `ix_payslips_employee_status`, `ix_job_openings_*`, nhóm KB
-  (`ix_kb_*`, `ix_emp_kb_*`), `ix_whitelist_entries_type`. **DB đúng** — index được thêm có chủ đích qua
-  migration, model chỉ đơn giản không mô tả chúng. Mất index không mất dữ liệu, nhưng `audit_logs` và
-  `payslips` là bảng lớn dần theo thời gian, mất index ở đó là truy vấn tụt thành seq scan.
+- ~~**14 index hiệu năng bị mất.**~~ **✅ Đã xử lý.** DB có, model không khai. **DB đúng** — index được
+  thêm có chủ đích qua migration, model chỉ đơn giản không mô tả chúng. Mất index không mất dữ liệu, nhưng
+  `audit_logs` và `payslips` là bảng lớn dần theo thời gian, mất index ở đó là truy vấn tụt thành seq scan.
 - **6 cột JSON → JSONB.** `cv_documents.{confirmed_fields, field_provenance}` và
   `recruitment_inbox_items.{attachments_metadata, evidence, source_hints, correction_history}`. Ở đây
   **model đúng** — JSONB là kiểu nên dùng. Nhưng chuyển kiểu là **rewrite toàn bảng**, khoá bảng theo kích
   thước dữ liệu. Không mất dữ liệu; xếp P3 vì chi phí vận hành, không vì rủi ro.
+
+#### ✅ Đã xử lý — 14 index, sửa model chứ không thêm migration
+
+Danh sách được xác minh lại từ `compare_metadata` chứ không lấy từ bản mô tả trên, và nó khớp: đúng 14
+`remove_index`. Định nghĩa thật đọc từ `pg_indexes` cho từng cái — **cả 14 đều là btree, non-unique, không
+partial**. Toàn schema có **0 index non-btree và 0 index partial** (kiểm bằng `pg_am` / `pg_index.indpred`),
+nên lo ngại "nhóm KB có index pgvector không diễn đạt nổi" **không xảy ra**: không có index vector nào tồn
+tại để mà khai. Không có index nào phải bỏ lại vì SQLAlchemy không mô tả được.
+
+| Index | Bảng | Định nghĩa thật trên DB | Khai lại bằng |
+|---|---|---|---|
+| `ix_audit_logs_action_type` | `audit_logs` | btree `(action_type)` | `Column(..., index=True)` |
+| `ix_audit_logs_created_at` | `audit_logs` | btree `(created_at)` | `Column(..., index=True)` |
+| `ix_employees_department_id` | `employees` | btree `(department_id)` | `Field(index=True)` |
+| `ix_employees_position_id` | `employees` | btree `(position_id)` | `Field(index=True)` |
+| `ix_job_openings_created_at` | `job_openings` | btree `(created_at)` | `Column(..., index=True)` |
+| `ix_job_openings_id` | `job_openings` | btree `(id)` | `Field(index=True)` |
+| `ix_payslips_employee_status` | `payslips` | btree `(employee_id, status)` | `Index()` trong `__table_args__` |
+| `ix_whitelist_entries_type` | `whitelist_entries` | btree `(entry_type)` | `Index()` trong `__table_args__` |
+| `ix_kb_documents_kb_type` | `hr_knowledge_base_documents` | btree `(kb_type)` | `Index()` trong `__table_args__` |
+| `ix_kb_documents_status` | `hr_knowledge_base_documents` | btree `(status)` | `Index()` trong `__table_args__` |
+| `ix_kb_chunks_document_id` | `hr_knowledge_base_chunks` | btree `(document_id)` | `Index()` trong `__table_args__` |
+| `ix_emp_kb_documents_kb_type` | `employee_knowledge_base_documents` | btree `(kb_type)` | `Index()` trong `__table_args__` |
+| `ix_emp_kb_documents_status` | `employee_knowledge_base_documents` | btree `(status)` | `Index()` trong `__table_args__` |
+| `ix_emp_kb_chunks_document_id` | `employee_knowledge_base_chunks` | btree `(document_id)` | `Index()` trong `__table_args__` |
+
+**Vì sao ba cách khai khác nhau, chứ không phải một.** Cả ba đều phải ra đúng cái tên đang có trên DB —
+tên lệch thì autogenerate đề nghị drop cái cũ rồi tạo cái mới, tức là vẫn hỏng, chỉ ồn ào hơn.
+
+- `Field(index=True)` chỉ dùng được khi tên mặc định (`ix_<bảng>_<cột>`) **trùng đúng** tên thật. Đúng với
+  6 cái đầu.
+- `Column(..., index=True)` cho các field có `sa_column`: **`Field(index=True)` bị bỏ qua khi có
+  `sa_column`** — khai ở đó trông đúng nhưng không sinh index nào. Đây là cái bẫy dễ dính nhất trong nhóm.
+- `Index()` trong `__table_args__` cho 8 cái còn lại, vì tên thật **không** theo quy ước mặc định:
+  `ix_whitelist_entries_type` (cột là `entry_type`), nhóm KB (`ix_kb_*` có từ khi tên bảng khác), và
+  `ix_payslips_employee_status` là **composite** nên không có dạng field nào diễn đạt được.
+
+**Thứ tự cột của composite được giữ nguyên chủ ý.** `ix_payslips_employee_status` là `(employee_id, status)`.
+Đảo thành `(status, employee_id)` vẫn là index hợp lệ, vẫn trả đúng dữ liệu, nhưng vô dụng cho truy vấn
+"payslip đã publish của nhân viên này" — tức đúng cái nó sinh ra để phục vụ. `compare_metadata` có so thứ tự
+cột, nên việc diff về 0 cũng chính là bằng chứng thứ tự khớp.
+
+**`ix_job_openings_id` là index thừa** — nó lặp lại index mà chính primary key đã có. Nhưng `035` tạo nó và
+DB đang có nó, nên model khai lại cho khớp. Bỏ nó đi là một quyết định riêng, cần migration đứng sau, không
+phải thứ mà một sửa đổi model làm bằng cách im lặng.
+
+**Không có migration nào được thêm.** DB đang đúng; chỉ model được sửa. Cùng khuôn với P1
+(`10b5f3f` / `91e0f96` / `bb632d4`).
+
+**P3 (index): 14 diff → 0. Tổng 78 → 64.**
 
 ### 5.5 P4 — 58 diff — vô hại
 
@@ -403,16 +451,17 @@ của các cặp ở P1.a) và **1 diff UNIQUE** biến mất theo khi P1 đư�
 | **P1.b** | `__table_args__` UNIQUE cho `oauth_configs` (+`attendance_records`) | 0.5 giờ | ✅ xong |
 | **P1.c** | 3 field → `Column(DateTime(timezone=True))` | 0.5 giờ | ✅ xong |
 | **P2** | 3 quyết định nghiệp vụ + backfill nếu cần | 0.5 ngày | ✅ xong (migration `085`) |
-| **P3** | Khai 14 index vào model; xác nhận 6 JSONB | 1 ngày | còn |
+| **P3** (index) | Khai 14 index vào model | 1 ngày | ✅ xong |
+| **P3** (JSONB) | Migration đổi kiểu 6 cột `JSON → JSONB` | 0.5 ngày | còn |
 | **P4** | 24 cột → `Column(Text)`; đồng bộ tên index/constraint | 1–1.5 ngày | còn |
-| | **Còn lại** | **2–2.5 ngày** | |
+| | **Còn lại** | **1.5–2 ngày** | |
 
-**P4 tuy vô hại nhưng nên dọn cuối cùng** vì nó chiếm 74% số diff còn lại. Còn 58 dòng nhiễu thì không ai
+**P4 tuy vô hại nhưng nên dọn cuối cùng** vì nó chiếm 91% số diff còn lại. Còn 58 dòng nhiễu thì không ai
 đọc nổi output autogenerate để phát hiện mìn thật mới xuất hiện.
 
-Lưu ý cho ai làm P3: **6 diff JSON→JSONB là bên model đúng**, nên dọn chúng nghĩa là viết migration đổi kiểu
-cột thật — rewrite toàn bảng, khoá theo kích thước dữ liệu — chứ không phải sửa model. 14 index còn lại thì
-ngược lại, chỉ cần khai vào model.
+Lưu ý cho ai làm nốt P3: **6 diff JSON→JSONB là bên model đúng**, nên dọn chúng nghĩa là viết migration đổi
+kiểu cột thật — rewrite toàn bảng, khoá theo kích thước dữ liệu — chứ không phải sửa model. Đây là nhóm P3
+**duy nhất còn lại**; 14 index đã đi hướng ngược lại và chỉ cần khai vào model.
 
 ---
 
@@ -421,16 +470,22 @@ ngược lại, chỉ cần khai vào model.
 > **Không chạy `alembic revision --autogenerate` rồi apply thẳng trên repo này.**
 > Viết migration bằng tay, hoặc nếu dùng autogenerate thì phải đọc lại từng dòng và đối chiếu với §5.
 
-**Khuyến nghị này giữ nguyên, nhưng lý do đã đổi.** Trước đây apply thẳng là mất dữ liệu; giờ 78 diff còn lại
+**Khuyến nghị này giữ nguyên, nhưng lý do đã đổi.** Trước đây apply thẳng là mất dữ liệu; giờ 64 diff còn lại
 không cái nào làm mất dữ liệu hay mất ràng buộc toàn vẹn. Rủi ro bây giờ là **nhiễu**: một migration
-autogenerate sẽ kéo theo 20 diff P3 mà 6 trong số đó rewrite toàn bảng, và giữa 78 dòng đó thì một quả mìn
-mới xuất hiện rất dễ trôi qua mắt reviewer.
+autogenerate vẫn kéo theo 6 diff P3 rewrite toàn bảng, và giữa 64 dòng đó thì một quả mìn mới xuất hiện rất
+dễ trôi qua mắt reviewer.
 
 Đã có sẵn một phần hàng rào: `tests/test_alembic_metadata_complete.py` chặn đúng cơ chế đã gây ra P0 — bảng
 có model mà không ai import. Nó không bắt được các loại drift khác.
 
-Vẫn nên cân nhắc CI gate chặn merge nếu số diff vượt ngưỡng — biến **78** thành trần không được phép tăng.
+Vẫn nên cân nhắc CI gate chặn merge nếu số diff vượt ngưỡng — biến **64** thành trần không được phép tăng.
 Ngoài phạm vi ticket này, nêu ra để owner cân nhắc.
+
+**Nhóm 14 index vừa đóng đang không có test nào giữ.** Xoá một dòng `index=True` thì suite vẫn xanh, và diff
+sẽ lặng lẽ quay lại 65 — đúng cái cơ chế đã tạo ra chính nhóm này. Ticket giới hạn phạm vi sửa trong
+`entities.py` + `docs/` nên không thêm test được trong đợt này. Cái trần diff ở trên chính là hàng rào rẻ
+nhất phủ được cả nhóm này lẫn mọi drift mới, và nên làm trước khi P4 được dọn — sau đó ngưỡng sẽ về gần 0
+và mọi thay đổi ngoài ý muốn đều lộ ngay.
 
 ---
 
@@ -460,7 +515,13 @@ Hai chỗ dễ đo lệch:
 
 Lưu ý khi đếm: các diff `modify_*` trả về dưới dạng **list lồng trong list**, nên `len()` trên kết quả thô
 cho ra số top-level chứ không phải số diff thật. Phải trải phẳng trước khi đếm. Ở lần đo đầu chênh lệch này
-là 112 với 113; ở trạng thái hiện tại thì không còn diff lồng nào nên cả hai đều là 78.
+là 112 với 113; ở trạng thái hiện tại thì không còn diff lồng nào nên cả hai đều là 64.
+
+Postgres của stack dev **không publish port ra host**. Hai đường vào: `docker exec vroom-postgres psql -U
+postgres -d <db>`, hoặc nối thẳng TCP tới IP container (`docker inspect vroom-postgres` →
+`NetworkSettings.Networks.*.IPAddress`, bridge network định tuyến được từ host trên Linux) — đường thứ hai
+cần thiết vì alembic và `create_engine` nói TCP chứ không chạy qua `docker exec`. Không phải recreate
+container.
 
 ---
 
