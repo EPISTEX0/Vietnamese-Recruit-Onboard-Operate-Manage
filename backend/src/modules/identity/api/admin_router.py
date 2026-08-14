@@ -109,7 +109,10 @@ async def require_system_admin(
     if current_user.role != UserRole.SYSTEM_ADMIN:
         raise HTTPException(
             status_code=403,
-            detail={"code": "SYSTEM_ADMIN_ACCESS_DENIED", "message": "System Admin access required"},
+            detail={
+                "code": "SYSTEM_ADMIN_ACCESS_DENIED",
+                "message": "System Admin access required",
+            },
         )
     return current_user
 

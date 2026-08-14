@@ -61,8 +61,8 @@ from src.modules.identity.domain.exceptions import (
 )
 from src.modules.identity.infrastructure.config import AuthSettings
 from src.modules.identity.infrastructure.rate_limiter import (
-    RateLimitRule,
     RateLimiter,
+    RateLimitRule,
     email_identifier,
 )
 

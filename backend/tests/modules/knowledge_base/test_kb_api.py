@@ -116,7 +116,8 @@ class TestKnowledgeBaseAPIMigration:
         )
 
     def test_employee_tables_exist(self, test_app: TestClient):
-        """AC: Migration 079 creates employee_knowledge_base_documents and employee_knowledge_base_chunks tables."""
+        """AC: Migration 079 creates employee_knowledge_base_documents and
+        employee_knowledge_base_chunks tables."""
         from sqlalchemy import create_engine, inspect
 
         db_url = os.environ.get("DATABASE_URL", "")
@@ -171,7 +172,8 @@ class TestKnowledgeBaseAPIHealth:
         )
 
     def test_employee_kb_router_registered(self, test_app: TestClient):
-        """The knowledge-base router accepts kb_type=employee (returns 401 not 404 when unauthenticated)."""
+        """The knowledge-base router accepts kb_type=employee
+        (returns 401 not 404 when unauthenticated)."""
         response = test_app.get("/api/knowledge-base/documents?kb_type=employee")
         assert response.status_code in (200, 401, 403), (
             f"Expected 200/401/403, got {response.status_code}. "

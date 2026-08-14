@@ -126,7 +126,7 @@ async def create_job_opening(
         target_headcount=body.target_headcount,
         description=body.description,
     )
-    
+
     return JobOpeningResponse.model_validate(job_opening)
 
 

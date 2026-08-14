@@ -64,7 +64,8 @@ def build_reset_email(reset_link: str) -> tuple[str, str, str]:
 <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;">
 <div style="max-width:560px;margin:0 auto;padding:24px;background-color:#ffffff;">
 <h2 style="color:#1f2937;">Đặt lại mật khẩu</h2>
-<p style="color:#374151;">Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản Vroom HR của bạn.</p>
+<p style="color:#374151;">Chúng tôi nhận được yêu cầu đặt lại mật khẩu
+cho tài khoản Vroom HR của bạn.</p>
 <p style="color:#374151;">Vui lòng nhấp vào liên kết bên dưới để tạo mật khẩu mới.
 Liên kết này có hiệu lực trong <strong>15 phút</strong>:</p>
 <p style="margin:24px 0;">
@@ -72,7 +73,8 @@ Liên kết này có hiệu lực trong <strong>15 phút</strong>:</p>
    style="display:inline-block;padding:12px 24px;background-color:#2563eb;color:#ffffff;
           text-decoration:none;border-radius:6px;">Đặt lại mật khẩu</a>
 </p>
-<p style="color:#6b7280;font-size:13px;">Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.
+<p style="color:#6b7280;font-size:13px;">Nếu bạn không yêu cầu đặt lại mật khẩu,
+hãy bỏ qua email này.
 Liên kết sẽ hết hạn sau 15 phút kể từ khi được tạo.</p>
 </div>
 </body>

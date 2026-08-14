@@ -43,7 +43,6 @@ from src.modules.identity.api.admin_router import admin_router  # noqa: E402
 from src.modules.identity.api.error_handler import (  # noqa: E402
     register_auth_error_handlers,
 )
-
 from src.modules.identity.api.router import router as auth_router  # noqa: E402
 from src.modules.identity.container import get_settings  # noqa: E402
 from src.modules.knowledge_base.api.router import router as kb_router  # noqa: E402
@@ -95,7 +94,11 @@ async def _bootstrap_super_admin() -> None:
             logger.info("Super admin bootstrap completed for '%s'.", super_admin_email)
         else:
             # Check if any system_admin exists in the database.
-            statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
+            statement = (
+                select(func.count())
+                .select_from(User)
+                .where(User.role == UserRole.SYSTEM_ADMIN)
+            )
             result = await session.execute(statement)
             admin_count = result.scalar_one()
             if admin_count == 0:

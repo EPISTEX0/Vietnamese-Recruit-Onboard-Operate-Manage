@@ -171,7 +171,8 @@ class WhitelistManager:
                     "code": "WHITELIST_INVALID_FORMAT",
                     "message": (
                         f"'{stripped}' không đúng định dạng. "
-                        "Vui lòng nhập email hợp lệ (vd: ten@congty.com) hoặc tên miền (vd: @congty.com)."
+                        "Vui lòng nhập email hợp lệ (vd: ten@congty.com) "
+                        "hoặc tên miền (vd: @congty.com)."
                     ),
                 },
             )
