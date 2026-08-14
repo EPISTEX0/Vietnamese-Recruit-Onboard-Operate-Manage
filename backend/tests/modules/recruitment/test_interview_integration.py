@@ -67,11 +67,20 @@ from sqlmodel import select
 # when the ORM flushes a Candidate insert in this test.
 import src.modules.gmail.domain.entities  # noqa: F401
 from src.modules.employee.domain.entities import Employee
-from src.modules.identity.application.oauth_service import OAuthService
-from src.modules.identity.domain.entities import OAuthGrant, User, UserRole
+from src.modules.identity.domain.entities import (
+    OAuthGrant,
+    OrganizationGoogleConnection,
+    User,
+    UserRole,
+)
 from src.modules.identity.infrastructure.config import AuthSettings
+from src.modules.identity.infrastructure.connection_state_repository import (
+    OrganizationGoogleConnectionRepository,
+)
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
-from src.modules.identity.infrastructure.oauth_grant_repository import OAuthGrantRepository
+from src.modules.recruitment.application.candidate_lifecycle_service import (
+    CandidateLifecycleService,
+)
 from src.modules.recruitment.application.interview_scheduler_service import (
     InterviewSchedulerService as CandidateService,
 )
@@ -90,6 +99,7 @@ from src.modules.recruitment.infrastructure.org_settings_repository import (
 from src.modules.recruitment.infrastructure.repositories import (
     CandidateRepository,
     CVDocumentRepository,
+    InterviewRepository,
 )
 from tests.postgres_support import make_postgres_container
 
@@ -106,6 +116,9 @@ _EVENT_ID = "evt_integration_abc123"
 _HTML_LINK = f"https://www.google.com/calendar/event?eid={_EVENT_ID}"
 _MEET_LINK = "https://meet.google.com/iii-jjjj-kkk"
 _ORG_TIMEZONE = "Asia/Ho_Chi_Minh"
+# The mocked Google layer only routes ``/calendars/primary/...``, so the
+# Organization connection selects ``primary`` as its recruitment calendar.
+_SELECTED_CALENDAR_ID = "primary"
 
 # Plaintext access token decrypted from the seeded grant by ``CryptoUtils``.
 _ACCESS_TOKEN_PLAINTEXT = "ya29.integration-access-token"  # noqa: S105 - test value
@@ -348,27 +361,52 @@ def _build_candidate_service(
     """
     settings = RecruitmentSettings()
     candidate_repo = CandidateRepository(session)
-    cv_document_repo = CVDocumentRepository(session)
+    interview_repo = InterviewRepository(session)
     org_settings_repo = OrganizationSettingsRepository(session, settings)
-    oauth_grant_repo = OAuthGrantRepository(session)
-    oauth_service = OAuthService(
-        settings=auth_settings,
-        crypto=crypto,
-        grant_repository=oauth_grant_repo,
-    )
+    connection_repo = OrganizationGoogleConnectionRepository(session)
     calendar_adapter = CalendarAdapter(settings=settings, http_client=http_client)
 
     return CandidateService(
         candidate_repo=candidate_repo,
-        cv_document_repo=cv_document_repo,
+        interview_repo=interview_repo,
+        calendar_port=calendar_adapter,
+        org_settings_repo=org_settings_repo,
+        connection_repo=connection_repo,
+        crypto=crypto,
+        session=session,
+        user_id=user_id,
+    )
+
+
+def _build_lifecycle_service(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    crypto: CryptoUtils,
+    auth_settings: AuthSettings,
+    http_client: httpx.AsyncClient,
+) -> CandidateLifecycleService:
+    """Wire a :class:`CandidateLifecycleService` exactly like the container.
+
+    Terminal transitions live here, and the container hands them the scheduler as
+    the ``InterviewCanceller`` seam so rejecting a Candidate also calls off their
+    booked interview (R8). Wiring it the same way here is the point of the reject
+    stage: it drives the real cancellation path end to end.
+    """
+    return CandidateLifecycleService(
+        candidate_repo=CandidateRepository(session),
+        cv_document_repo=CVDocumentRepository(session),
+        job_opening_repo=AsyncMock(),
         minio_client=AsyncMock(),
         session=session,
         user_id=user_id,
-        calendar_port=calendar_adapter,
-        org_settings_repo=org_settings_repo,
-        oauth_grant_repo=oauth_grant_repo,
-        oauth_service=oauth_service,
-        crypto=crypto,
+        interview_canceller=_build_candidate_service(
+            session,
+            user_id=user_id,
+            crypto=crypto,
+            auth_settings=auth_settings,
+            http_client=http_client,
+        ),
     )
 
 
@@ -423,6 +461,19 @@ async def _seed_actor_grant_employee_candidate(
             is_valid=True,
         )
         db_session.add(grant)
+
+        # The live Organization Google Connection: this, not the per-user grant,
+        # is what authorizes writes to the selected recruitment calendar.
+        connection = OrganizationGoogleConnection(
+            status="connected",
+            selected_calendar_id=_SELECTED_CALENDAR_ID,
+            access_token_enc=crypto.encrypt(_ACCESS_TOKEN_PLAINTEXT),
+            refresh_token_enc=crypto.encrypt(_REFRESH_TOKEN_PLAINTEXT),
+            token_expires_at=datetime.now(UTC) + timedelta(hours=1),
+            connected_by_user_id=user.id,
+        )
+        db_session.add(connection)
+
         await db_session.commit()
         return user.id, interviewer.id, candidate.id
 
@@ -498,7 +549,7 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
             interviewer_ids=[interviewer_id],
             notes="First round interview",
         )
-        assert scheduled.calendar_event_id == _EVENT_ID
+        assert scheduled.status == CandidateStatus.INTERVIEW_SCHEDULED
 
     # The real adapter must have issued exactly one create POST that requested a
     # Meet link (conferenceData.createRequest), confirming the create path ran.
@@ -510,15 +561,12 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
         == "hangoutsMeet"
     )
 
-    # Persisted Candidate state after schedule (R2.1, R4.1-R4.3).
+    # Persisted Candidate state after schedule (R2.1).
     after_schedule = await _load_candidate(session_maker, candidate_id)
     assert after_schedule.status == CandidateStatus.INTERVIEW_SCHEDULED
-    assert after_schedule.calendar_event_id == _EVENT_ID
-    assert after_schedule.interview_timezone == _ORG_TIMEZONE
-    assert after_schedule.interview_start_at is not None
-    assert _same_instant(after_schedule.interview_start_at, schedule_start)
 
-    # Assert Interview created (GH issue 150)
+    # The event reference, the scheduled start, and the applied timezone are
+    # persisted on the Interview the schedule creates (R4.1-R4.3).
     async with session_maker() as session:
         interviews = (
             (await session.execute(select(Interview).where(Interview.candidate_id == candidate_id)))
@@ -529,6 +577,7 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
         iv = interviews[0]
         assert iv.status == "scheduled"
         assert iv.calendar_event_id == _EVENT_ID
+        assert iv.timezone == _ORG_TIMEZONE
         assert _same_instant(iv.start_at, schedule_start)
 
         participants = (
@@ -577,16 +626,12 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
     assert patch_request.url.path.endswith(f"/calendars/primary/events/{_EVENT_ID}")
     assert "conferenceData" not in _json_body(patch_request)
 
-    # Persisted Candidate state after reschedule: start updated, event id and
-    # status unchanged (R7.1, R7.3).
+    # Persisted Candidate state after reschedule: status unchanged (R7.3).
     after_reschedule = await _load_candidate(session_maker, candidate_id)
     assert after_reschedule.status == CandidateStatus.INTERVIEW_SCHEDULED
-    assert after_reschedule.calendar_event_id == _EVENT_ID  # unchanged
-    assert after_reschedule.interview_start_at is not None
-    assert _same_instant(after_reschedule.interview_start_at, reschedule_start)
-    assert not _same_instant(after_reschedule.interview_start_at, schedule_start)
 
-    # Assert Interview updated (GH issue 150)
+    # The Interview's start advanced to the new instant while its event id is
+    # left unchanged -- a reschedule patches in place (R7.1, R7.3).
     async with session_maker() as session:
         interviews = (
             (await session.execute(select(Interview).where(Interview.candidate_id == candidate_id)))
@@ -596,7 +641,9 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
         assert len(interviews) == 1
         iv = interviews[0]
         assert iv.status == "scheduled"
+        assert iv.calendar_event_id == _EVENT_ID  # unchanged
         assert _same_instant(iv.start_at, reschedule_start)
+        assert not _same_instant(iv.start_at, schedule_start)
 
     # An interview_rescheduled audit row exists with previous + new start (R12.2).
     reschedule_audit = await _load_audit(session_maker, candidate_id, _OP_RESCHEDULED)
@@ -604,21 +651,27 @@ async def test_schedule_reschedule_reject_against_mocked_google_layer(
     resched_entry = reschedule_audit[0]
     assert resched_entry.user_id == user_id
     assert resched_entry.success is True
+    # The service records the previous start under ``previous_value`` and the
+    # new start under ``new_value``, which is what those audit fields mean.
+    assert resched_entry.previous_value is not None
     assert resched_entry.new_value is not None
-    assert resched_entry.new_value["calendar_event_id"] == _EVENT_ID
-    assert resched_entry.new_value["previous_start"] is not None
-    assert resched_entry.new_value["new_start"] is not None
+    assert resched_entry.new_value["event_id"] == _EVENT_ID
+    assert resched_entry.previous_value["start"] is not None
+    assert _same_instant(
+        datetime.fromisoformat(resched_entry.previous_value["start"]), schedule_start
+    )
+    assert _same_instant(datetime.fromisoformat(resched_entry.new_value["start"]), reschedule_start)
 
     # --- Stage 3: reject (DELETE .../events/{id} -> 204). --------------------
     async with session_maker() as svc_session:
-        service = _build_candidate_service(
+        lifecycle = _build_lifecycle_service(
             svc_session,
             user_id=user_id,
             crypto=crypto,
             auth_settings=auth_settings,
             http_client=calendar_http_client,
         )
-        rejected = await service.reject_candidate(candidate_id, reason="Not a fit")
+        rejected = await lifecycle.reject_candidate(candidate_id, reason="Not a fit")
         assert rejected.status == CandidateStatus.REJECTED
 
     # The real adapter must have deleted the EXACT stored event id (R8.1).

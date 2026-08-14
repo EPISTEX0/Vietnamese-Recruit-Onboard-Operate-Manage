@@ -32,7 +32,6 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -44,11 +43,17 @@ from sqlmodel import select
 
 import src.modules.gmail.domain.entities  # noqa: F401
 from src.modules.employee.domain.entities import Employee
-from src.modules.identity.application.oauth_service import OAuthService
-from src.modules.identity.domain.entities import OAuthGrant, User, UserRole
+from src.modules.identity.domain.entities import (
+    OAuthGrant,
+    OrganizationGoogleConnection,
+    User,
+    UserRole,
+)
 from src.modules.identity.infrastructure.config import AuthSettings
+from src.modules.identity.infrastructure.connection_state_repository import (
+    OrganizationGoogleConnectionRepository,
+)
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
-from src.modules.identity.infrastructure.oauth_grant_repository import OAuthGrantRepository
 from src.modules.recruitment.application.interview_scheduler_service import (
     InterviewSchedulerService as CandidateService,
 )
@@ -66,7 +71,7 @@ from src.modules.recruitment.infrastructure.org_settings_repository import (
 )
 from src.modules.recruitment.infrastructure.repositories import (
     CandidateRepository,
-    CVDocumentRepository,
+    InterviewRepository,
 )
 from tests.postgres_support import make_postgres_container
 
@@ -78,6 +83,9 @@ _HTML_LINK = f"https://www.google.com/calendar/event?eid={_STABLE_EVENT_ID}"
 _MEET_LINK = "https://meet.google.com/xxx-yyyy-zzz"
 _EVENT_ETAG = '"etag-abc123"'
 _ORG_TIMEZONE = "Asia/Ho_Chi_Minh"
+# The recruitment calendar the Organization connection selects; every event
+# must be created here rather than on the connected account's primary calendar.
+_SELECTED_CALENDAR_ID = "recruitment@example.com"
 
 _ACCESS_TOKEN_PLAINTEXT = "ya29.create-interview-token"
 _REFRESH_TOKEN_PLAINTEXT = "1//create-refresh-token"
@@ -112,7 +120,12 @@ class _GoogleCalendarMock:
             return httpx.Response(200, json=self._calendar_list_json())
 
         if method == "POST" and is_collection:
-            created = body.get("conferenceData", {}).get("createRequest", {}) is not None
+            # Google only mints a conference when the create body actually asks
+            # for one. The previous form (``.get("createRequest", {}) is not
+            # None``) is true for *every* body, so the mock handed back a Meet
+            # link even for in_person/custom_link events and could never catch a
+            # wrongly-requested conference.
+            created = "createRequest" in body.get("conferenceData", {})
             return httpx.Response(200, json=self._created_event_json(created))
         if method == "PATCH" and is_item:
             event_id = path.rsplit("/", 1)[-1]
@@ -273,29 +286,28 @@ def _build_candidate_service(
     auth_settings: AuthSettings,
     http_client: httpx.AsyncClient,
 ) -> CandidateService:
+    """Wire an InterviewSchedulerService the way the recruitment container does.
+
+    Calendar writes are authorized by the Organization Google Connection (the
+    ``connection_repo`` seam), not by the acting HR user's personal OAuth grant,
+    so that repository is what the service needs to reach Google.
+    """
     settings = RecruitmentSettings()
     candidate_repo = CandidateRepository(session)
-    cv_document_repo = CVDocumentRepository(session)
+    interview_repo = InterviewRepository(session)
     org_settings_repo = OrganizationSettingsRepository(session, settings)
-    oauth_grant_repo = OAuthGrantRepository(session)
-    oauth_service = OAuthService(
-        settings=auth_settings,
-        crypto=crypto,
-        grant_repository=oauth_grant_repo,
-    )
+    connection_repo = OrganizationGoogleConnectionRepository(session)
     calendar_adapter = CalendarAdapter(settings=settings, http_client=http_client)
 
     return CandidateService(
         candidate_repo=candidate_repo,
-        cv_document_repo=cv_document_repo,
-        minio_client=AsyncMock(),
-        session=session,
-        user_id=user_id,
+        interview_repo=interview_repo,
         calendar_port=calendar_adapter,
         org_settings_repo=org_settings_repo,
-        oauth_grant_repo=oauth_grant_repo,
-        oauth_service=oauth_service,
+        connection_repo=connection_repo,
         crypto=crypto,
+        session=session,
+        user_id=user_id,
     )
 
 
@@ -345,6 +357,21 @@ async def _seed_data(
             is_valid=True,
         )
         db_session.add(grant)
+
+        # The live Organization Google Connection: this, not the per-user grant,
+        # is what authorizes writes to the selected recruitment calendar.
+        existing_conn = (
+            (await db_session.execute(select(OrganizationGoogleConnection))).scalars().first()
+        )
+        connection = existing_conn or OrganizationGoogleConnection()
+        connection.status = "connected"
+        connection.selected_calendar_id = _SELECTED_CALENDAR_ID
+        connection.access_token_enc = crypto.encrypt(_ACCESS_TOKEN_PLAINTEXT)
+        connection.refresh_token_enc = crypto.encrypt(_REFRESH_TOKEN_PLAINTEXT)
+        connection.token_expires_at = datetime.now(UTC) + timedelta(hours=1)
+        connection.connected_by_user_id = user.id
+        db_session.add(connection)
+
         await db_session.commit()
         return user.id, interviewer.id, candidate.id
 
