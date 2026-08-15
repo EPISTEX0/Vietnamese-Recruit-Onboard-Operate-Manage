@@ -16,7 +16,9 @@ Lý do trực tiếp: trên deployment vừa setup xong, console nhìn như mộ
 
 - **Giữ tab, chỉ restyle cho giống Dashboard HR**: bị loại. Nó không chạm vào nguyên nhân — sidebar vẫn một item và vẫn trống. Phần restyle vốn đã đi kèm miễn phí khi dùng `PageHeader` sẵn có trong `components/shared-ui.tsx:444`, không cần đánh đổi gì để lấy.
 
-- **Chuyển tab sang sidebar nhưng vẫn giữ state, URL đứng yên ở `/settings`**: bị loại. Sidebar mà không đổi URL là cái bẫy: người dùng bookmark "Nhật ký hoạt động", quay lại thấy "Cấu hình AI". Nó cũng bỏ lỡ khả năng prefetch theo từng đề mục mà `ROUTE_QUERY_MAP` trong `components/app-shell.tsx:29` đã dựng sẵn — hiện `/settings` nạp gộp ba query key khi hover một chỗ.
+- **Chuyển tab sang sidebar nhưng vẫn giữ state, URL đứng yên ở `/settings`**: bị loại. Sidebar mà không đổi URL là cái bẫy: người dùng bookmark "Nhật ký hoạt động", quay lại thấy "Cấu hình AI".
+
+  > Bản nháp đầu của ADR này còn viện dẫn một lý do thứ hai — rằng tách route mở ra khả năng prefetch React Query theo từng đề mục qua `ROUTE_QUERY_MAP` của app shell. **Lý do đó sai và đã bị gỡ.** Cơ chế ấy chưa bao giờ chạy: shell gọi `prefetchQuery` chỉ với `queryKey`, không có `queryFn`, và query client không đặt `queryFn` mặc định — nên `ensureQueryFn` của `@tanstack/query-core` trả về một hàm reject sẵn, khiến mỗi key **settle thành error** thay vì được warm. Việc gỡ hẳn cơ chế này là một quyết định riêng, không thuộc ADR này.
 
 - **Dời sang `/system-admin/*` cho khớp chữ ADR 0009 §3**: bị loại, lý do ở trên. Đáng ghi lại vì đây đúng là thứ sẽ bị đảo ngược bởi người đọc ADR 0009 §3 rồi tưởng code đang sai.
 
