@@ -34,7 +34,17 @@ Lý do trực tiếp: trên deployment vừa setup xong, console nhìn như mộ
 
 - **`middleware.ts` không cần sửa.** `middleware.ts:50` lọc bằng `startsWith`, nên `/settings/ai`, `/settings/users`… đã được bảo vệ sẵn ngay khi route ra đời.
 
-- **Nội dung thường trực của trang chủ là trạng thái vận hành, không phải checklist.** Bốn thẻ bento (AI provider, runtime health, tài khoản, nhật ký) cộng mười dòng audit gần nhất. `getAuditLogs({ start_date, page_size: 10 })` trả cả `total` lẫn `items` (`lib/api/admin.ts:141-146`), nên một request phục vụ cả thẻ đếm lẫn danh sách — trang chủ vẫn đúng bốn query.
+- **Nội dung thường trực của trang chủ là trạng thái vận hành, không phải checklist.** Bốn thẻ bento (AI provider, runtime health, tài khoản, nhật ký) cộng mười dòng audit gần nhất. `getAuditLogs({ start_date, page_size: 10 })` trả cả `total` lẫn `items` (`lib/api/admin.ts:141-146`), nên một request phục vụ cả thẻ đếm lẫn danh sách.
+
+  > Bản đầu của gạch đầu dòng này kết luận "trang chủ vẫn đúng **bốn** query". **Con số đó sai.** Thẻ runtime health cần `services[]`, và trường đó chỉ tồn tại trên `RuntimeHealthResponse` từ `getRuntimeHealth()` (`lib/api/admin.ts:157-160, 521`); không payload nào trong bốn cái được liệt kê mang nó. Trang chủ chạy **năm** query. Ràng buộc thật mà con số ấy định diễn đạt vẫn nguyên vẹn và là thứ đáng giữ: **không thêm endpoint backend nào**, đặc biệt không dựng endpoint gộp kiểu `/api/system-admin/overview`. Cả năm query đều đã tồn tại. Phát hiện bởi peer làm #302, trước khi viết dòng code nào.
+
+- **Task "Cấu hình Google OAuth" của Quick-Start Guide không có đích điều hướng, và đó là sự thật về hệ thống chứ không phải thiếu sót của trang chủ.**
+
+  > Spec và #300 viết "mỗi task navigate tới đề mục tương ứng khi click". **Mệnh đề đó sai với một trong ba task.** Console chưa từng có màn hình cấu hình OAuth: `rg -ni 'oauth' frontend/app/` không trả một hit nào trong *toàn bộ* `app/`, và bản trước khi tách route cũng đúng bảy tab (`TabId` không có `oauth`). Backend thì đủ — `GET`/`POST /oauth/config` (`identity/api/admin_router.py:1057, 1085`) — nên phần *suy trạng thái* của task chạy được đúng như mô tả; chỉ đích đến là không tồn tại.
+  >
+  > Cách xử lý đã chọn: view-model của task mang **action nullable** — điều hướng khi có đề mục, và một dòng hướng dẫn khi không. Ba lối ra khác đều bị loại: dựng đề mục thứ tám ngay trong ticket trang chủ phá "bảy đề mục" của ADR này và nhét một bề mặt chạm client secret vào một PR không được review cho việc đó; bỏ task đi thì trái ADR-0009 §4, vốn nói ba; trỏ tạm sang một đề mục có sẵn thì chính là kiểu nói dối người vừa cài xong mà cả trang này sinh ra để chặn — `/settings/domains` là tên miền email được phép đăng nhập, không phải OAuth client credentials.
+  >
+  > Đề mục OAuth là một quyết định riêng, đã tách thành ticket của nó. Khi nó có, task này chuyển thành điều hướng bằng một thay đổi trong module thuần, không đụng component.
 
 - **Hàm suy trạng thái checklist phải nhận `QueryResult` từ ngoài vào**, không được tự gọi `useQuery` bên trong. Đây là ràng buộc thiết kế do yêu cầu test đặt ra: đó là chỗ duy nhất trong thay đổi này có thể sai âm thầm, và nó chỉ test được như hàm thuần nếu không tự đi lấy dữ liệu.
 

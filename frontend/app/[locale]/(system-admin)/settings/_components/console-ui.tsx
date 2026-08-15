@@ -62,20 +62,3 @@ export function ErrorBox({ text, onRetry }: { text: string; onRetry: () => void 
 export function Empty({ text }: { text: string }) {
   return <p className="text-[13px] text-slate-400 py-10 text-center">{text}</p>;
 }
-
-/**
- * A labelled scalar readout.
- *
- * Carried over from the pre-split console, where it was already unreferenced.
- * Kept rather than deleted because the Tổng quan hệ thống homepage (#302) is
- * built from exactly this shape — four status cards, each a label over a
- * value. Delete it if that page lands without using it.
- */
-export function StatusBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="text-center">
-      <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
-      <p className="text-[12px] font-medium text-slate-700">{value}</p>
-    </div>
-  );
-}

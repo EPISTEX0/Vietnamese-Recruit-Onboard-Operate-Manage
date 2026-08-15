@@ -878,6 +878,33 @@
       "usersAccess": "Người dùng & Truy cập",
       "system": "Hệ thống"
     },
+    "systemOverview": {
+      "title": "Tổng quan hệ thống",
+      "subtitle": "Deployment đang chạy thế nào, và còn việc gì phải làm",
+      "cardAiKicker": "AI",
+      "cardAiSub": "Nhà cung cấp",
+      "aiNotConfigured": "Chưa cấu hình",
+      "cardRuntimeKicker": "Runtime",
+      "cardRuntimeSub": "dịch vụ khoẻ",
+      "cardAccountsKicker": "Tài khoản",
+      "cardAuditKicker": "Nhật ký",
+      "cardAuditSub": "bản ghi trong 24 giờ",
+      "recentActivity": "Hoạt động gần đây",
+      "recentActivityDesc": "Mười thay đổi gần nhất trong 24 giờ qua",
+      "noActivity24h": "Chưa có hoạt động nào trong 24 giờ qua."
+    },
+    "quickStart": {
+      "title": "Bắt đầu nhanh",
+      "subtitle": "Ba việc cần làm để deployment sẵn sàng dùng",
+      "progress": "{done}/{total} đã xong",
+      "statusDone": "Đã xong",
+      "statusTodo": "Chưa làm",
+      "statusUnknown": "Chưa xác định được",
+      "taskGoogleOAuth": "Cấu hình Google OAuth",
+      "taskGoogleOAuthGuidance": "Cấu hình bằng biến môi trường của deployment — Console chưa có màn hình cho mục này.",
+      "taskAiConfiguration": "Cấu hình AI",
+      "taskHrAccount": "Tạo tài khoản HR đầu tiên"
+    },
     "aiConfig": "Cấu hình AI",
     "aiConfigDesc": "Nhà cung cấp AI, chính sách dữ liệu và các tính năng AI của hệ thống",
     "aiTools": "Công cụ Assistant",

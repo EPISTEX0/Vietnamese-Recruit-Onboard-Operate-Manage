@@ -19,7 +19,9 @@ Issue và PRD của repo này sống trong GitHub Issues. PR ngoài không phả
 Repo single-context: một [`CONTEXT.md`](./CONTEXT.md) ở root, một [`docs/adr/`](./docs/adr/) cho toàn hệ thống. Không có `CONTEXT-MAP.md`, không có ADR theo từng context.
 
 - Dùng đúng vocab của `CONTEXT.md` khi viết issue title, tên test, đề xuất refactor — đừng trôi sang synonym mà glossary đã liệt ở `_Avoid_`. Khái niệm cần dùng chưa có trong glossary là tín hiệu: hoặc đang bịa ngôn ngữ repo không dùng, hoặc có gap thật cần ghi lại.
-- **Đọc `docs/adr/` trước khi đổi một quyết định kiến trúc.** ADR là bất biến: không sửa ADR đã merge, muốn đổi thì viết ADR mới supersede ADR cũ (xem ADR-0007 → ADR-0012 làm mẫu).
+- **Đọc `docs/adr/` trước khi đổi một quyết định kiến trúc.** ADR đã merge không viết lại, nhưng "không viết lại" gộp hai việc khác nhau:
+  - **Đổi một quyết định** → viết ADR mới supersede ADR cũ, không đụng vào bản cũ (xem ADR-0007 → [ADR-0012](./docs/adr/0012-operator-configured-embedding-endpoint.md) làm mẫu).
+  - **Một mệnh đề dữ kiện trong ADR hoá ra sai** → đính chính tại chỗ bằng blockquote trỏ sang sự thật, nói rõ phần còn lại vẫn còn giá trị (xem [ADR-0006](./docs/adr/0006-ai-studio-design-system.md) dòng 13 làm mẫu). Supersede cả ADR chỉ vì vài câu sai dữ kiện sẽ để nguyên câu sai làm văn bản sống cho tới khi ai đó đọc tới văn bản thay thế.
 - Nếu việc đang làm mâu thuẫn với một ADR hiện có, nói thẳng ra thay vì âm thầm ghi đè.
 
 ## Môi trường phát triển cục bộ

@@ -878,6 +878,33 @@
       "usersAccess": "Users & Access",
       "system": "System"
     },
+    "systemOverview": {
+      "title": "System Overview",
+      "subtitle": "How this deployment is running, and what is still left to do",
+      "cardAiKicker": "AI",
+      "cardAiSub": "Provider",
+      "aiNotConfigured": "Not configured",
+      "cardRuntimeKicker": "Runtime",
+      "cardRuntimeSub": "services healthy",
+      "cardAccountsKicker": "Accounts",
+      "cardAuditKicker": "Audit",
+      "cardAuditSub": "records in the last 24 hours",
+      "recentActivity": "Recent activity",
+      "recentActivityDesc": "The ten most recent changes in the last 24 hours",
+      "noActivity24h": "No activity in the last 24 hours."
+    },
+    "quickStart": {
+      "title": "Quick start",
+      "subtitle": "Three things to do before this deployment is ready to use",
+      "progress": "{done}/{total} done",
+      "statusDone": "Done",
+      "statusTodo": "Not done",
+      "statusUnknown": "Could not determine",
+      "taskGoogleOAuth": "Configure Google OAuth",
+      "taskGoogleOAuthGuidance": "Configure this through the deployment's environment variables — the console has no screen for it yet.",
+      "taskAiConfiguration": "Configure AI",
+      "taskHrAccount": "Create the first HR account"
+    },
     "aiConfig": "AI Configuration",
     "aiConfigDesc": "AI provider, data policy, and the system's AI features",
     "aiTools": "Assistant Tools",

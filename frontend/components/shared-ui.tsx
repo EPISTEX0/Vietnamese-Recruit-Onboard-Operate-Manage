@@ -643,6 +643,19 @@ export function formatDate(iso: string | null | undefined, locale = 'vi-VN'): st
  * - heartbeat-related → "Không hoạt động"
  * - fallback: return detail as-is
  */
+/**
+ * Whether to render these helpers' built-in strings in Vietnamese.
+ *
+ * The `locale` parameters below default to `'vi-VN'`, but every call site feeds
+ * them `useLocale()`, which yields next-intl's routing locale — `'vi'` or
+ * `'en'` (`i18n/routing.ts`). An equality test against `'vi-VN'` therefore
+ * missed on the Vietnamese UI and quietly served the English branch: runtime
+ * detail read "Just now", latency read "Fast", and audit field labels came out
+ * in English on a Vietnamese-default product. Matching the language subtag
+ * accepts both spellings.
+ */
+const isVietnamese = (locale: string): boolean => locale.split('-')[0] === 'vi';
+
 export function formatRuntimeDetail(detail: string | null, locale = 'vi-VN'): string {
       if (detail == null) return '';
       if (detail.startsWith('last beat:')) {
@@ -651,29 +664,29 @@ export function formatRuntimeDetail(detail: string | null, locale = 'vi-VN'): st
         if (Number.isNaN(ts)) return detail;
         const now = Date.now() / 1000;
         const diff = Math.max(0, now - ts);
-        if (diff < 60) return locale === 'vi-VN' ? 'Vừa xong' : 'Just now';
+        if (diff < 60) return isVietnamese(locale) ? 'Vừa xong' : 'Just now';
         if (diff < 3600) {
           const m = Math.floor(diff / 60);
-          return locale === 'vi-VN' ? `${m} phút trước` : `${m} min ago`;
+          return isVietnamese(locale) ? `${m} phút trước` : `${m} min ago`;
         }
         if (diff < 86400) {
           const h = Math.floor(diff / 3600);
-          return locale === 'vi-VN' ? `${h} giờ trước` : `${h} hr ago`;
+          return isVietnamese(locale) ? `${h} giờ trước` : `${h} hr ago`;
         }
         const d = Math.floor(diff / 86400);
-        return locale === 'vi-VN' ? `${d} ngày trước` : `${d} day ago`;
+        return isVietnamese(locale) ? `${d} ngày trước` : `${d} day ago`;
       }
       if (detail === 'no heartbeat' || detail.includes('heartbeat'))
-        return locale === 'vi-VN' ? 'Không hoạt động' : 'Inactive';
+        return isVietnamese(locale) ? 'Không hoạt động' : 'Inactive';
       return detail;
     }
 
 /** Format latency in ms → Vietnamese qualitative label. */
 export function formatLatency(latencyMs: number | null, locale = 'vi-VN'): string {
       if (latencyMs == null) return '';
-      if (latencyMs < 100) return locale === 'vi-VN' ? 'Nhanh' : 'Fast';
-      if (latencyMs < 500) return locale === 'vi-VN' ? 'Bình thường' : 'Normal';
-      return locale === 'vi-VN' ? 'Chậm' : 'Slow';
+      if (latencyMs < 100) return isVietnamese(locale) ? 'Nhanh' : 'Fast';
+      if (latencyMs < 500) return isVietnamese(locale) ? 'Bình thường' : 'Normal';
+      return isVietnamese(locale) ? 'Chậm' : 'Slow';
     }
 
     /** Format audit details as a Vietnamese-readable string (never raw JSON). */
@@ -682,7 +695,7 @@ export function formatLatency(latencyMs: number | null, locale = 'vi-VN'): strin
       if (typeof details !== 'object' || details === null) return String(details);
 
       // Field labels — locale-aware
-      const fieldMap: Record<string, string> = locale === 'vi-VN'
+      const fieldMap: Record<string, string> = isVietnamese(locale)
         ? {
           role: 'Quyền', email: 'Email', name: 'Tên',
           employee_id: 'Mã NV', permissions: 'Quyền hạn',
@@ -743,7 +756,7 @@ export function formatLatency(latencyMs: number | null, locale = 'vi-VN'): strin
         };
 
       // Value translations — locale-aware
-      const valueMap: Record<string, string> = locale === 'vi-VN'
+      const valueMap: Record<string, string> = isVietnamese(locale)
         ? {
           calendar_selected: 'đã chọn lịch',
           connected: 'đã kết nối', disconnected: 'đã ngắt kết nối',
