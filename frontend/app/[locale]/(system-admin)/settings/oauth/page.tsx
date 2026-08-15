@@ -241,15 +241,16 @@ function UpdateForm({ current }: { current: OAuthConfig }) {
        * The cache is written from the POST's own response, not from a re-read.
        *
        * `POST /oauth/config` answers with the configuration it persisted, so
-       * that body is the authoritative answer — and a `GET` fired immediately
-       * afterwards is not. Observed on this deployment: a save at 10:43:46.98
-       * landed in `oauth_configs`, and the refetch it triggered came back with
-       * the *previous* row (`updated_at` 10:41:36) while the database already
-       * held the new one; the same `GET` a second later was correct. The write
-       * is not visible to the next read for a moment, so a refetch here is a
-       * race the screen can lose — and losing it means showing credentials
-       * that are no longer the ones in effect, which is the one thing this
-       * section exists to get right.
+       * that body is already the authoritative answer; re-asking for it costs
+       * a round trip and flashes stale credentials in between for nothing.
+       *
+       * This used to also be a correctness fix. The endpoint committed only in
+       * FastAPI's dependency teardown, which runs after the response is sent,
+       * so a `GET` fired immediately after a save could still read the old row
+       * (observed here: a save at 10:43:46.98 answered by a refetch carrying
+       * `updated_at` 10:41:36). #312 gave the handler an explicit commit, so
+       * that race is gone — seeding from the response is now purely about the
+       * round trip and the flicker.
        *
        * Still invalidated, so the entry is marked stale and any later mount
        * re-reads it — just with `refetchType: 'none'`, which suppresses the
