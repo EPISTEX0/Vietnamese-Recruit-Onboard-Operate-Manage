@@ -51,18 +51,6 @@ const TASK_TITLE_KEY: Record<SetupTaskId, string> = {
   hrAccount: 'taskHrAccount',
 };
 
-/**
- * The line shown *in place of* a destination. Read only when the task has no
- * action — see `guidanceKey` below, which gates on `task.action`, not on the id.
- *
- * No task is actionless since #307 gave Google OAuth its section, so nothing
- * in here renders today. Kept, along with the arm that reads it, as the shape
- * for the next task that lands before its screen does (ADR-0014).
- */
-const TASK_GUIDANCE_KEY: Partial<Record<SetupTaskId, string>> = {
-  googleOAuth: 'taskGoogleOAuthGuidance',
-};
-
 export default function SystemOverviewPage() {
   const t = useTranslations('settings');
   const to = useTranslations('settings.systemOverview');
@@ -200,7 +188,7 @@ export default function SystemOverviewPage() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[13px] font-medium text-slate-700">{log.admin_email}</span>
                     <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
-                      {ta(log.action_type) ?? log.action_type}
+                      {ta(log.action_type)}
                     </span>
                   </div>
                   <p className="text-[12px] text-slate-500">{formatAuditDetails(log.details, locale)}</p>
@@ -223,11 +211,10 @@ export default function SystemOverviewPage() {
 }
 
 /**
- * One checklist row.
+ * One checklist row, and always a link: every task has a destination (#314).
  *
- * Takes the whole task view-model and renders it — the three statuses, the two
- * shapes of `unknown`, and the two shapes of action all come in already
- * decided.
+ * Takes the whole task view-model and renders it — the three statuses and the
+ * two shapes of `unknown` all come in already decided.
  */
 function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => void }) {
   const tq = useTranslations('settings.quickStart');
@@ -245,12 +232,6 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
   }
 
   const title = tq(TASK_TITLE_KEY[task.id]);
-  // Gated on the absence of an action, not on the task id. The guidance line
-  // exists *because* there is nowhere to click; keying it off `googleOAuth`
-  // would have left it printing under a live link once #307 gave OAuth a
-  // section. It did, and this file needed no edit — the wiring was the one
-  // line in `TASK_ACTIONS` the ticket asked for.
-  const guidanceKey = task.action ? undefined : TASK_GUIDANCE_KEY[task.id];
 
   const label = (
     <>
@@ -270,15 +251,11 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
           )}
           {title}
         </p>
-        {task.status === 'unknown' ? (
+        {task.status === 'unknown' && (
           // Not "chưa làm". The query failed, and saying otherwise sends a
           // freshly-installed admin off to redo work they already did.
           <p className="text-[11px] text-amber-600">{tq('statusUnknown')}</p>
-        ) : guidanceKey && task.status === 'todo' ? (
-          // Only while the task is still owed. Printing "configure this through
-          // environment variables" under a green tick reads as a contradiction.
-          <p className="text-[11px] text-slate-400">{tq(guidanceKey)}</p>
-        ) : null}
+        )}
       </div>
     </>
   );
@@ -287,23 +264,11 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
   const labelClass = 'flex items-center gap-3 flex-1 min-w-0 text-left';
 
   return (
-    <div className={`${rowClass}${task.action ? ' hover:bg-slate-100 transition-colors' : ''}`}>
-      {/* No destination, no click — the general shape for a task the console
-          has no section for, not a statement about any one task. Google OAuth
-          was the case that made this branch necessary and stopped being it in
-          #307, so today nothing live reaches the `<div>` arm; it is what the
-          next such task gets. Pointing a row at some other section to make it
-          feel complete is the exact lie this page exists to prevent, and that
-          is the reason the arm stays rather than the row becoming a bare
-          `<Link>`. Nothing renders this component under test — see #314. */}
-      {task.action ? (
-        <Link href={task.action.href} className={labelClass}>
-          {label}
-          <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-        </Link>
-      ) : (
-        <div className={labelClass}>{label}</div>
-      )}
+    <div className={`${rowClass} hover:bg-slate-100 transition-colors`}>
+      <Link href={task.action.href} className={labelClass}>
+        {label}
+        <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+      </Link>
       {/* Sibling of the link, never a child of it: a button nested inside an
           anchor is a `nested-interactive` violation, and it only worked at all
           because next/link happens to honour `defaultPrevented`. */}

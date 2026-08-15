@@ -99,7 +99,14 @@ describe('the Essential Setup Tasks', () => {
   });
 });
 
-// --- action: navigable vs guidance-only ------------------------------------
+// --- action: where each task sends the admin --------------------------------
+//
+// That every task *has* a destination is not asserted here: `SetupTaskActions`
+// is a total `Record<SetupTaskId, SetupTaskAction>`, so a new id in
+// `SETUP_TASK_IDS` without a route is a `tsc` error at the route map (#314).
+// A runtime assertion could only restate what could not compile. That the
+// destinations are real routes rather than plausible strings is held one level
+// up, in `settings/page.test.ts`.
 
 describe('task actions', () => {
   it('sends the AI and HR tasks to the console section that does the work', () => {
@@ -116,21 +123,6 @@ describe('task actions', () => {
     const view = buildSetupGuide(nothingDone());
 
     expect(taskOf(view, 'googleOAuth').action).toEqual({ href: '/settings/oauth' });
-  });
-
-  it('carries a task through as un-clickable when the console has no section for it', () => {
-    // The nullable arm, kept under test through the route map because no live
-    // task exercises it any more — all three now have a screen. It is not dead
-    // weight: the next task that lands before its section does takes this path,
-    // and `SetupTaskRow` reads exactly this null to draw a guidance line
-    // instead of a link (ADR-0014).
-    const view = buildSetupGuide(nothingDone(), {
-      googleOAuth: null,
-      aiConfiguration: { href: '/settings/ai' },
-      hrAccount: { href: '/settings/users' },
-    });
-
-    expect(taskOf(view, 'googleOAuth').action).toBeNull();
   });
 
   it('keeps the action fixed regardless of how the task resolved', () => {

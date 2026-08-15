@@ -96,12 +96,8 @@ export interface SetupTaskView {
   status: SetupTaskStatus;
   /** Set only while `status` is `unknown`; `null` otherwise. */
   unknownReason: SetupTaskUnknownReason | null;
-  /**
-   * `null` when the console has no section that performs this task, which
-   * makes the task un-clickable and puts a guidance line where the destination
-   * would be. No task is in that state today — see `TASK_ACTIONS`.
-   */
-  action: SetupTaskAction | null;
+  /** Always present — see `TASK_ACTIONS` for why that is a real guarantee. */
+  action: SetupTaskAction;
 }
 
 export interface SetupProgress {
@@ -124,20 +120,34 @@ export interface SetupGuideView {
   progress: SetupProgress | null;
 }
 
-/** Where each task sends the admin, or `null` when nowhere does the job. */
-export type SetupTaskActions = Readonly<Record<SetupTaskId, SetupTaskAction | null>>;
+/**
+ * Where each task sends the admin. Total over `SetupTaskId`, deliberately.
+ *
+ * Module-private: it was exported so a test could inject a route map, and #314
+ * removed the parameter that took one. `SetupTaskAction` stays exported because
+ * `SetupTaskView.action` is part of what callers read.
+ */
+type SetupTaskActions = Readonly<Record<SetupTaskId, SetupTaskAction>>;
 
 /**
- * The console's route map.
+ * The console's route map, and the module's one invariant about navigation:
+ * **every task in `SETUP_TASK_IDS` has a destination**.
  *
- * `googleOAuth` was `null` from #302 until #307: the console had never had an
- * OAuth configuration screen, while the backend half existed all along
- * (`GET`/`POST /api/system-admin/oauth/config`) — so the task's *status* was
- * real and only its destination was missing. #307 built `/settings/oauth`, and
- * wiring it was this one line, with no change to the component that draws the
- * row. The null arm stays because it is the module's answer for the next task
- * that lands before its section does; pointing such a task at a nearby section
- * to round the count up would be precisely the lie this page exists to prevent.
+ * `googleOAuth` was `null` from #302 until #307, when `/settings/oauth` gave it
+ * a real one. The nullable arm outlived that by one ticket. It was justified as
+ * the guard that stops a row pointing somewhere that cannot do the job, but it
+ * never was one: a wrong `href` typechecks and renders as a link just the same,
+ * so the only case it caught was someone deliberately writing `null` (#314).
+ *
+ * Totality catches more, and earlier. Adding an id to `SETUP_TASK_IDS` without
+ * a route here is a `tsc` error on this object — where the omission is — rather
+ * than a row that renders dead at runtime and is read as a checklist item
+ * nobody can act on.
+ *
+ * So a task with nowhere to go is no longer expressible, and that is the point.
+ * The day one exists, that is a design decision to reopen — pointing it at a
+ * nearby section to round the count up is the lie this page exists to prevent,
+ * and so is drawing it as an un-clickable line and calling it handled.
  */
 const TASK_ACTIONS: SetupTaskActions = {
   googleOAuth: { href: '/settings/oauth' },
@@ -189,13 +199,12 @@ function resolveTask<T>(
   id: SetupTaskId,
   result: QueryResult<T>,
   isDone: CompletionReader<T>,
-  actions: SetupTaskActions,
 ): SetupTaskView {
   const view = (status: SetupTaskStatus, unknownReason: SetupTaskUnknownReason | null = null) => ({
     id,
     status,
     unknownReason,
-    action: actions[id],
+    action: TASK_ACTIONS[id],
   });
 
   // Error first, before any look at `data`. React Query keeps the last good
@@ -218,20 +227,15 @@ function resolveTask<T>(
  * Build the widget's entire view-model. The component that renders it makes no
  * decisions of its own — it draws what comes back from here.
  *
- * `actions` defaults to the real route map, so every caller in the app passes
- * `sources` alone. It is a parameter rather than a closed-over constant for one
- * reason: since #307 gave Google OAuth a section, no live task produces
- * `action: null`, and the branch that handles a task without a section would
- * otherwise have nothing exercising it.
+ * Takes `sources` alone. #307 gave the route map a second parameter so a test
+ * could inject a task with no destination; #314 made that state unrepresentable
+ * instead, which leaves nothing for the parameter to say.
  */
-export function buildSetupGuide(
-  sources: SetupGuideSources,
-  actions: SetupTaskActions = TASK_ACTIONS,
-): SetupGuideView {
+export function buildSetupGuide(sources: SetupGuideSources): SetupGuideView {
   const tasks: readonly SetupTaskView[] = [
-    resolveTask('googleOAuth', sources.oauthConfig, oauthTaskDone, actions),
-    resolveTask('aiConfiguration', sources.aiConfiguration, aiTaskDone, actions),
-    resolveTask('hrAccount', sources.users, hrTaskDone, actions),
+    resolveTask('googleOAuth', sources.oauthConfig, oauthTaskDone),
+    resolveTask('aiConfiguration', sources.aiConfiguration, aiTaskDone),
+    resolveTask('hrAccount', sources.users, hrTaskDone),
   ];
 
   const allResolved = tasks.every((task) => task.status !== 'unknown');
