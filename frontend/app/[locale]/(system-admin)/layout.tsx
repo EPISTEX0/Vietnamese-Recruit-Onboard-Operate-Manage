@@ -12,10 +12,10 @@
  */
 
 import React from 'react';
-import { ShieldCheck, Settings } from 'lucide-react';
+import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import AppShell from '@/components/app-shell';
-import type { NavItem } from '@/components/app-shell';
+import type { NavGroup } from '@/components/app-shell';
 import { useAuthGuard } from '@/lib/auth/session';
 import type { UserRole } from '@/lib/auth/roles';
 
@@ -25,26 +25,48 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
   useAuthGuard({ requireAuth: true, allowRoles: ALLOW });
   const t = useTranslations();
 
-  const navItems: NavItem[] = [
-    { href: '/settings', label: t('system.settings'), icon: Settings },
+  /**
+   * Three groups, one per kind of responsibility, mirroring the HR shell. A
+   * flat run of seven labels would make the admin read all seven to find one.
+   */
+  const navGroups: NavGroup[] = [
+    {
+      label: t('settings.navGroups.ai'),
+      items: [
+        { href: '/settings/ai', label: t('settings.aiConfig'), icon: Bot },
+        { href: '/settings/tools', label: t('settings.aiTools'), icon: Cpu },
+      ],
+    },
+    {
+      label: t('settings.navGroups.usersAccess'),
+      items: [
+        { href: '/settings/users', label: t('settings.usersRoles'), icon: Users },
+        { href: '/settings/whitelist', label: t('settings.accessWhitelist'), icon: ShieldCheck },
+        { href: '/settings/domains', label: t('settings.emailDomains'), icon: Mail },
+      ],
+    },
+    {
+      label: t('settings.navGroups.system'),
+      items: [
+        { href: '/settings/health', label: t('settings.systemHealth'), icon: Activity },
+        { href: '/settings/audit', label: t('settings.auditLog'), icon: FileText },
+      ],
+    },
   ];
 
+  /*
+   * No `sidebarBadge` here: the top bar already names the role, and stacking a
+   * "Quản trị hệ thống" badge on top of the "QUẢN TRỊ HỆ THỐNG" section label
+   * spent the sidebar's first inches saying the same thing twice. The prop
+   * itself stays on AppShell — the Employee shell renders the signed-in user's
+   * name and email through it.
+   */
   return (
     <AppShell
       roleLabel={t('appShell.systemAdminLabel')}
       sidebarSectionLabel={t('appShell.systemAdminSection')}
-      navItems={navItems}
+      navGroups={navGroups}
       userDisplayNameFallback={t('appShell.systemAdminFallbackName')}
-      sidebarBadge={
-        <div className="p-2.5 mb-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-          <span className="font-semibold text-[11px] text-slate-800 block truncate">
-            {t('roles.system_admin')}
-          </span>
-        </div>
-      }
     >
       {children}
     </AppShell>

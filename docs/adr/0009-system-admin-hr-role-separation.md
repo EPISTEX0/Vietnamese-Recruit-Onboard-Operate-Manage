@@ -50,6 +50,8 @@ Phân tách các endpoint thành 2 namespace chính:
 1. First-Run Setup (`/setup`) khởi tạo Organization và tài khoản **System Admin** đầu tiên.
 2. System Admin đăng nhập, cấu hình thông số kỹ thuật tối thiểu (Google OAuth, LLM Provider Key).
 3. System Admin khởi tạo tài khoản **HR** đầu tiên tại `/system-admin/users`.
+
+> **Đã thay đổi.** Đường dẫn frontend `/system-admin/users` ở dòng trên không còn đúng — xem [ADR 0014](./0014-system-admin-console-navigation.md). System Admin Console giữ base path `/settings`, nên trang đó là `/settings/users`. Phần có giá trị của quyết định này — tách bạch hoàn toàn bề mặt System Admin và HR — vẫn nguyên, và được thực hiện bằng route group `(system-admin)` với guard riêng chứ không bằng chuỗi URL. Namespace **API** `/api/system-admin/*` ở §2 không đổi.
 4. Tài khoản HR đăng nhập lần đầu, đổi mật khẩu và tiếp quản toàn bộ giao diện quản trị HR.
 
 ### 4. Tách Quick-Start Guide (ADR-0008 Refactor)

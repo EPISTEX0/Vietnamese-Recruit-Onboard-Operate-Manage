@@ -16,6 +16,14 @@ _Avoid_: dùng Tenant như thể nhiều công ty cùng chia sẻ một deployme
 Vai trò quản trị kỹ thuật và triển khai hệ thống (`UserRole.SYSTEM_ADMIN`). Chịu trách nhiệm thực hiện First-Run Setup, cấu hình Google Workspace OAuth Client ID/Secret, LLM Provider/API Keys, Email Whitelist, Organization Domains và xem System Audit Logs. System Admin bị cấm hoàn toàn (Strict Block) khỏi việc truy cập hoặc thao tác trên dữ liệu nghiệp vụ HR.
 _Avoid_: Super Admin, System Administrator, Deployer (dùng System Admin thống nhất trong spec/code)
 
+**System Admin Console** (Quản trị hệ thống):
+Bề mặt giao diện dành riêng cho System Admin, tách hẳn với giao diện nghiệp vụ HR. Console chứa mọi đề mục cấu hình kỹ thuật; "Cấu hình AI" chỉ là một đề mục bên trong nó, không phải tên của cả console.
+_Avoid_: Cấu hình AI & Hệ thống hay Cấu hình hệ thống dùng để chỉ toàn bộ console, Settings page, Admin panel
+
+**Tổng quan hệ thống**:
+Trang chủ của System Admin Console — nơi System Admin đáp xuống sau khi đăng nhập. Trình bày trạng thái vận hành của deployment và Quick-Start Guide của vai trò System Admin. Đây không phải Dashboard HR: System Admin không truy cập được bề mặt nghiệp vụ HR.
+_Avoid_: Admin Dashboard, Trang chủ admin, dùng chung tên với Dashboard HR
+
 **HR**:
 Vai trò quản trị viên nghiệp vụ nhân sự (`UserRole.HR`). Quản lý Candidate, Job Opening, Onboarding, Employee Profile, Attendance, Employee Request, Payslip, Knowledge Base và tương tác HR Assistant. HR KHÔNG có quyền truy cập hoặc chỉnh sửa các secret cấu hình hạ tầng kỹ thuật của System Admin.
 _Avoid_: Manager (Manager là khái niệm quan hệ báo cáo riêng), Administrator
@@ -182,15 +190,15 @@ Danh sách các bước hoặc tài liệu mà Employee cần hoàn thành trong
 _Avoid_: AI Assistant placeholder.
 
 **Quick-Start Guide**:
-Flow hướng dẫn sau First-Run Setup, hiển thị trên Dashboard HR dưới dạng widget task list cho đến khi HR hoàn tất các tác vụ thiết yếu. Đây không phải tour tính năng — là danh sách tác vụ có trạng thái, được auto-detect completion bởi backend hoặc manual confirm bởi HR. HR có thể dismiss và xem lại từ Dashboard hoặc trang /guide.
-_Avoid_: Feature tour, Walkthrough, Onboarding wizard
+Danh sách tác vụ có trạng thái hiển thị sau First-Run Setup cho đến khi vai trò đó hoàn tất các tác vụ thiết yếu của mình. Một khái niệm, hai tập task theo vai trò (xem Essential Setup Task) — không phải hai cơ chế khác nhau. Đây không phải tour tính năng.
+_Avoid_: Feature tour, Walkthrough, Onboarding wizard, coi Quick-Start Guide là khái niệm chỉ của HR
 
 **Essential Setup Task**:
-Một trong bốn tác vụ HR cần hoàn thành sau First-Run Setup trước khi Backbone Flow hoạt động. Bốn task: kết nối Google Workspace, cấu hình AI, tạo Job Opening đầu tiên, upload tài liệu đầu tiên vào Employee Knowledge Base.
-_Avoid_: Step, Checklist item (generic)
+Một tác vụ cần hoàn thành sau First-Run Setup trước khi Backbone Flow hoạt động. Tập task tách theo vai trò: **System Admin** có ba (cấu hình Google OAuth, cấu hình AI, tạo tài khoản HR đầu tiên); **HR** có ba (kết nối Organization Shared Google Account, tạo Job Opening đầu tiên, upload tài liệu đầu tiên vào Employee Knowledge Base). Cấu hình AI thuộc System Admin, không thuộc HR.
+_Avoid_: Step, Checklist item (generic), gộp hai tập task thành một danh sách bốn task
 
 **Guide Widget**:
-Widget thu nhỏ trên Dashboard HR hiển thị progress bar và danh sách Essential Setup Task. Ẩn được (dismiss). Click vào task → navigate đến trang cấu hình tương ứng.
+Widget hiển thị progress bar và danh sách Essential Setup Task của vai trò đang đăng nhập, trên Dashboard HR hoặc Tổng quan hệ thống tương ứng. Click vào task → navigate đến trang cấu hình tương ứng.
 _Avoid_: Banner, Tour popup, Slideshow
 
 

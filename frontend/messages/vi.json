@@ -566,7 +566,6 @@
     "nav": "Hệ thống",
     "knowledgeBase": "Tài liệu nội bộ",
     "gmail": "Kênh Gmail",
-    "settings": "Cấu hình AI & Hệ thống",
     "redis": "Bộ nhớ đệm",
     "postgresql": "Cơ sở dữ liệu",
     "minio": "Lưu trữ tài liệu",
@@ -874,9 +873,14 @@
     "allCategories": "Tất cả danh mục"
   },
   "settings": {
-    "title": "Cấu hình hệ thống",
+    "navGroups": {
+      "ai": "AI",
+      "usersAccess": "Người dùng & Truy cập",
+      "system": "Hệ thống"
+    },
     "aiConfig": "Cấu hình AI",
-    "aiTools": "Công cụ AI",
+    "aiConfigDesc": "Nhà cung cấp AI, chính sách dữ liệu và các tính năng AI của hệ thống",
+    "aiTools": "Công cụ Assistant",
     "systemHealth": "Tình trạng hệ thống",
     "auditLog": "Nhật ký hoạt động",
     "usersRoles": "Người dùng & Vai trò",
