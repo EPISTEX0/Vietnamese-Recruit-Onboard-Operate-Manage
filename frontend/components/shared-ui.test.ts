@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
 
 import { routing } from '@/i18n/routing';
-import { formatRuntimeDetail, formatLatency, formatAuditDetails } from '@/components/shared-ui';
+import {
+  formatRuntimeDetail,
+  formatLatency,
+  formatAuditDetails,
+  BADGE_TONE_PARTS,
+  badgeToneClass,
+} from '@/components/shared-ui';
 
 /**
- * The three pure formatters in `shared-ui.tsx` that carry their own built-in
- * strings instead of going through next-intl messages.
+ * The pure, render-free parts of `shared-ui.tsx`: three formatters that carry
+ * their own built-in strings instead of going through next-intl messages, and
+ * the semantic tone table `DESIGN.md` names as its source of truth.
  *
  * These are plain functions — no render, no React tree. Testing them does not
  * open component testing (#302 AC: "Không viết component test").
@@ -137,5 +144,65 @@ describe('formatAuditDetails', () => {
   it('never renders raw JSON for an empty or absent payload', () => {
     expect(formatAuditDetails(null, VI)).toBe('—');
     expect(formatAuditDetails({}, VI)).toBe('—');
+  });
+});
+
+/**
+ * `BADGE_TONE_PARTS` — the canonical semantic palette.
+ *
+ * Pinned as literals, unlike everything else in this file, because this table
+ * is what other assertions are allowed to be relative to. `settings/stat-card-tone.test.tsx`
+ * asserts the console's status cards match *whatever this table says*; that is
+ * the right shape for a wiring test, but it means the table itself could be
+ * rewritten with both sides moving together and nothing would notice. These
+ * cases are the fixed end of that pair.
+ *
+ * The values are the ones `Badge` has shipped with. #308 split the single
+ * joined string into three parts so a caller needing only `bg` + `fg` could
+ * stop writing its own; `badgeToneClass` is asserted to rebuild the original
+ * string exactly, so the split stayed a refactor.
+ */
+describe('BADGE_TONE_PARTS', () => {
+  it('names exactly the six tones the design system publishes', () => {
+    // Not five, not seven: `DESIGN.md` documents a meaning per tone, and a
+    // tone added here without one is a colour nobody can look up. `StatusPill`
+    // keeps a seventh (`violet`) in a table of its own — see #316.
+    expect(Object.keys(BADGE_TONE_PARTS).sort()).toEqual(
+      ['amber', 'emerald', 'indigo', 'rose', 'sky', 'slate'],
+    );
+  });
+
+  it('carries the class strings the badge has always rendered', () => {
+    // Slate is the odd one and is meant to be: it tints `bg-*-100`/`text-*-600`
+    // where every other tone is `bg-*-50`/`text-*-700`, because it is the
+    // neutral and has to read as unemphatic against a white card.
+    expect(badgeToneClass('slate')).toBe('bg-slate-100 text-slate-600 border-slate-200');
+    expect(badgeToneClass('indigo')).toBe('bg-indigo-50 text-indigo-700 border-indigo-200');
+    expect(badgeToneClass('emerald')).toBe('bg-emerald-50 text-emerald-700 border-emerald-200');
+    expect(badgeToneClass('amber')).toBe('bg-amber-50 text-amber-700 border-amber-200');
+    expect(badgeToneClass('rose')).toBe('bg-rose-50 text-rose-700 border-rose-200');
+    expect(badgeToneClass('sky')).toBe('bg-sky-50 text-sky-700 border-sky-200');
+  });
+
+  it('spells every part as a whole Tailwind class', () => {
+    // Tailwind v4 scans source text for complete class names. A part stored as
+    // a bare shade — `'emerald-50'`, or a value meant to be interpolated —
+    // would typecheck, render into `class`, and produce no CSS whatsoever.
+    for (const [tone, parts] of Object.entries(BADGE_TONE_PARTS)) {
+      expect(parts.bg, tone).toMatch(/^bg-[a-z]+-\d{2,3}$/);
+      expect(parts.fg, tone).toMatch(/^text-[a-z]+-\d{2,3}$/);
+      expect(parts.border, tone).toMatch(/^border-[a-z]+-\d{2,3}$/);
+    }
+  });
+
+  it('keeps all three parts of a tone on the same colour', () => {
+    // The failure this catches is a copy-paste when a tone is added: a row
+    // reading `bg-sky-50 text-slate-600 border-sky-200` looks plausible in
+    // review and renders unreadable text.
+    for (const [tone, parts] of Object.entries(BADGE_TONE_PARTS)) {
+      const families = [parts.bg, parts.fg, parts.border].map((cls) => cls.split('-')[1]);
+
+      expect(new Set(families), tone).toEqual(new Set([families[0]]));
+    }
   });
 });

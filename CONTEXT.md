@@ -202,6 +202,14 @@ Widget hiển thị progress bar và danh sách Essential Setup Task của vai t
 _Avoid_: Banner, Tour popup, Slideshow
 
 
+**Accent thương hiệu**:
+Màu trả lời câu "chỗ nào bấm được" — indigo, dùng cho action, link, focus ring và icon nhấn. Đúng một accent, không có accent thứ hai.
+_Avoid_: gọi mọi màu không phải slate là "accent"; dùng màu ngữ nghĩa làm affordance.
+
+**Tone ngữ nghĩa**:
+Màu trả lời câu "cái này đang ở trạng thái nào" — sáu tone có tên (`BadgeTone`), class chính tắc ở `frontend/components/shared-ui.tsx`. Trục riêng, độc lập với Accent thương hiệu; một màn hình mang cả hai không phải vi phạm.
+_Avoid_: coi tone ngữ nghĩa là "accent thứ hai"; viết chuỗi class tone bằng tay thay vì đi qua bảng.
+
 **Tiếng Việt mặc định**:
 Ngôn ngữ mặc định của giao diện trong deployment dành cho doanh nghiệp Việt Nam; nhãn nghiệp vụ dùng tiếng Việt nhất quán.
 _Avoid_: trộn Việt/Anh không có chủ đích.

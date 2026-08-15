@@ -12,6 +12,14 @@ system nguồn sự thật; `frontend/` được giữ làm backup legacy.
 
 > **Đã thay đổi.** Hai chi tiết trong đoạn trên không còn đúng — xem [ADR 0013](./0013-vietnamese-typography-and-single-frontend-directory.md). Font sans giờ là **Be Vietnam Pro** thay cho Inter (JetBrains Mono giữ nguyên), và `vroom-hr/` không còn tồn tại: app AI Studio nằm ở `frontend/`, không còn thư mục Heritage legacy nào. Phần còn lại của ADR này (nền slate, một accent indigo duy nhất, Tailwind v4 CSS-first, card `rounded-2xl`) vẫn nguyên giá trị.
 
+> **Làm rõ phạm vi (#308) — quyết định không đổi.** "Một accent duy nhất indigo" ở đây là luật về **affordance**: chỗ nào bấm được thì mang đúng một màu, và màu đó là indigo. Nó **không** phải một phát biểu rằng giao diện chỉ được dùng indigo với slate. Màu mang **ngữ nghĩa trạng thái** — emerald cho "xong", amber cho "đang chờ", rose cho "hỏng" — là một trục riêng, không nằm trong phạm vi quyết định này và không bị nó cấm.
+>
+> Cần nói ra vì đọc lướt sẽ hiểu ngược: một review đã phạt bốn thẻ trạng thái ở #302 vì dùng `bg-emerald-50` / `bg-sky-50` / `bg-amber-50`, trong khi chính `frontend/components/shared-ui.tsx` — file thư viện của design system — mới là nơi định nghĩa bảng tone ấy.
+>
+> Dữ kiện chống lưng cách đọc này: chính commit `5e1eb09` sinh ra ADR này đã chở sẵn màu ngữ nghĩa trong code (`vroom-hr/lib/dashboard-ui.tsx:81`, `vroom-hr/app/(dashboard)/recruitment/metrics/page.tsx:59`). Quyết định một-accent chưa từng mô tả một palette đầy đủ, nó chỉ chưa bao giờ nói ra là mình không mô tả. Bằng chứng thứ hai nằm ngay trong Consequences bên dưới: điều bị cấm được đặt tên cụ thể là "accent terracotta" và "font Fraunces" của Heritage, chứ không phải màu nói chung.
+>
+> Bảng tone chính tắc và nghĩa từng tone giờ ghi ở [`DESIGN.md`](../../DESIGN.md), mục "Semantic palette", trỏ về `shared-ui.tsx` làm nguồn chân lý.
+
 Quyết định này chốt DESIGN.md với code thực và ngắt sự lệch giữa tài liệu và
 triển khai: DESIGN.md trước đây mô tả Heritage dù frontend chính đã là AI Studio.
 
