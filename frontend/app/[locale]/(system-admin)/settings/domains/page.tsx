@@ -8,13 +8,13 @@ import { useTranslations } from 'next-intl';
 import { Mail, Loader2, Plus, X, AlertCircle } from 'lucide-react';
 import * as admin from '@/lib/api/admin';
 import { PageHeader } from '@/components/shared-ui';
-import { SectionCard, Empty } from '../_components/console-ui';
+import { SectionCard, ErrorBox, Empty } from '../_components/console-ui';
 import { apiErrorText } from '../_components/api-error-text';
 
 export default function EmailDomainsPage() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
-  const { data, isLoading } = useQuery({ queryKey: ['org-domains'], queryFn: admin.listDomains });
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['org-domains'], queryFn: admin.listDomains });
   const [value, setValue] = useState('');
   const [domError, setDomError] = useState<string | null>(null);
   const addMut = useMutation({
@@ -60,7 +60,9 @@ export default function EmailDomainsPage() {
             {addMut.isPending ? t('adding') : t('add')}
           </button>
         </div>
-        {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
+        {/* Error before data — see `Empty` in ../_components/console-ui. */}
+        {isError ? <ErrorBox text={apiErrorText(error)} onRetry={() => { void refetch(); }} /> :
+          isPending ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
           (data?.allowed_domains?.length ?? 0) === 0 ? <Empty text={t('noDomains')} /> :
           <div className="flex flex-wrap gap-2">
             {data!.allowed_domains.map((d) => (

@@ -9,13 +9,13 @@ import { ShieldCheck, Loader2, Plus, Trash2, AlertCircle } from 'lucide-react';
 import * as admin from '@/lib/api/admin';
 import type { WhitelistEntry } from '@/lib/api/admin';
 import { PageHeader } from '@/components/shared-ui';
-import { SectionCard, Empty } from '../_components/console-ui';
+import { SectionCard, ErrorBox, Empty } from '../_components/console-ui';
 import { apiErrorText } from '../_components/api-error-text';
 
 export default function AccessWhitelistPage() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
-  const { data, isLoading } = useQuery({ queryKey: ['whitelist'], queryFn: admin.listWhitelist });
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['whitelist'], queryFn: admin.listWhitelist });
   const [value, setValue] = useState('');
   const [wlError, setWlError] = useState<string | null>(null);
   const addMut = useMutation({
@@ -67,7 +67,9 @@ export default function AccessWhitelistPage() {
             {addMut.isPending ? t('adding') : t('add')}
           </button>
         </div>
-        {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
+        {/* Error before data — see `Empty` in ../_components/console-ui. */}
+        {isError ? <ErrorBox text={apiErrorText(error)} onRetry={() => { void refetch(); }} /> :
+          isPending ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
           (data?.items?.length ?? 0) === 0 ? <Empty text={t('emptyWhitelist')} /> :
           <div className="space-y-1.5">
             {data!.items.map((w: WhitelistEntry) => (
