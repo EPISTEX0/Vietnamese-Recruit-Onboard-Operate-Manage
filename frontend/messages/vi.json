@@ -901,7 +901,6 @@
       "statusTodo": "Chưa làm",
       "statusUnknown": "Chưa xác định được",
       "taskGoogleOAuth": "Cấu hình Google OAuth",
-      "taskGoogleOAuthGuidance": "Cấu hình bằng biến môi trường của deployment — Console chưa có màn hình cho mục này.",
       "taskAiConfiguration": "Cấu hình AI",
       "taskHrAccount": "Tạo tài khoản HR đầu tiên"
     },

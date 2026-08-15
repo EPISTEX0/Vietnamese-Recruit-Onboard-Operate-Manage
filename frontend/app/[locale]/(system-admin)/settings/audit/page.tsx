@@ -108,7 +108,7 @@ export default function AuditLogPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[13px] font-medium text-slate-700">{log.admin_email}</span>
-                    <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">{ta(log.action_type) ?? log.action_type}</span>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">{ta(log.action_type)}</span>
                   </div>
                   <p className="text-[12px] text-slate-500">{formatAuditDetails(log.details, locale)}</p>
                 </div>

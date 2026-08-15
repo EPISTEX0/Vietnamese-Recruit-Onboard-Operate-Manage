@@ -901,7 +901,6 @@
       "statusTodo": "Not done",
       "statusUnknown": "Could not determine",
       "taskGoogleOAuth": "Configure Google OAuth",
-      "taskGoogleOAuthGuidance": "Configure this through the deployment's environment variables — the console has no screen for it yet.",
       "taskAiConfiguration": "Configure AI",
       "taskHrAccount": "Create the first HR account"
     },

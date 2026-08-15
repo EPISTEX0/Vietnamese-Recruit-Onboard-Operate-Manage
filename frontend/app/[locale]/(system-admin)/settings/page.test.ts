@@ -74,13 +74,15 @@ describe('where the Quick-Start Guide can send the admin', () => {
     aiConfiguration: { status: 'pending' },
     users: { status: 'pending' },
   });
-  const destinations = guide.tasks
-    .map((task) => task.action?.href)
-    .filter((href): href is string => href != null);
+  const destinations = guide.tasks.map((task) => task.action.href);
 
   it('names at least one destination', () => {
-    // Without this the loop below passes vacuously the day every task loses
-    // its action — and a checklist that navigates nowhere ships unnoticed.
+    // `it.each([])` passes silently, so without this the loop below goes
+    // vacuous the day the checklist empties out — and a guide that navigates
+    // nowhere ships unnoticed. Deliberately not `toHaveLength(SETUP_TASK_IDS
+    // .length)`: since #314 every task has an action by construction, so a
+    // count here could only restate `setup-guide.test.ts`'s own assertion that
+    // the view-model carries each id once.
     expect(destinations.length).toBeGreaterThan(0);
   });
 
