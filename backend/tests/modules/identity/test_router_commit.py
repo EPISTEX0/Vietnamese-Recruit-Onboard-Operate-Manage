@@ -308,9 +308,9 @@ async def _logout(t: _Timeline) -> object:
     )
 
 
-async def _forgot_password(t: _Timeline) -> object:
+async def _forgot_password_sending(t: _Timeline, *, sent: bool) -> object:
     reset_service = AsyncMock()
-    reset_service.create_reset_token = _records(t, True)
+    reset_service.create_reset_token = _records(t, sent)
     settings = SimpleNamespace(
         rate_limit_forgot_password_ip_max=3,
         rate_limit_forgot_password_ip_window_seconds=900,
@@ -325,6 +325,10 @@ async def _forgot_password(t: _Timeline) -> object:
         settings,
         session=t.session,
     )
+
+
+async def _forgot_password(t: _Timeline) -> object:
+    return await _forgot_password_sending(t, sent=True)
 
 
 #: One entry per endpoint that writes and has nothing below it that commits,
@@ -467,6 +471,28 @@ def test_service_owned_commits_stay_where_they_are(name: str) -> None:
     assert "session.commit()" not in handler_source, (
         f"{name} commits in the handler as well as in {owner.__name__}.{method}"
     )
+
+
+async def test_forgot_password_commits_when_the_email_could_not_be_sent() -> None:
+    """The send-failure branch is the one that makes this handler's commit needed.
+
+    ``PasswordResetService.create_reset_token`` commits itself, but only on the
+    path where the mail went out; the ``return False`` path returns early with
+    the token rows merely flushed (#320). ``WRITE_CASES`` drives the success
+    branch, where that service-side commit would keep the assertion green even
+    if the handler stopped committing -- so the branch the ticket singles out
+    needs a case of its own.
+    """
+    timeline = _timeline()
+
+    await _forgot_password_sending(timeline, sent=False)
+
+    calls = timeline.calls.mock_calls
+    assert call.commit() in calls, (
+        "forgot_password does not commit when the email failed to send; "
+        "the invalidation of the user's previous tokens is left on the teardown"
+    )
+    assert calls[-1] == call.commit(), f"forgot_password does work after committing: {calls}"
 
 
 # The read-only half of the partition is guarded by

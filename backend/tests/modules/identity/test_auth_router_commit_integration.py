@@ -10,7 +10,7 @@ It is the sibling of ``test_admin_oauth_commit_integration.py`` (#312) pointed
 at the second write path into ``oauth_configs`` -- the one #320 was filed about,
 which #312's fix did not reach.
 
-Two endpoints are covered, because the two shapes fail differently:
+Three endpoints are covered, because the three shapes fail differently:
 
 * ``POST /api/auth/organization-google-connection`` writes ``oauth_configs``
   through ``OAuthConfigRepository.upsert``, which only ``flush()``es. Nothing
@@ -20,6 +20,11 @@ Two endpoints are covered, because the two shapes fail differently:
   ``OrganizationGoogleConnectionService.disconnect`` rather than in the handler.
   That is the arrangement ``admin_router`` never had, so it needs its own
   evidence that the audit row is durable by the time the response starts.
+* ``POST /api/auth/login`` hands the browser a ``Set-Cookie`` in the same
+  response, so a late commit does not merely delay a row -- it can leave the
+  client holding a refresh token that no row backs. #320 names this the heavier
+  consequence of the two, and it is a different failure from an invisible
+  config row.
 
 The check has to happen *while the response is being sent*, not after the
 request returns: by then FastAPI has drained its dependency stack and the
@@ -34,6 +39,7 @@ import asyncio
 import base64
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, MutableMapping
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -53,8 +59,10 @@ from sqlalchemy.pool import NullPool
 from src.modules.identity.api.admin_router import require_hr
 from src.modules.identity.api.router import router
 from src.modules.identity.application.oauth_config_manager import OAuthConfigManager
+from src.modules.identity.container import get_rate_limiter
 from src.modules.identity.domain.entities import User, UserRole
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
+from src.modules.identity.infrastructure.password_utils import hash_password
 from tests.conftest import _run_alembic_upgrade_head
 
 pytestmark = pytest.mark.integration
@@ -62,6 +70,7 @@ pytestmark = pytest.mark.integration
 _CLIENT_ID = "320-explicit-commit.apps.googleusercontent.com"
 _REDIRECT_URI = "https://app.example.com/api/auth/callback"
 _TEST_KEY_B64 = base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
+_PASSWORD = "correct-horse-battery"
 
 _Scope = MutableMapping[str, Any]
 _Message = MutableMapping[str, Any]
@@ -118,11 +127,18 @@ async def hr_user(probe_db_url: str, monkeypatch: pytest.MonkeyPatch) -> AsyncIt
         lambda: maker,
     )
 
-    user = User(id=uuid4(), email="hr@example.com", name="HR", role=UserRole.HR)
+    user = User(
+        id=uuid4(),
+        email="hr@example.com",
+        name="HR",
+        role=UserRole.HR,
+        password_hash=hash_password(_PASSWORD),
+    )
     async with maker() as session:
         await session.execute(text("DELETE FROM audit_logs"))
         await session.execute(text("DELETE FROM oauth_configs"))
         await session.execute(text("DELETE FROM organization_google_connections"))
+        await session.execute(text("DELETE FROM refresh_tokens"))
         await session.execute(text("DELETE FROM users"))
         session.add(user)
         await session.commit()
@@ -159,6 +175,13 @@ def app(hr_user: User, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[require_hr] = lambda: hr_user
+    # ``/login`` is the only path here that consults Redis. Overriding the rate
+    # limiter keeps this module off that dependency without touching
+    # ``get_db_session`` -- the seam under test is the transaction boundary, and
+    # this override leaves it exactly as production wires it.
+    limiter = MagicMock()
+    limiter.check_rate_limit = AsyncMock(return_value=True)
+    application.dependency_overrides[get_rate_limiter] = lambda: limiter
     return application
 
 
@@ -170,6 +193,13 @@ async def _active_client_id(engine: AsyncEngine) -> str | None:
         )
         row = result.first()
     return None if row is None else row[0]
+
+
+async def _refresh_token_count(engine: AsyncEngine) -> int:
+    """Count stored refresh tokens on a connection of its own."""
+    async with engine.connect() as connection:
+        result = await connection.execute(text("SELECT count(*) FROM refresh_tokens"))
+    return result.scalar_one()
 
 
 async def _audit_row_count(engine: AsyncEngine) -> int:
@@ -236,6 +266,35 @@ async def test_oauth_config_is_committed_before_the_response_is_sent(
     # Without the handler's own commit this is [None]: the row exists only
     # inside the request's still-open transaction while 200 is on the wire.
     assert seen_at_send == [_CLIENT_ID]
+
+
+async def test_refresh_token_row_is_durable_before_the_cookie_is_set(
+    app: FastAPI, probe_engine: AsyncEngine
+) -> None:
+    """The refresh-token row exists before the browser is handed the cookie.
+
+    #320 calls this the heavier consequence of the class of bug it was filed
+    about: "client nhận 200 kèm ``Set-Cookie`` refresh token mà hàng
+    refresh-token tương ứng chưa bền. Teardown commit hỏng ⇒ trình duyệt giữ
+    một token không tồn tại trong DB."
+
+    The probe fires as the response starts -- the same window as the two tests
+    above, which is when ``Set-Cookie`` is already in the outgoing headers.
+    """
+    response, tokens_at_send = await _request_probing(
+        app,
+        lambda: _refresh_token_count(probe_engine),
+        lambda client: client.post(
+            "/api/auth/login",
+            json={"email": "hr@example.com", "password": _PASSWORD},
+        ),
+    )
+
+    assert response.status_code == 200, response.text
+    assert any("refresh_token=" in header for header in response.headers.get_list("set-cookie"))
+    # [0] without the handler's own commit: the cookie would leave carrying a
+    # token whose row is still inside an uncommitted transaction.
+    assert tokens_at_send == [1]
 
 
 async def test_service_owned_audit_row_is_durable_before_the_response_is_sent(
