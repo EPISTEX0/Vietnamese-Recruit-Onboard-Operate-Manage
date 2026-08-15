@@ -14,101 +14,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { Sparkles, LogOut, Menu, X } from 'lucide-react';
 import { useSession } from '@/lib/auth/session';
 import { useTranslations } from 'next-intl';
 import LocaleSwitcher from '@/components/locale-switcher';
-
-/**
- * Map of sidebar routes to their primary React Query cache keys.
- * Used by the hover prefetch strategy to warm up query data
- * before the user clicks through.
- */
-const ROUTE_QUERY_MAP: Record<string, import('@tanstack/react-query').QueryKey[]> = {
-  '/dashboard': [
-    ['recruitment-metrics'],
-  ],
-  '/recruitment/inbox': [
-    ['recruitment-inbox'],
-    ['recruitment-job-openings', 'open'],
-  ],
-  '/recruitment/candidates': [
-    ['recruitment-candidates'],
-  ],
-  '/recruitment/job-openings': [
-    ['recruitment-job-openings'],
-  ],
-  '/recruitment/interviews': [
-    ['google-calendars'],
-    ['recruitment-candidates', { status: ['reviewing', 'interview_scheduled'], page_size: 100 }],
-    ['recruitment-conflicts'],
-  ],
-  '/onboarding': [
-    ['onboarding', 'counts'],
-  ],
-  '/employees': [
-    ['employees-list'],
-    ['departments-list'],
-    ['positions-list'],
-  ],
-  '/attendance': [
-    ['attendance-today', 'me'],
-    ['employees-list', { active: true, all: true }],
-  ],
-  '/payroll/payslips': [
-    ['admin-payslips'],
-    ['employees-list', { all: true }],
-  ],
-  '/knowledge-base': [
-    ['kb-documents'],
-  ],
-  '/gmail': [
-    ['gmail-connection'],
-    ['gmail-messages'],
-  ],
-  // One entry per system admin console section, each naming its own query key
-  // family. `/settings` used to be a single entry that pulled three unrelated
-  // keys on hover, back when all seven sections shared one route.
-  //
-  // `audit-logs` is the family prefix, not the exact key: the audit page runs
-  // `['audit-logs', params]` because its filters are part of the key, the same
-  // prefix it invalidates against.
-  '/settings/ai': [
-    ['ai-config'],
-  ],
-  '/settings/tools': [
-    ['assistant-tools'],
-  ],
-  '/settings/health': [
-    ['runtime-health'],
-  ],
-  '/settings/audit': [
-    ['audit-logs'],
-  ],
-  '/settings/users': [
-    ['admin-users'],
-  ],
-  '/settings/whitelist': [
-    ['whitelist'],
-  ],
-  '/settings/domains': [
-    ['org-domains'],
-  ],
-  '/employee': [
-    ['employee-dashboard'],
-  ],
-  '/employee/attendance': [
-    ['attendance-today', 'me'],
-  ],
-  '/employee/requests': [
-    ['my-requests'],
-  ],
-  '/employee/payslips': [
-    ['my-payslips'],
-  ],
-};
 
 export interface NavItem {
   href: string;
@@ -161,7 +71,6 @@ export default function AppShell({
   const router = useRouter();
   const { user } = useSession();
   const t = useTranslations('appShell');
-  const queryClient = useQueryClient();
 
   // Mobile sidebar toggle
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -189,21 +98,50 @@ export default function AppShell({
   };
 
   const handleNavClick = useCallback((href: string) => {
-    if (optimisticPath === href && isActive(href)) return; // already there
+    // Bail before touching `isNavigating` when there is nothing to navigate to.
+    //
+    // `setIsNavigating(false)` has exactly one call site — the `[pathname]`
+    // effect above. So a `router.push` that leaves `pathname` untouched strands
+    // the flag `true` forever, and the skeleton below replaces the whole page
+    // body until the user navigates elsewhere or reloads. Pushing the route
+    // you are already on is exactly that push.
+    //
+    // The old guard also required `optimisticPath === href`, which is `null`
+    // until the first click, so it never fired on the click that mattered:
+    // clicking the section you are already looking at blanked it.
+    //
+    // Compared against `pathname`, not `isActive(href)`: `isActive` is a prefix
+    // match, so it is true on `/recruitment/candidates/42` for the
+    // `/recruitment/candidates` item, and going from a detail page back to its
+    // list is a real navigation that must not be swallowed.
+    if (pathname === href) {
+      // On mobile the drawer is closed by the `[pathname]` effect, which this
+      // return skips — so tapping the section you are already on would leave
+      // the drawer sitting open over the page it just declined to navigate to.
+      // Desktop needs no branch here: `lg:translate-x-0` pins the sidebar open
+      // regardless of this flag, and the overlay it also drives is `lg:hidden`.
+      setSidebarOpen(false);
+      return;
+    }
+    // Already on the way there — a second click would re-arm the flag for a
+    // push that resolves to the same place. No drawer handling needed: the
+    // pending navigation still lands and the effect closes it.
+    if (optimisticPath === href) return;
     setOptimisticPath(href);
     setIsNavigating(true);
     router.push(href);
-  }, [optimisticPath, isActive, router]);
+  }, [pathname, optimisticPath, router]);
 
   const handleNavHover = useCallback((href: string) => {
-    // Prefetch the Next.js page bundle
+    // Prefetch the Next.js page bundle. This is the whole of hover prefetching
+    // now — a React Query pass used to sit alongside it, warming a per-route
+    // map of query keys, but it called `prefetchQuery` with a key and no
+    // `queryFn` against a client that sets no default one. `ensureQueryFn`
+    // answers that with a pre-rejected function, so every "warmed" key settled
+    // as an error instead, and the retry policy turned each hover into three
+    // rejections. Removing it costs no behaviour because there never was any.
     router.prefetch(href);
-    // Warm up React Query cache for the target route
-    const keys = ROUTE_QUERY_MAP[href] ?? [];
-    keys.forEach(key => {
-      queryClient.prefetchQuery({ queryKey: key });
-    });
-  }, [router, queryClient]);
+  }, [router]);
 
   const handleLogout = async () => {
     try {
