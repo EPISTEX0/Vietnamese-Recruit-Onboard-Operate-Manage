@@ -6,12 +6,6 @@ File này là doc **điều hướng** cho agent: tìm gì ở đâu, chạy l�
 
 ## Agent skills
 
-IMPORTANT: When applicable, prefer using intellij-index MCP tools for code navigation and refactoring.
-
-## Code Search
-
-Tìm code theo mô tả hoặc theo symbol bằng `semble search <query> <path>`; cần *mọi* occurrence của một chuỗi literal (đổi tên hàm, gỡ field) thì dùng `rg`.
-
 ### Issue tracker
 
 Issue và PRD của repo này sống trong GitHub Issues. PR ngoài không phải surface triage. Xem `docs/agents/issue-tracker.md`.
