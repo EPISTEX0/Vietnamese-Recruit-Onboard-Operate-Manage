@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail, LayoutDashboard } from 'lucide-react';
+import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import AppShell from '@/components/app-shell';
 import type { NavGroup, NavItem } from '@/components/app-shell';
@@ -36,7 +36,12 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
 
   /**
    * Three groups, one per kind of responsibility, mirroring the HR shell. A
-   * flat run of seven labels would make the admin read all seven to find one.
+   * flat run of eight labels would make the admin read all eight to find one.
+   *
+   * Google OAuth opens "Người dùng & Truy cập" and sits above the other three:
+   * it decides who can sign in at all, while the accounts, the allowlist and
+   * the email domains below it only matter once someone can. That is also the
+   * order the Quick-Start Guide walks a fresh deployment through.
    */
   const navGroups: NavGroup[] = [
     {
@@ -49,6 +54,7 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
     {
       label: t('settings.navGroups.usersAccess'),
       items: [
+        { href: '/settings/oauth', label: t('settings.oauth.nav'), icon: KeyRound },
         { href: '/settings/users', label: t('settings.usersRoles'), icon: Users },
         { href: '/settings/whitelist', label: t('settings.accessWhitelist'), icon: ShieldCheck },
         { href: '/settings/domains', label: t('settings.emailDomains'), icon: Mail },
