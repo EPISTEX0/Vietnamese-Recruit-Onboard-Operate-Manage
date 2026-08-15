@@ -566,7 +566,6 @@
     "nav": "System",
     "knowledgeBase": "Knowledge Base",
     "gmail": "Gmail Channel",
-    "settings": "AI & System Settings",
     "redis": "Cache",
     "postgresql": "Database",
     "minio": "Document Storage",
@@ -874,7 +873,6 @@
     "allCategories": "All categories"
   },
   "settings": {
-    "title": "System Settings",
     "navGroups": {
       "ai": "AI",
       "usersAccess": "Users & Access",
