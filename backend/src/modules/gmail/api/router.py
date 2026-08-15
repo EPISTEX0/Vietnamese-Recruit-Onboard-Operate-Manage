@@ -1309,17 +1309,9 @@ async def reclassify_email(
             detail=(f"Email status is '{email.processing_status}', expected a reviewable item"),
         )
 
-    from src.modules.gmail.container import get_classification_service
-    from src.modules.gmail.infrastructure.audit_logger import AuditLogger
-    from src.modules.gmail.infrastructure.config import GmailSettings
+    from src.modules.gmail.container import build_classification_service
 
-    gmail_settings = GmailSettings()
-    audit_logger_instance = AuditLogger(email_repo.session, gmail_settings)
-
-    classification_service = await get_classification_service(
-        email_repo=email_repo,
-        audit_logger=audit_logger_instance,
-    )
+    classification_service = await build_classification_service(email_repo.session)
     await classification_service.classify_single_email(
         user_id=current_user.id,
         email=email,
