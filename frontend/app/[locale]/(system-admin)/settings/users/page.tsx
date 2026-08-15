@@ -20,7 +20,17 @@ export default function UsersRolesPage() {
   const t = useTranslations('settings');
   const tr = useTranslations('roles');
   const { user: currentUser } = useSession();
-  const { data, isPending, isError, error, refetch } = useQuery<AdminUser[]>({ queryKey: ['admin-users'], queryFn: admin.listUsers });
+  // Same key *and* `staleTime` as the roster read on `/settings`. `staleTime` is
+  // per observer, not per key, so without the second half this one inherits the
+  // app-wide 5 minutes (`lib/query-client.ts`) while the homepage's says 30
+  // seconds — one cache entry, two opinions about when it is stale, and the
+  // console refetching on an order-of-navigation basis nothing announces (#310).
+  // 30 seconds is the console's number, set on every other shared key here; the
+  // roster is also invalidated explicitly by the role and provisioning
+  // mutations below, so the window never hides the admin's own change.
+  const { data, isPending, isError, error, refetch } = useQuery<AdminUser[]>({
+    queryKey: ['admin-users'], queryFn: admin.listUsers, staleTime: 30_000,
+  });
   const [roleError, setRoleError] = useState<string | null>(null);
   const roleMut = useMutation({
     mutationFn: ({ id, role }: { id: string; role: UserRole }) => admin.updateUserRole(id, role),

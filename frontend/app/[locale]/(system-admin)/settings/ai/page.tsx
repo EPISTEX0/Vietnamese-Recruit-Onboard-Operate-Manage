@@ -35,9 +35,13 @@ export default function AIConfigPage() {
 function AIConfigSections() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
+  // 30 seconds, same as every other console observer on a shared key — see
+  // `users/page.tsx` for why the number has to be repeated rather than
+  // inherited, and `shared-query-staleness.test.tsx` for the guard (#310).
   const { data: cfg, isLoading, error } = useQuery<OrganizationAIConfiguration>({
     queryKey: ['ai-config'],
     queryFn: admin.getOrganizationAIConfiguration,
+    staleTime: 30_000,
   });
   const { data: policy } = useQuery({
     queryKey: ['ai-data-policy'],

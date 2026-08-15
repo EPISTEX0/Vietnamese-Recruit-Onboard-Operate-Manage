@@ -43,10 +43,10 @@ export default function SystemHealthPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {data.services.map((s) => (
-                  <div key={s.name} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl" title={ts(s.name) ? `${ts(s.name)}: ${s.status === 'healthy' ? t('healthy') : s.status === 'unhealthy' ? t('error') : t('degraded')}` : undefined}>
+                  <div key={s.name} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl" title={`${ts(s.name)}: ${s.status === 'healthy' ? t('healthy') : s.status === 'unhealthy' ? t('error') : t('degraded')}`}>
                     <span>{s.status === 'healthy' ? '🟢' : s.status === 'unhealthy' ? '🔴' : '🟡'}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-slate-700">{ts(s.name) ?? s.name}</p>
+                      <p className="text-[13px] font-medium text-slate-700">{ts(s.name)}</p>
                       {formatRuntimeDetail(s.detail, locale) && <p className="text-[11px] text-slate-400 truncate">{formatRuntimeDetail(s.detail, locale)}</p>}
                     </div>
                     {s.latency_ms !== null && <span className="text-[11px] text-slate-400">{formatLatency(s.latency_ms, locale)}</span>}
