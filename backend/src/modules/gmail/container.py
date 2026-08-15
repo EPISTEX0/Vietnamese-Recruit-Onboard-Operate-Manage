@@ -370,12 +370,28 @@ def _build_ai_classifier(
     )
 
 
-async def get_classification_service(
-    email_repo: EmailRepository = Depends(get_email_repository),
-    audit_logger: AuditLogger = Depends(get_audit_logger),
-    session: AsyncSession = Depends(get_db_session),
-) -> ClassificationService:
-    """Provide classification with idempotent Job Application ingestion and Recruitment Inbox."""
+async def build_classification_service(session: AsyncSession) -> ClassificationService:
+    """Build classification with idempotent Job Application ingestion and Recruitment Inbox.
+
+    Takes the session explicitly and derives every collaborator from it, so it is
+    callable anywhere -- a request handler, a worker, a script. Compare
+    ``build_send_service`` / ``build_outbound_email_service``.
+
+    No FastAPI provider wraps this, deliberately. A provider's ``Depends``
+    defaults are resolved by FastAPI and by nothing else, so calling one directly
+    binds the sentinels themselves; that is how the reclassify handler ended up
+    passing a ``Depends`` object as its session (#332), and how password reset
+    broke before it (#327). Nothing resolves this service through ``Depends``
+    today, so a thin provider would add no reach and re-offer the shape both
+    incidents came from. A future route needs one line to add one back.
+
+    Args:
+        session: An async database session; every repository is bound to it, so
+            classification shares the caller's transaction.
+
+    Returns:
+        A fully configured ClassificationService.
+    """
     from src.modules.gmail.application.classification_rollout import (
         BusinessPolicy,
         ClassificationRollout,
@@ -435,10 +451,10 @@ async def get_classification_service(
     return ClassificationService(
         rules_classifier=RulesClassifier(),
         ai_classifier=ai_classifier,
-        email_repo=email_repo,
-        audit_logger=audit_logger,
+        email_repo=EmailRepository(session),
+        audit_logger=AuditLogger(session, settings),
         settings=settings,
-        session=email_repo.session,
+        session=session,
         on_application_created=job_app_service.create_from_classification,
         on_uncertain_classification=inbox_service.create_from_classification,
         rollout=rollout,
