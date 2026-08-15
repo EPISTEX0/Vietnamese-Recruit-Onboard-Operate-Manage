@@ -26,8 +26,8 @@ import { defaultExclude, defineConfig } from "vitest/config";
  * - `jsdom`. `lib/api/client.ts` reads `document.cookie` and the guard hooks
  *   render React, so a Node environment would fail on the first import.
  * - JSX compilation. `tsconfig.json` sets `"jsx": "preserve"` because Next does
- *   its own transform, and esbuild honours that — so a `.tsx` file reaches
- *   Vite's import analysis as raw JSX and fails to parse. That matters for
+ *   its own transform, and Vite's transformer honours that — so a `.tsx` file
+ *   reaches Vite's import analysis as raw JSX and fails to parse. That matters for
  *   exactly one file: `settings/page.test.ts` imports the console's homepage
  *   route to prove it still resolves, and that route is now a component rather
  *   than the JSX-free redirect it used to be. Overriding the mode here is a

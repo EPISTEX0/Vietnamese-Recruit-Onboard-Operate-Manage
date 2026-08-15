@@ -52,8 +52,9 @@ const TASK_TITLE_KEY: Record<SetupTaskId, string> = {
 };
 
 /**
- * The line shown in place of a destination when a task has nowhere to go.
- * Only Google OAuth has one today; the rest navigate.
+ * The line shown *in place of* a destination. Read only when the task has no
+ * action — see `guidanceKey` below, which gates on `task.action`, not on the id.
+ * Only Google OAuth is actionless today; the rest navigate.
  */
 const TASK_GUIDANCE_KEY: Partial<Record<SetupTaskId, string>> = {
   googleOAuth: 'taskGoogleOAuthGuidance',
@@ -241,7 +242,12 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
   }
 
   const title = tq(TASK_TITLE_KEY[task.id]);
-  const guidanceKey = TASK_GUIDANCE_KEY[task.id];
+  // Gated on the absence of an action, not on the task id. The guidance line
+  // exists *because* there is nowhere to click; keying it off `googleOAuth`
+  // would leave it printing under a live link the day #307 gives OAuth a
+  // section, and wiring #307 would then take two edits instead of the one line
+  // in `TASK_ACTIONS` the ticket asks for.
+  const guidanceKey = task.action ? undefined : TASK_GUIDANCE_KEY[task.id];
 
   const label = (
     <>

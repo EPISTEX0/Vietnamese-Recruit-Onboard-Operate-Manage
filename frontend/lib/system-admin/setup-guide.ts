@@ -23,6 +23,8 @@
  * work they already did.
  */
 
+import type { UserRole } from '@/lib/auth/roles';
+
 /**
  * The three tasks, in the order the admin should do them: OAuth gates login, AI
  * gates the assistant, the HR account is the handover.
@@ -169,9 +171,17 @@ const oauthTaskDone: CompletionReader<OAuthConfigFields> = (config) =>
 const aiTaskDone: CompletionReader<AIConfigurationFields> = (config) =>
   typeof config?.configured === 'boolean' ? config.configured : null;
 
+/**
+ * Typed against `UserRole` rather than left as a bare `'hr'` literal: this
+ * comparison is what decides whether the handover task is done, and if the role
+ * is ever renamed in `lib/auth/roles.ts` the rename has to fail here at compile
+ * time rather than turn the task permanently `todo` in silence.
+ */
+const HR_ROLE: UserRole = 'hr';
+
 /** The deployment has handed over once any account carries the HR role. */
 const hrTaskDone: CompletionReader<readonly UserAccountFields[]> = (users) =>
-  Array.isArray(users) ? users.some((user) => user?.role === 'hr') : null;
+  Array.isArray(users) ? users.some((user) => user?.role === HR_ROLE) : null;
 
 function resolveTask<T>(
   id: SetupTaskId,
