@@ -281,36 +281,49 @@ async def get_email_sync_service(
     )
 
 
-async def get_send_service(
-    email_repo: EmailRepository = Depends(get_email_repository),
-    connection_repo: OrganizationGoogleConnectionRepository = Depends(
-        get_organization_google_connection_repository
-    ),
-    audit_logger: AuditLogger = Depends(get_audit_logger),
-) -> SendService:
-    """Provide a SendService instance.
+async def build_send_service(session: AsyncSession) -> SendService:
+    """Build a SendService bound to ``session``, with no DI resolver required.
+
+    Callers outside a request -- other containers, workers, scripts -- must use
+    this rather than ``get_send_service``. A FastAPI provider's ``Depends(...)``
+    defaults are resolved by FastAPI and by nothing else, so calling one bare
+    binds the sentinels themselves as the repositories and yields a SendService
+    that raises ``AttributeError`` on first use (#327).
 
     Args:
-        email_repo: The email repository from DI.
-        connection_repo: The organization Google connection repository from DI.
-        audit_logger: The audit logger from DI.
+        session: An async database session; every repository is bound to it, so
+            the send path shares the caller's transaction.
 
     Returns:
-        A SendService configured with all dependencies.
+        A fully configured SendService.
     """
     auth_settings = get_auth_settings()
     gmail_adapter = await get_gmail_adapter()
 
     return SendService(
         gmail_adapter=gmail_adapter,
-        email_repo=email_repo,
-        connection_repo=connection_repo,
+        email_repo=EmailRepository(session),
+        connection_repo=OrganizationGoogleConnectionRepository(session),
         crypto=get_crypto_utils(),
-        audit_logger=audit_logger,
+        audit_logger=AuditLogger(session, get_gmail_settings()),
         settings=get_gmail_settings(),
         client_id=auth_settings.google_client_id,
         client_secret=auth_settings.google_client_secret,
     )
+
+
+async def get_send_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> SendService:
+    """FastAPI dependency: provide a SendService.
+
+    Args:
+        session: The async database session from DI.
+
+    Returns:
+        A fully configured SendService.
+    """
+    return await build_send_service(session)
 
 
 async def get_attachment_service(

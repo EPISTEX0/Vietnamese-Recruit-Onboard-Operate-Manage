@@ -272,8 +272,12 @@ async def get_password_reset_service(
 ) -> PasswordResetService:
     """Provide a PasswordResetService instance.
 
-    Lazily imports the Gmail SendService provider to avoid a circular
+    Lazily imports the Gmail SendService builder to avoid a circular
     import between the identity and gmail DI containers.
+
+    Uses ``build_send_service`` rather than the ``get_send_service`` provider:
+    this runs one dependency deep, where nothing resolves ``Depends`` defaults.
+    See that builder for why calling a provider from here is unsafe (#327).
 
     Args:
         user_repo: The user repository from DI.
@@ -284,9 +288,9 @@ async def get_password_reset_service(
     Returns:
         A PasswordResetService configured with all dependencies.
     """
-    from src.modules.gmail.container import get_send_service
+    from src.modules.gmail.container import build_send_service
 
-    send_service = await get_send_service()
+    send_service = await build_send_service(session)
     return PasswordResetService(
         settings=get_settings(),
         user_repository=user_repo,
