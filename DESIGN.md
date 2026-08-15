@@ -109,9 +109,9 @@ Rút từ call site đang có, không tự đặt. Cột cuối là chứng cứ
 **`sky` không rút được nghĩa nhất quán.** Ba cách dùng khác hẳn nhau, nên ở đây ghi đúng như vậy thay vì
 bịa một dòng cho đủ bảng:
 
-- `knowledge-base/page.tsx:113` và `:509` — `processing`, tức "đang xử lý". Nhưng cùng ý đó,
+- `knowledge-base/page.tsx:499` — `processing`, tức "đang xử lý". Nhưng cùng ý đó,
   `gmail/historical-import.tsx:295` dùng `amber` và `recruitment/review/page.tsx:15` dùng `indigo`.
-  (Hai dòng vì file có hai `StatusBadge` trùng nhau — xem #318.)
+  (Trước #318 chỗ này là hai dòng, vì file có hai `StatusBadge` trùng nhau.)
 - `requests/page.tsx:240` và `employee/requests/page.tsx:268` — phân biệt `leave` với `overtime`. Đây là
   **phân loại**, không phải trạng thái; cùng cấu trúc với việc dùng indigo cho nhánh còn lại.
 - `settings/page.tsx` thẻ Tài khoản — thuần trang trí, để bốn thẻ trong hàng khác màu nhau.
