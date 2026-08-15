@@ -12,7 +12,7 @@ import { useSession } from '@/lib/auth/session';
 import { STAFF_ROLES, USER_ROLES, type StaffRole, type UserRole } from '@/lib/auth/roles';
 import { staffAccountCreateSchema } from '@/lib/api/admin-schemas';
 import { PageHeader } from '@/components/shared-ui';
-import { SectionCard, Empty } from '../_components/console-ui';
+import { SectionCard, ErrorBox, Empty } from '../_components/console-ui';
 import { apiErrorText } from '../_components/api-error-text';
 
 export default function UsersRolesPage() {
@@ -20,7 +20,7 @@ export default function UsersRolesPage() {
   const t = useTranslations('settings');
   const tr = useTranslations('roles');
   const { user: currentUser } = useSession();
-  const { data, isLoading } = useQuery<AdminUser[]>({ queryKey: ['admin-users'], queryFn: admin.listUsers });
+  const { data, isPending, isError, error, refetch } = useQuery<AdminUser[]>({ queryKey: ['admin-users'], queryFn: admin.listUsers });
   const [roleError, setRoleError] = useState<string | null>(null);
   const roleMut = useMutation({
     mutationFn: ({ id, role }: { id: string; role: UserRole }) => admin.updateUserRole(id, role),
@@ -49,7 +49,9 @@ export default function UsersRolesPage() {
           </div>
         )}
         <CreateStaffAccount />
-        {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
+        {/* Error before data — see `Empty` in ../_components/console-ui. */}
+        {isError ? <ErrorBox text={apiErrorText(error)} onRetry={() => { void refetch(); }} /> :
+          isPending ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
           (data?.length ?? 0) === 0 ? <Empty text={t('noUsers')} /> :
           <div className="space-y-2">
             {data!.map((u) => (

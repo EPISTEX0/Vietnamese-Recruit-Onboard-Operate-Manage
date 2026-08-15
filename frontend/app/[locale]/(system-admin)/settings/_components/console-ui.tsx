@@ -59,6 +59,30 @@ export function ErrorBox({ text, onRetry }: { text: string; onRetry: () => void 
   );
 }
 
+/**
+ * "There are no records" — a statement of fact about the deployment, so a
+ * surface may only draw it once its query has actually answered.
+ *
+ * Every list route here therefore branches error *before* it looks at `data`
+ * (#305). Two reasons it is that order and not the other:
+ *
+ * - An unanswered query leaves `data` undefined, and a length check on
+ *   undefined reads as zero. Ordering empty first turns every failure into
+ *   "danh sách trống". On the three access-control sections that is the
+ *   dangerous direction: an admin told the allowlist is empty concludes nobody
+ *   holds access, when the system merely could not say who does.
+ * - React Query keeps the last good payload alongside `error` when a background
+ *   refetch fails, so a branch that reads `data` first quietly presents a list
+ *   of who *used to* hold access as who holds it now.
+ *
+ * The waiting arm is keyed on `isPending`, never on `isLoading`: `isLoading` is
+ * `isPending && isFetching`, so a query paused because the browser is offline
+ * reports neither loading nor error and slips past both arms into this one.
+ * `StatCard` in `../page.tsx` hit the same edge and names it there.
+ *
+ * Same rule as `lib/system-admin/setup-guide.ts`, which resolves an unreadable
+ * answer to `unknown` rather than to `todo`.
+ */
 export function Empty({ text }: { text: string }) {
   return <p className="text-[13px] text-slate-400 py-10 text-center">{text}</p>;
 }

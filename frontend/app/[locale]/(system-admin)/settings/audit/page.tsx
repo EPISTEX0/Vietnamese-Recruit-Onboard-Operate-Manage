@@ -9,7 +9,8 @@ import { FileText, Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-
 import * as admin from '@/lib/api/admin';
 import type { AuditLog } from '@/lib/api/admin';
 import { PageHeader, AUDIT_ACTION_GROUPS, formatAuditDetails } from '@/components/shared-ui';
-import { SectionCard, Empty } from '../_components/console-ui';
+import { SectionCard, ErrorBox, Empty } from '../_components/console-ui';
+import { apiErrorText } from '../_components/api-error-text';
 
 export default function AuditLogPage() {
   const qc = useQueryClient();
@@ -49,7 +50,7 @@ export default function AuditLogPage() {
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
 
-  const { data, isLoading } = useQuery({ queryKey: ['audit-logs', params], queryFn: () => admin.getAuditLogs(params), staleTime: 30_000 });
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['audit-logs', params], queryFn: () => admin.getAuditLogs(params), staleTime: 30_000 });
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
 
   const datePresets = [
@@ -94,7 +95,11 @@ export default function AuditLogPage() {
           )}
           <button onClick={() => qc.invalidateQueries({ queryKey: ['audit-logs'] })} className="h-9 px-3 text-[13px] font-medium rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1.5 ml-auto"><RefreshCw className="w-3.5 h-3.5" /> {t('refresh')}</button>
         </div>
-        {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
+        {/* Error before data — see `Empty` in ../_components/console-ui. The
+            filtered variant below makes it worse here: a failed request under an
+            active filter reads as "no records match", i.e. as an answer. */}
+        {isError ? <ErrorBox text={apiErrorText(error)} onRetry={() => { void refetch(); }} /> :
+          isPending ? <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto mt-5 block" /> :
           (data?.items?.length ?? 0) === 0 ? <Empty text={actionType || startDate || endDate ? t('noFilterResults') : t('noActivityYet')} /> :
           <div className="space-y-2">
             {data!.items.map((log: AuditLog) => (
