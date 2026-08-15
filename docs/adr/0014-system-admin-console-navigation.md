@@ -30,6 +30,8 @@ Lý do trực tiếp: trên deployment vừa setup xong, console nhìn như mộ
 
 - **`/settings` đổi nghĩa.** Trước: trang cấu hình AI. Sau: Tổng quan hệ thống. `lib/auth/roles.ts:45` và hai test tại `lib/auth/session.test.ts:166,205` **không cần sửa** — chúng khẳng định System Admin đáp xuống `/settings`, và điều đó vẫn đúng. Không có deep link nào gãy vì tab trước đây vốn không nằm trong URL.
 
+  Nhưng "không cần sửa" không có nghĩa là "được canh". Cả ba assertion — hai cái trên cộng `lib/auth/roles.test.ts:79` — chỉ khẳng định **chuỗi** `"/settings"`, không khẳng định route đó resolve tới đâu. Xoá `settings/page.tsx` thì cả ba vẫn xanh và `next build` vẫn sạch, vì page thiếu chỉ là route không được emit chứ không phải lỗi build; trong khi mọi System Admin 404 ngay lúc đăng nhập. Seam đó giờ do `app/[locale]/(system-admin)/settings/page.test.ts` canh — nó *import* chính module nó canh, nên module biến mất là suite đỏ với exit code 1, và nó kiểm luôn đích redirect có tồn tại để không 404 chậm một nhịp. Đã chứng minh bằng mutation cả hai chiều, không phải bằng khẳng định.
+
 - **`middleware.ts` không cần sửa.** `middleware.ts:50` lọc bằng `startsWith`, nên `/settings/ai`, `/settings/users`… đã được bảo vệ sẵn ngay khi route ra đời.
 
 - **Nội dung thường trực của trang chủ là trạng thái vận hành, không phải checklist.** Bốn thẻ bento (AI provider, runtime health, tài khoản, nhật ký) cộng mười dòng audit gần nhất. `getAuditLogs({ start_date, page_size: 10 })` trả cả `total` lẫn `items` (`lib/api/admin.ts:141-146`), nên một request phục vụ cả thẻ đếm lẫn danh sách — trang chủ vẫn đúng bốn query.
