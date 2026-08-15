@@ -288,9 +288,14 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
 
   return (
     <div className={`${rowClass}${task.action ? ' hover:bg-slate-100 transition-colors' : ''}`}>
-      {/* No destination, no click. The console has no OAuth screen (#307), and
-          pointing the row at some other section to make it feel complete is the
-          exact lie this page exists to prevent. */}
+      {/* No destination, no click — the general shape for a task the console
+          has no section for, not a statement about any one task. Google OAuth
+          was the case that made this branch necessary and stopped being it in
+          #307, so today nothing live reaches the `<div>` arm; it is what the
+          next such task gets. Pointing a row at some other section to make it
+          feel complete is the exact lie this page exists to prevent, and that
+          is the reason the arm stays rather than the row becoming a bare
+          `<Link>`. Nothing renders this component under test — see #314. */}
       {task.action ? (
         <Link href={task.action.href} className={labelClass}>
           {label}
