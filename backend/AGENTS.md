@@ -119,7 +119,19 @@ async def get_employee_repository(
     return EmployeeRepository(session)
 ```
 
-`get_db_session` commit khi thoát sạch, rollback khi có exception.
+`get_db_session` commit khi thoát sạch, rollback khi có exception. Nhưng phần sau `yield` chỉ chạy lúc
+FastAPI tháo dependency stack, tức là **sau** khi response đã gửi (#312): client cầm 200 cho một lần ghi
+chưa bền, và một `commit()` hỏng ở teardown không còn đường nào báo về.
+
+Nên teardown là **lưới đỡ**, không phải ranh giới transaction. Endpoint ghi phải tự `await
+session.commit()` trước khi handler trả về — đặt sau lời gọi audit, để bản ghi audit cũng bền trước khi
+response đi. Đa số use case đã commit tường minh ở tầng application/infrastructure; nơi nào chưa thì
+commit ở handler. `identity/api/admin_router.py` theo quy ước này cho cả 25 endpoint ghi của nó.
+
+Nếu audit đi qua `log_audit` (`recruitment`, nuốt lỗi theo R17.5) thì **không** viết `commit()` trần —
+dùng dạng `InterviewSchedulerService._commit_audit()`, vì một flush audit hỏng để lại session cần
+rollback và `commit()` kế tiếp sẽ ném `PendingRollbackError`. `identity` dùng
+`AuditService.log_action`, hàm này không nuốt lỗi nên `commit()` trần là đúng.
 
 `src/database.py` có một `get_session()` **sync** (SQLModel `Session`) cho script/tooling chạy ngoài
 request cycle. Không dùng nó trong đường API.

@@ -8,6 +8,36 @@ This module also owns the two shared role guards, ``require_system_admin``
 and ``require_hr``. There is deliberately no generic ``require_admin``: an
 alias that accepts either role is how 38 HR endpoints silently ended up
 gated by SYSTEM_ADMIN. Call sites must name the role they mean.
+
+Every writing endpoint here ends with an explicit ``await session.commit()``
+(#312). ``get_db_session`` also commits, but only when FastAPI unwinds its
+dependency stack -- which happens *after* the response has been sent, so the
+teardown alone answers 200 before the write is durable and turns a failed
+commit into a success the client already holds. The teardown stays as the
+safety net for anything that forgets; these commits put the transaction
+boundary back where the decision is made.
+
+The commits sit in the handlers rather than one layer down, unlike most of the
+70 explicit commits elsewhere in the repo, because these endpoints hold their
+use case in the handler itself: there is no application service between the
+route and the repositories, and the audit call the commit must follow is right
+here too. Anything that grows a service layer should move its commit with it.
+
+Each commit sits *after* the audit call, so the audit row is durable before
+the response goes out and not just the action it describes. Note that this is
+an ordering guarantee, not an atomicity one: the whitelist endpoints, the
+three domain endpoints and ``create_staff_account`` reach code that already
+commits its own work, so for those six the audit row lands in a later
+transaction of its own. Precisely: ``WhitelistRepository.add``/``.remove``
+commit; the three domain endpoints all land in
+``OrganizationSettingsRepository.set_allowed_domains``, ``add_domains`` and
+``remove_domain`` by delegating to it and ``replace_domains`` directly; and
+``AuthService.create_staff_account`` commits when it holds a session, which
+on this path it always does because ``get_auth_service`` passes one.
+A bare ``commit()`` is correct here because
+identity audits through ``AuditService.log_action``, which propagates
+failures; the swallowing ``log_audit`` that forces recruitment's
+``_commit_audit()`` dance has no call site in this module.
 """
 
 from __future__ import annotations
@@ -247,6 +277,7 @@ async def configure_classification_rollout(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Select an audited business policy and rollout stage."""
     metrics = (
@@ -276,6 +307,7 @@ async def configure_classification_rollout(
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -288,6 +320,7 @@ async def enforce_classification_guardrails(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Apply measured guardrails and automatically roll back unsafe rollout state."""
     result = await service.enforce_classification_guardrails(
@@ -298,6 +331,7 @@ async def enforce_classification_guardrails(
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -309,6 +343,7 @@ async def rollback_classification_rollout(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Restore retained stable versions without deleting Recruitment Inbox work."""
     try:
@@ -323,6 +358,7 @@ async def rollback_classification_rollout(
         action_type=AuditActionType.ORG_AI_CLASSIFICATION_ROLLOUT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -352,6 +388,7 @@ async def update_organization_ai_config(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     try:
         result = await service.update(
@@ -373,6 +410,7 @@ async def update_organization_ai_config(
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -388,6 +426,7 @@ async def set_credential_source(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Change the AI credential source (org_api_key or deployment_key)."""
     try:
@@ -407,6 +446,7 @@ async def set_credential_source(
         action_type=AuditActionType.ORG_AI_CONFIG_SOURCE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -422,6 +462,7 @@ async def activate_org_api_key(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Activate a new Organization API key (assumes test already passed)."""
     try:
@@ -436,6 +477,7 @@ async def activate_org_api_key(
         action_type=AuditActionType.ORG_AI_CONFIG_ROTATE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -444,6 +486,7 @@ async def revoke_org_api_key(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Revoke the Organization API key, preserving provider/model configuration."""
     try:
@@ -458,6 +501,7 @@ async def revoke_org_api_key(
         action_type=AuditActionType.ORG_AI_CONFIG_REVOKE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -504,6 +548,7 @@ async def update_provider_config(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Update provider/model/base_url without changing the API key."""
     try:
@@ -520,6 +565,7 @@ async def update_provider_config(
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -550,6 +596,7 @@ async def accept_data_policy(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Accept the data policy before enabling AI capabilities for the first time."""
     try:
@@ -564,6 +611,7 @@ async def accept_data_policy(
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -578,6 +626,7 @@ async def accept_automation_consent(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     result = await service.accept_automation_consent(system_admin_user)
     await audit_service.log_action(
@@ -585,6 +634,7 @@ async def accept_automation_consent(
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -596,6 +646,7 @@ async def accept_assistant_consent(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     result = await service.accept_assistant_consent(system_admin_user)
     await audit_service.log_action(
@@ -603,6 +654,7 @@ async def accept_assistant_consent(
         action_type=AuditActionType.ORG_AI_CONSENT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
     # --- Capability toggles: AI Automation ---
@@ -616,6 +668,7 @@ async def enable_ai_automation(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Enable AI Automation after validating preconditions."""
     try:
@@ -635,6 +688,7 @@ async def enable_ai_automation(
         action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -646,6 +700,7 @@ async def disable_ai_automation(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Disable AI Automation."""
     try:
@@ -660,6 +715,7 @@ async def disable_ai_automation(
         action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -674,6 +730,7 @@ async def enable_ai_assistant(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Enable AI Assistant after validating preconditions."""
     try:
@@ -693,6 +750,7 @@ async def enable_ai_assistant(
         action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -704,6 +762,7 @@ async def disable_ai_assistant(
     system_admin_user: SystemAdminUserDep,
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     """Disable AI Assistant."""
     try:
@@ -718,6 +777,7 @@ async def disable_ai_assistant(
         action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
 
@@ -732,6 +792,7 @@ async def set_ai_policy_preset(
     preset: AIPolicyPreset = Body(...),
     service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OrganizationAIConfigurationResponse:
     result = await service.set_policy_preset(preset, system_admin_user)
     await audit_service.log_action(
@@ -739,6 +800,7 @@ async def set_ai_policy_preset(
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
         details=result.audit_details,
     )
+    await session.commit()
     return _ai_view_response(result.view)
 
     # --- Whitelist Endpoints ---
@@ -783,6 +845,7 @@ async def add_whitelist_entry(
     system_admin_user: SystemAdminUserDep,
     whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> WhitelistEntryCreatedResponse:
     """Add a new whitelist entry.
 
@@ -813,6 +876,7 @@ async def add_whitelist_entry(
             "entry_type": entry.entry_type.value,
         },
     )
+    await session.commit()
 
     return WhitelistEntryCreatedResponse.model_validate(entry)
 
@@ -823,6 +887,7 @@ async def remove_whitelist_entry(
     system_admin_user: SystemAdminUserDep,
     whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """Remove a whitelist entry by ID.
 
@@ -848,6 +913,7 @@ async def remove_whitelist_entry(
             "entry_id": str(entry_id),
         },
     )
+    await session.commit()
 
 
 # --- User Management Endpoints ---
@@ -882,6 +948,7 @@ async def create_staff_account(
     system_admin_user: SystemAdminUserDep,
     auth_service: AuthService = Depends(get_auth_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> StaffAccountCreateResponse:
     """Provision an HR or SYSTEM_ADMIN account with a temporary password.
 
@@ -925,6 +992,7 @@ async def create_staff_account(
             "reason": "staff_account_created",
         },
     )
+    await session.commit()
 
     return StaffAccountCreateResponse(
         user=AdminUserResponse.model_validate(user),
@@ -939,6 +1007,7 @@ async def change_user_role(
     system_admin_user: SystemAdminUserDep,
     role_service: RoleService = Depends(get_role_service),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AdminUserResponse:
     """Assign any of the three roles (system_admin, hr, user) to a user.
 
@@ -997,6 +1066,7 @@ async def change_user_role(
             "new_role": updated_user.role.value,
         },
     )
+    await session.commit()
 
     return AdminUserResponse.model_validate(updated_user)
 
@@ -1088,6 +1158,7 @@ async def update_oauth_config(
     system_admin_user: SystemAdminUserDep,
     oauth_manager: OAuthConfigManager = Depends(get_oauth_config_manager),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> OAuthConfigResponse:
     """Update OAuth credentials with validation.
 
@@ -1132,6 +1203,7 @@ async def update_oauth_config(
             # Never log the client_secret value
         },
     )
+    await session.commit()
 
     return OAuthConfigResponse(
         client_id=config.client_id,
@@ -1190,6 +1262,7 @@ async def add_domains(
     system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DomainListResponse:
     """Add one or more domains to the allowed list.
 
@@ -1217,6 +1290,7 @@ async def add_domains(
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "add", "domains": body.domains},
     )
+    await session.commit()
 
     return DomainListResponse(allowed_domains=updated)
 
@@ -1227,6 +1301,7 @@ async def replace_domains(
     system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DomainListResponse:
     """Replace the entire allowed domains list.
 
@@ -1252,6 +1327,7 @@ async def replace_domains(
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "replace", "domains": body.domains},
     )
+    await session.commit()
 
     return DomainListResponse(allowed_domains=updated)
 
@@ -1262,6 +1338,7 @@ async def remove_domain(
     system_admin_user: SystemAdminUserDep,
     org_repo: OrganizationSettingsRepository = Depends(get_org_settings_repo),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DomainRemoveResponse:
     """Remove a single domain from the allowed list.
 
@@ -1287,6 +1364,7 @@ async def remove_domain(
         action_type=AuditActionType.ORG_DOMAIN_UPDATE,
         details={"action": "remove", "domain": domain},
     )
+    await session.commit()
 
     return DomainRemoveResponse(removed=domain, allowed_domains=updated)
 
@@ -1346,6 +1424,7 @@ async def update_assistant_tools(
     system_admin_user: SystemAdminUserDep,
     tool_config_repo: ToolConfigRepository = Depends(get_tool_config_repository),
     audit_service: AuditService = Depends(get_audit_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AssistantToolConfigListResponse:
     """Batch update assistant tool configs (Apply button).
 
@@ -1375,6 +1454,7 @@ async def update_assistant_tools(
         action_type=AuditActionType.ASSISTANT_TOOL_CONFIG,
         details={"tools": body.tools},
     )
+    await session.commit()
 
     # Return updated list
     return await list_assistant_tools(system_admin_user, tool_config_repo)
