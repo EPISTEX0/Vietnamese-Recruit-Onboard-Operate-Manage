@@ -57,7 +57,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.identity.api import router as router_module
 from src.modules.identity.api.router import (
-    CalendarListResponseSchema,
     SelectCalendarRequest,
     authorize_google_connection,
     callback_google_connection,
@@ -470,27 +469,10 @@ def test_service_owned_commits_stay_where_they_are(name: str) -> None:
     )
 
 
-@pytest.mark.parametrize("name", sorted(READ_ONLY_ENDPOINTS))
-def test_read_only_endpoints_do_not_commit(name: str) -> None:
-    """Read-only handlers stay read-only.
-
-    ``me`` and ``list_calendars_for_selection`` legitimately take a session to
-    read through, so "has no session" cannot be the check the way it was for
-    #312's two probe endpoints. Committing is what would be wrong here.
-    """
-    source = inspect.getsource(getattr(router_module, name))
-
-    assert "commit()" not in source, f"{name} is classified read-only but commits"
-
-
-def test_calendar_list_schema_is_unaffected() -> None:
-    """The read-only calendars endpoint keeps returning its own schema.
-
-    Guards the one endpoint in this file that already took a session before
-    #320, so a careless sweep that added a commit everywhere would show up
-    here rather than in production.
-    """
-    assert CalendarListResponseSchema.model_fields.keys() == {
-        "calendars",
-        "selected_calendar_id",
-    }
+# The read-only half of the partition is guarded by
+# ``test_router_read_only_endpoints.py``, which drives each of these endpoints
+# against real PostgreSQL and asserts no INSERT/UPDATE/DELETE reaches the
+# driver. There was a source-level check here first -- "the handler text has no
+# ``commit()``" -- and it is deliberately not kept alongside it: for an endpoint
+# that has silently started writing, the absence of a commit is the bug, so that
+# check went green in exactly the case it was named for.
