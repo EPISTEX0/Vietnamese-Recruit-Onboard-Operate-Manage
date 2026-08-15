@@ -117,16 +117,16 @@ function CurrentConfig({ config }: { config: OAuthConfig }) {
       <SourceBanner source={config.source} />
       {configured ? (
         <dl className="space-y-3">
-          <Field label={t('clientId')} value={config.client_id} mono />
+          <ConfigRow label={t('clientId')} value={config.client_id} mono />
           {/* Whatever the backend masked it to. The console has no unmasked
               form of this value to reveal, so there is no eye toggle here. */}
-          <Field
+          <ConfigRow
             label={t('clientSecret')}
             value={config.client_secret_masked || t('secretUnset')}
             mono
           />
-          <Field label={t('redirectUri')} value={config.redirect_uri} mono />
-          <Field label={t('updatedAt')} value={formatUpdatedAt(config.updated_at, t('updatedAtUnknown'))} />
+          <ConfigRow label={t('redirectUri')} value={config.redirect_uri} mono />
+          <ConfigRow label={t('updatedAt')} value={formatUpdatedAt(config.updated_at, t('updatedAtUnknown'))} />
         </dl>
       ) : (
         <Empty text={t('notConfigured')} />
@@ -135,7 +135,15 @@ function CurrentConfig({ config }: { config: OAuthConfig }) {
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/**
+ * One `dt`/`dd` pair of the read-only configuration list.
+ *
+ * Deliberately not called `Field`: `@/components/shared-ui` exports a `Field`
+ * of its own — a `<label>` wrapping an input — and this module already imports
+ * from that file. Two components a rename away from colliding, one writable and
+ * one not, on the page that shows a client secret.
+ */
+function ConfigRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4">
       <dt className="text-[12px] text-slate-500 sm:w-40 shrink-0">{label}</dt>
