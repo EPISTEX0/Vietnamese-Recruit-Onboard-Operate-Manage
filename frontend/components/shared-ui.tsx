@@ -239,29 +239,6 @@ export function Badge({
   );
 }
 
-/** Map a status string to a tone. */
-export function statusTone(status: string): BadgeTone {
-  switch (status) {
-    case 'active':
-    case 'approved':
-    case 'published':
-    case 'completed':
-    case 'healthy':
-      return 'emerald';
-    case 'submitted':
-    case 'draft':
-    case 'checked_in':
-      return 'amber';
-    case 'inactive':
-    case 'rejected':
-    case 'cancelled':
-    case 'unhealthy':
-      return 'rose';
-    default:
-      return 'slate';
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Status metadata maps (Vietnamese, per CONTEXT.md)
 // ---------------------------------------------------------------------------

@@ -11,7 +11,6 @@ export {
   EmptyState,
   StatusPill,
   Badge,
-  statusTone,
   CANDIDATE_STATUS_META,
   INBOX_STATUS_META,
   JOB_STATUS_META,
