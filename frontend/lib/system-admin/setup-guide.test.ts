@@ -109,11 +109,26 @@ describe('task actions', () => {
     expect(taskOf(view, 'hrAccount').action).toEqual({ href: '/settings/users' });
   });
 
-  it('gives the Google OAuth task no destination, because the console has none', () => {
-    // Not an oversight: there is no OAuth configuration screen anywhere in the
-    // app (#307 is where one gets decided). A placeholder href pointing at some
-    // other section would be exactly the lie this whole page exists to prevent.
+  it('sends the Google OAuth task to the console section that configures it', () => {
+    // #307 built that section. Until it landed this assertion was its mirror
+    // image — `action` had to be null, because pointing the row at some nearby
+    // section would have been exactly the lie the whole page exists to prevent.
     const view = buildSetupGuide(nothingDone());
+
+    expect(taskOf(view, 'googleOAuth').action).toEqual({ href: '/settings/oauth' });
+  });
+
+  it('carries a task through as un-clickable when the console has no section for it', () => {
+    // The nullable arm, kept under test through the route map because no live
+    // task exercises it any more — all three now have a screen. It is not dead
+    // weight: the next task that lands before its section does takes this path,
+    // and `SetupTaskRow` reads exactly this null to draw a guidance line
+    // instead of a link (ADR-0014).
+    const view = buildSetupGuide(nothingDone(), {
+      googleOAuth: null,
+      aiConfiguration: { href: '/settings/ai' },
+      hrAccount: { href: '/settings/users' },
+    });
 
     expect(taskOf(view, 'googleOAuth').action).toBeNull();
   });

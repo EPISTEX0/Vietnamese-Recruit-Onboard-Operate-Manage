@@ -99,7 +99,7 @@ export interface SetupTaskView {
   /**
    * `null` when the console has no section that performs this task, which
    * makes the task un-clickable and puts a guidance line where the destination
-   * would be. Google OAuth is that case today — see `TASK_ACTIONS`.
+   * would be. No task is in that state today — see `TASK_ACTIONS`.
    */
   action: SetupTaskAction | null;
 }
@@ -124,21 +124,23 @@ export interface SetupGuideView {
   progress: SetupProgress | null;
 }
 
+/** Where each task sends the admin, or `null` when nowhere does the job. */
+export type SetupTaskActions = Readonly<Record<SetupTaskId, SetupTaskAction | null>>;
+
 /**
- * Where each task sends the admin, or `null` when nowhere does the job.
+ * The console's route map.
  *
- * `googleOAuth` is `null` because the console has never had an OAuth
- * configuration screen — `rg -ni 'oauth' app/` finds nothing, and the
- * pre-route-split console had the same seven sections. The backend half exists
- * (`GET`/`POST /api/system-admin/oauth/config`), so the task's *status* is real;
- * only its destination is missing. Pointing it at a nearby section to round the
- * count up to three would be precisely the lie this page exists to prevent —
- * `/settings/domains` is the allowed email-domain list, not OAuth client
- * credentials. #307 decides the real section; when it lands, the fix is this
- * one line and the component does not change.
+ * `googleOAuth` was `null` from #302 until #307: the console had never had an
+ * OAuth configuration screen, while the backend half existed all along
+ * (`GET`/`POST /api/system-admin/oauth/config`) — so the task's *status* was
+ * real and only its destination was missing. #307 built `/settings/oauth`, and
+ * wiring it was this one line, with no change to the component that draws the
+ * row. The null arm stays because it is the module's answer for the next task
+ * that lands before its section does; pointing such a task at a nearby section
+ * to round the count up would be precisely the lie this page exists to prevent.
  */
-const TASK_ACTIONS: Record<SetupTaskId, SetupTaskAction | null> = {
-  googleOAuth: null,
+const TASK_ACTIONS: SetupTaskActions = {
+  googleOAuth: { href: '/settings/oauth' },
   aiConfiguration: { href: '/settings/ai' },
   hrAccount: { href: '/settings/users' },
 };
@@ -187,12 +189,13 @@ function resolveTask<T>(
   id: SetupTaskId,
   result: QueryResult<T>,
   isDone: CompletionReader<T>,
+  actions: SetupTaskActions,
 ): SetupTaskView {
   const view = (status: SetupTaskStatus, unknownReason: SetupTaskUnknownReason | null = null) => ({
     id,
     status,
     unknownReason,
-    action: TASK_ACTIONS[id],
+    action: actions[id],
   });
 
   // Error first, before any look at `data`. React Query keeps the last good
@@ -214,12 +217,21 @@ function resolveTask<T>(
 /**
  * Build the widget's entire view-model. The component that renders it makes no
  * decisions of its own — it draws what comes back from here.
+ *
+ * `actions` defaults to the real route map, so every caller in the app passes
+ * `sources` alone. It is a parameter rather than a closed-over constant for one
+ * reason: since #307 gave Google OAuth a section, no live task produces
+ * `action: null`, and the branch that handles a task without a section would
+ * otherwise have nothing exercising it.
  */
-export function buildSetupGuide(sources: SetupGuideSources): SetupGuideView {
+export function buildSetupGuide(
+  sources: SetupGuideSources,
+  actions: SetupTaskActions = TASK_ACTIONS,
+): SetupGuideView {
   const tasks: readonly SetupTaskView[] = [
-    resolveTask('googleOAuth', sources.oauthConfig, oauthTaskDone),
-    resolveTask('aiConfiguration', sources.aiConfiguration, aiTaskDone),
-    resolveTask('hrAccount', sources.users, hrTaskDone),
+    resolveTask('googleOAuth', sources.oauthConfig, oauthTaskDone, actions),
+    resolveTask('aiConfiguration', sources.aiConfiguration, aiTaskDone, actions),
+    resolveTask('hrAccount', sources.users, hrTaskDone, actions),
   ];
 
   const allResolved = tasks.every((task) => task.status !== 'unknown');

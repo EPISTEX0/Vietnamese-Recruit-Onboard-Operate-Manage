@@ -91,15 +91,17 @@ describe('where the Quick-Start Guide can send the admin', () => {
     expect(existsSync(routeFileFor(href))).toBe(true);
   });
 
-  it('leaves the Google OAuth task without a destination', () => {
-    // Deliberate, and worth pinning at the route level: the console has no
-    // OAuth configuration screen at all (#307). Someone "fixing" this by
-    // pointing the row at a nearby section would pass the existence check above
+  it('sends the Google OAuth task to the section that configures OAuth', () => {
+    // Pinned at the route level, not just in the pure module, because the
+    // hazard this task carries is a specific one: every other console section
+    // handles something adjacent to OAuth without being able to configure it —
+    // `/settings/domains` is the allowed email-domain list, `/settings/users`
+    // is accounts. The existence check above would happily pass on either,
     // while telling a freshly-installed admin to go configure OAuth somewhere
-    // that cannot configure OAuth.
+    // that cannot. Only `/settings/oauth` is the right answer (#307).
     const oauth = guide.tasks.find((task) => task.id === 'googleOAuth');
 
     expect(SETUP_TASK_IDS).toContain('googleOAuth');
-    expect(oauth?.action).toBeNull();
+    expect(oauth?.action).toEqual({ href: '/settings/oauth' });
   });
 });

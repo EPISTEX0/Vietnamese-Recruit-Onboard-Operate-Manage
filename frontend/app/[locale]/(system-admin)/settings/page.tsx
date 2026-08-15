@@ -54,7 +54,10 @@ const TASK_TITLE_KEY: Record<SetupTaskId, string> = {
 /**
  * The line shown *in place of* a destination. Read only when the task has no
  * action — see `guidanceKey` below, which gates on `task.action`, not on the id.
- * Only Google OAuth is actionless today; the rest navigate.
+ *
+ * No task is actionless since #307 gave Google OAuth its section, so nothing
+ * in here renders today. Kept, along with the arm that reads it, as the shape
+ * for the next task that lands before its screen does (ADR-0014).
  */
 const TASK_GUIDANCE_KEY: Partial<Record<SetupTaskId, string>> = {
   googleOAuth: 'taskGoogleOAuthGuidance',
@@ -244,9 +247,9 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
   const title = tq(TASK_TITLE_KEY[task.id]);
   // Gated on the absence of an action, not on the task id. The guidance line
   // exists *because* there is nowhere to click; keying it off `googleOAuth`
-  // would leave it printing under a live link the day #307 gives OAuth a
-  // section, and wiring #307 would then take two edits instead of the one line
-  // in `TASK_ACTIONS` the ticket asks for.
+  // would have left it printing under a live link once #307 gave OAuth a
+  // section. It did, and this file needed no edit — the wiring was the one
+  // line in `TASK_ACTIONS` the ticket asked for.
   const guidanceKey = task.action ? undefined : TASK_GUIDANCE_KEY[task.id];
 
   const label = (
@@ -285,9 +288,14 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
 
   return (
     <div className={`${rowClass}${task.action ? ' hover:bg-slate-100 transition-colors' : ''}`}>
-      {/* No destination, no click. The console has no OAuth screen (#307), and
-          pointing the row at some other section to make it feel complete is the
-          exact lie this page exists to prevent. */}
+      {/* No destination, no click — the general shape for a task the console
+          has no section for, not a statement about any one task. Google OAuth
+          was the case that made this branch necessary and stopped being it in
+          #307, so today nothing live reaches the `<div>` arm; it is what the
+          next such task gets. Pointing a row at some other section to make it
+          feel complete is the exact lie this page exists to prevent, and that
+          is the reason the arm stays rather than the row becoming a bare
+          `<Link>`. Nothing renders this component under test — see #314. */}
       {task.action ? (
         <Link href={task.action.href} className={labelClass}>
           {label}
