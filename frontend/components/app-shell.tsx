@@ -114,9 +114,18 @@ export default function AppShell({
     // match, so it is true on `/recruitment/candidates/42` for the
     // `/recruitment/candidates` item, and going from a detail page back to its
     // list is a real navigation that must not be swallowed.
-    if (pathname === href) return;
+    if (pathname === href) {
+      // On mobile the drawer is closed by the `[pathname]` effect, which this
+      // return skips — so tapping the section you are already on would leave
+      // the drawer sitting open over the page it just declined to navigate to.
+      // Desktop needs no branch here: `lg:translate-x-0` pins the sidebar open
+      // regardless of this flag, and the overlay it also drives is `lg:hidden`.
+      setSidebarOpen(false);
+      return;
+    }
     // Already on the way there — a second click would re-arm the flag for a
-    // push that resolves to the same place.
+    // push that resolves to the same place. No drawer handling needed: the
+    // pending navigation still lands and the effect closes it.
     if (optimisticPath === href) return;
     setOptimisticPath(href);
     setIsNavigating(true);
