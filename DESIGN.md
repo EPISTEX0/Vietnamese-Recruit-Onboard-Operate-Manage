@@ -62,7 +62,8 @@ vừa phải — đọc được, không trang trí.
 
 ## Colors
 
-Palette xoay quanh slate (neutrals) và một accent indigo.
+Palette xoay quanh slate (neutrals) và một accent indigo. Sáu tone ngữ nghĩa cho **trạng thái** là một
+trục riêng — xem [Semantic palette](#semantic-palette) bên dưới.
 
 - **Ink (`#0f172a`, slate-900):** tiêu đề, text cốt lõi.
 - **Primary (`#4f46e5`, indigo-600):** accent duy nhất cho action chính.
@@ -74,6 +75,93 @@ Palette xoay quanh slate (neutrals) và một accent indigo.
 Quy ước: nền trang `bg-slate-50/50`, body text `text-slate-800` (xem
 `frontend/app/layout.tsx`). Icon nhấn dùng `text-indigo-600`, tiêu đề
 `text-slate-900`, subtitle `text-slate-500` (xem `frontend/components/operate.tsx`).
+
+## Semantic palette
+
+Có **hai trục màu**, và luật "một accent duy nhất" ở trên chỉ nói về trục thứ nhất:
+
+1. **Accent thương hiệu — indigo.** Trả lời "chỗ nào bấm được": nút hành động chính, link, focus ring,
+   icon trang trí của header và card. Đúng một accent, không trộn accent thứ hai. Đây là luật cũ, không
+   đổi.
+2. **Palette ngữ nghĩa — `BadgeTone`.** Trả lời "cái này đang ở trạng thái nào": xong / đang chờ / hỏng.
+   Sáu tone có tên, class chính tắc ở `frontend/components/shared-ui.tsx:191-212`
+   (`BadgeTone` + `BADGE_TONE_PARTS`). **Đó là nguồn chân lý** — bảng class không chép lại vào đây; sửa
+   ở đó, không sửa ở tài liệu.
+
+Hai trục độc lập và một màn hình mang cả hai: nút "Lưu" indigo đứng cạnh badge "Thất bại" rose không vi
+phạm gì cả. Cái luật cấm là dùng **màu thứ hai làm affordance** — ví dụ nút hành động chính màu
+emerald, hay link màu sky.
+
+### Nghĩa từng tone
+
+Rút từ call site đang có, không tự đặt. Cột cuối là chứng cứ, đọc ngược lại được.
+
+| Tone | Nghĩa | Call site |
+|---|---|---|
+| `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `statusTone` (`active`/`approved`/`published`/`completed`/`healthy`, `shared-ui.tsx:238`), `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
+| `amber` | Chưa xong, đang chờ ai đó làm gì đó — cảnh báo chứ chưa hỏng | `statusTone` (`submitted`/`draft`/`checked_in`), `INBOX_STATUS_META.needs_classification`, `PROC_STATUS_META.needs_review`, `CONFLICT_STATUS_META.pending`, khối bắt buộc xác nhận chính sách dữ liệu ở `settings/ai/page.tsx:280` |
+| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `statusTone` (`inactive`/`rejected`/`cancelled`/`unhealthy`), `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `DangerButton` (`shared-ui.tsx:583`) |
+| `indigo` | Đang chạy theo luồng chính, chưa mang tin tốt hay xấu | `CANDIDATE_STATUS_META.reviewing`, `INBOX_STATUS_META.ready_for_review`, `PROC_STATUS_META.ocr_processing`/`llm_parsing`, `onboarding/page.tsx:61` (`in_progress`) |
+| `slate` | Không có trạng thái đáng tô màu — chưa bắt đầu, hoặc đã khép lại và không cần chú ý | `statusTone` (nhánh `default`), `CANDIDATE_STATUS_META.new`/`archived`, `INBOX_STATUS_META.resolved`, `PROC_STATUS_META.skipped`/`dismissed` |
+| `sky` | **Chưa có nghĩa.** Xem dưới. | — |
+
+**`sky` không rút được nghĩa nhất quán.** Ba cách dùng khác hẳn nhau, nên ở đây ghi đúng như vậy thay vì
+bịa một dòng cho đủ bảng:
+
+- `knowledge-base/page.tsx:113` và `:509` — `processing`, tức "đang xử lý". Nhưng cùng ý đó,
+  `gmail/historical-import.tsx:295` dùng `amber` và `recruitment/review/page.tsx:15` dùng `indigo`.
+  (Hai dòng vì file có hai `StatusBadge` trùng nhau — xem #318.)
+- `requests/page.tsx:240` và `employee/requests/page.tsx:268` — phân biệt `leave` với `overtime`. Đây là
+  **phân loại**, không phải trạng thái; cùng cấu trúc với việc dùng indigo cho nhánh còn lại.
+- `settings/page.tsx` thẻ Tài khoản — thuần trang trí, để bốn thẻ trong hàng khác màu nhau.
+
+Chọn `sky` cho việc mới là đang chọn một màu chưa ai định nghĩa. Nếu cần nó, chốt nghĩa ở đây trước.
+Hợp nhất về một bảng và quyết số phận của `sky` (cùng `violet`, tone thứ bảy chỉ `StatusPill` có) là
+việc của #316.
+
+### Chỗ hai bảng đang mâu thuẫn
+
+Ghi lại vì đây là dữ kiện, không phải luật — ai chạm vào status map thì cần biết:
+
+- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:290`) nhưng `amber` trong `statusTone` và ở
+  `payroll/payslips/page.tsx:369`. Hai cách đọc đều có lý — "chưa phát hành nên chưa cần chú ý" so với
+  "đang chờ bạn phát hành".
+- `cancelled` là `rose` trong `statusTone` và `JOB_STATUS_META` nhưng `slate` ở
+  `requests/page.tsx:361` và `employee/requests/page.tsx:328`.
+
+Chưa chốt hướng nào đúng; đừng đọc bảng trên như thể đã chốt.
+
+### Icon mang màu gì
+
+Icon dùng indigo **trừ khi bản thân nó là readout của một trạng thái**, lúc đó nó lấy tone ngữ nghĩa của
+trạng thái ấy: `settings/page.tsx:258,261` (tick emerald khi xong, dấu hỏi amber khi không đọc được),
+`gmail/connection-panel.tsx:27-28` (`Plug` emerald khi đã nối, `Unplug` slate khi chưa),
+`gmail/historical-import.tsx:183-184`.
+
+Trường hợp thứ ba, yếu nhất: một hàng thẻ cho mỗi icon một tone chỉ để **phân biệt hạng mục**, không thẻ
+nào báo trạng thái gì — `settings/page.tsx:151-176` (AI / Runtime / Tài khoản / Nhật ký). Đang tồn tại,
+không phải luật, và #308 giữ nguyên tone bốn thẻ đó thay vì nhân dịp đặt lại.
+
+Đừng gộp mọi hàng thẻ vào ca này. `recruitment/metrics/page.tsx:31-34` nhìn y hệt về cấu trúc nhưng
+tone của nó **có nghĩa thật**: emerald cho `successRate`, rose cho `failureRate` — đúng nghĩa bảng trên
+gán. Khác nhau ở chỗ tone trả lời câu gì, không ở chỗ nó nằm trong component nào.
+
+**Sắc độ indigo của hai trục không bằng nhau, và đó không phải lỗi.** Icon nhấn thương hiệu là
+`text-indigo-600` (mục [Colors](#colors) ở trên); tone ngữ nghĩa `indigo` là `text-indigo-700`, vì nó
+sinh ra để đứng trên nền `bg-indigo-50` của badge. Hệ quả cụ thể: thẻ AI ở `settings/page.tsx:151` đi
+qua bảng ngữ nghĩa nên icon của nó là 700, không phải 600 như icon header cạnh đó. Đây là cái giá của
+việc #308 cho cả hàng thẻ đi qua một API duy nhất, và nó được ghi ra chứ không giấu.
+
+### Quy ước mới (chưa mô tả hiện trạng)
+
+Hai dòng dưới là **luật đặt ra từ #308**, không phải mô tả code đang có — 35 file hiện viết chuỗi class
+tone thẳng tại call site thay vì đi qua bảng, và ticket này cố ý không chuyển chúng:
+
+- **Do** đi qua `Badge` / `BadgeTone` / `BADGE_TONE_PARTS` khi cần màu trạng thái. Viết
+  `bg-emerald-50 text-emerald-700` bằng tay là cách `text-emerald-600` lọt vào cạnh
+  `text-emerald-700` của bảng.
+- **Do** ghi nghĩa vào bảng trên khi thêm tone mới. Một tone không có nghĩa ở đây là một màu không ai
+  tra được — `sky` là ví dụ sống.
 
 ## Typography
 
@@ -88,7 +176,8 @@ với weight 400/500/600/700 — đủ cho dấu tiếng Việt, đừng đổi 
 
 ## Do's and Don'ts
 
-- **Do** dùng indigo làm accent duy nhất cho action/icon — không trộn accent thứ hai.
+- **Do** dùng indigo làm accent duy nhất cho action/icon — không trộn accent thứ hai. Luật này nói về
+  affordance; màu trạng thái đi theo `BadgeTone`, xem [Semantic palette](#semantic-palette).
 - **Do** dùng `rounded-2xl` cho card, shadow mềm — giữ cảm giác sản phẩm dụng cụ.
 - **Do** ưu tiên tiếng Việt trong nhãn giao diện (deployment cho doanh nghiệp VN).
 - **Don't** mang accent hay font của design system cũ vào `frontend/` — lịch sử chuyển đổi nằm ở

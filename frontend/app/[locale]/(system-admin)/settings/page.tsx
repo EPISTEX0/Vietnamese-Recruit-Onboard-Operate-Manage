@@ -38,7 +38,7 @@ import type {
 import { Link } from '@/i18n/navigation';
 import { USER_ROLES } from '@/lib/auth/roles';
 import { buildSetupGuide, type SetupTaskId, type SetupTaskView } from '@/lib/system-admin/setup-guide';
-import { PageHeader, formatAuditDetails } from '@/components/shared-ui';
+import { PageHeader, formatAuditDetails, BADGE_TONE_PARTS, type BadgeTone } from '@/components/shared-ui';
 import { SectionCard, ErrorBox, Empty } from './_components/console-ui';
 import { apiErrorText } from './_components/api-error-text';
 
@@ -149,7 +149,7 @@ export default function SystemOverviewPage() {
           precedent. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          icon={Bot} iconBg="bg-indigo-50" iconFg="text-indigo-600" kicker={to('cardAiKicker')}
+          icon={Bot} tone="indigo" kicker={to('cardAiKicker')}
           isLoading={aiConfiguration.status === 'pending'} isError={aiConfiguration.status === 'error'}
           value={aiConfiguration.data?.configured
             ? (aiConfiguration.data.provider ?? '—')
@@ -157,19 +157,19 @@ export default function SystemOverviewPage() {
           sub={to('cardAiSub')}
         />
         <StatCard
-          icon={Activity} iconBg="bg-emerald-50" iconFg="text-emerald-600" kicker={to('cardRuntimeKicker')}
+          icon={Activity} tone="emerald" kicker={to('cardRuntimeKicker')}
           isLoading={runtimeHealth.status === 'pending'} isError={runtimeHealth.status === 'error'}
           value={`${healthyServices}/${services.length}`}
           sub={to('cardRuntimeSub')}
         />
         <StatCard
-          icon={Users} iconBg="bg-sky-50" iconFg="text-sky-600" kicker={to('cardAccountsKicker')}
+          icon={Users} tone="sky" kicker={to('cardAccountsKicker')}
           isLoading={users.status === 'pending'} isError={users.status === 'error'}
           value={users.data?.length ?? 0}
           sub={accountsByRole.map((entry) => `${tr(entry.role)} ${entry.count}`).join(' · ')}
         />
         <StatCard
-          icon={FileText} iconBg="bg-amber-50" iconFg="text-amber-600" kicker={to('cardAuditKicker')}
+          icon={FileText} tone="amber" kicker={to('cardAuditKicker')}
           isLoading={auditLogs.status === 'pending'} isError={auditLogs.status === 'error'}
           value={auditLogs.data?.total ?? 0}
           sub={to('cardAuditSub')}
@@ -331,20 +331,28 @@ function SetupTaskRow({ task, onRetry }: { task: SetupTaskView; onRetry: () => v
  * print a confident `0` — the same class of lie as calling an unread task
  * "chưa làm".
  */
-function StatCard({ icon: Icon, iconBg, iconFg, kicker, isLoading, isError, value, sub }: {
+function StatCard({ icon: Icon, tone, kicker, isLoading, isError, value, sub }: {
   icon: React.ComponentType<{ className?: string }>;
-  iconBg: string;
-  iconFg: string;
+  tone: BadgeTone;
   kicker: string;
   isLoading: boolean;
   isError: boolean;
   value: React.ReactNode;
   sub: string;
 }) {
+  // One tone rather than a `bg`/`fg` pair of bare class strings: they were
+  // never independent, and passing them separately is what let this row drift
+  // to `text-*-600` while the shared table said `text-*-700` (#308). Going
+  // through the table closes that gap for all four cards — including the
+  // indigo one, whose icon is now 700 rather than the 600 that `DESIGN.md`
+  // gives brand-accent icons. That shade collision is the stated cost of one
+  // API for the whole row; see "Icon mang màu gì" in `DESIGN.md`.
+  const { bg, fg } = BADGE_TONE_PARTS[tone];
+
   return (
     <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm shadow-slate-100">
       <div className="flex items-center justify-between mb-3">
-        <div className={`p-2 rounded-lg ${iconBg}`}><Icon className={`w-5 h-5 ${iconFg}`} /></div>
+        <div className={`p-2 rounded-lg ${bg}`}><Icon className={`w-5 h-5 ${fg}`} /></div>
         <span className="text-[10px] font-mono uppercase text-slate-400">{kicker}</span>
       </div>
       {isLoading ? (
