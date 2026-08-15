@@ -12,10 +12,10 @@
  */
 
 import React from 'react';
-import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail } from 'lucide-react';
+import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail, LayoutDashboard } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import AppShell from '@/components/app-shell';
-import type { NavGroup } from '@/components/app-shell';
+import type { NavGroup, NavItem } from '@/components/app-shell';
 import { useAuthGuard } from '@/lib/auth/session';
 import type { UserRole } from '@/lib/auth/roles';
 
@@ -24,6 +24,15 @@ const ALLOW: readonly UserRole[] = ['system_admin'];
 export default function SystemAdminLayout({ children }: { children: React.ReactNode }) {
   useAuthGuard({ requireAuth: true, allowRoles: ALLOW });
   const t = useTranslations();
+
+  /**
+   * The console's home sits above the groups, ungrouped — it is not one of the
+   * seven configuration sections, it is the place the admin lands after login
+   * and the answer to "what do I do now?".
+   */
+  const navItems: NavItem[] = [
+    { href: '/settings', label: t('settings.systemOverview.title'), icon: LayoutDashboard },
+  ];
 
   /**
    * Three groups, one per kind of responsibility, mirroring the HR shell. A
@@ -65,6 +74,7 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
     <AppShell
       roleLabel={t('appShell.systemAdminLabel')}
       sidebarSectionLabel={t('appShell.systemAdminSection')}
+      navItems={navItems}
       navGroups={navGroups}
       userDisplayNameFallback={t('appShell.systemAdminFallbackName')}
     >

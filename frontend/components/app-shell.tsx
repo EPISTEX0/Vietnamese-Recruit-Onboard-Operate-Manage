@@ -94,6 +94,11 @@ export default function AppShell({
     // Fallback to actual pathname
     if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/';
     if (href === '/employee') return pathname === '/employee' || pathname === '/employee/dashboard';
+    // Same reason as the two above: a shell home whose href is a prefix of
+    // every sibling's. The system admin console's seven sections all live
+    // under `/settings`, so a prefix match would light up "Tổng quan hệ thống"
+    // alongside whichever section is actually open.
+    if (href === '/settings') return pathname === '/settings';
     return pathname.startsWith(href);
   };
 
