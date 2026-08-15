@@ -104,7 +104,7 @@ export default function CandidatesPage() {
                   className="text-left p-4 bg-white rounded-2xl border border-slate-200 shadow-sm shadow-slate-100 hover:border-indigo-200 hover:shadow-indigo-100 transition-all"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <StatusPill status={c.status} label={tc(meta.labelKey)} tone={meta.tone} />
+                    <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />
                     <span className="text-[10px] font-mono text-slate-400">{confidencePct(c.confidence_score)}</span>
                   </div>
                   <p className="font-semibold text-sm text-slate-900 truncate">{c.name}</p>

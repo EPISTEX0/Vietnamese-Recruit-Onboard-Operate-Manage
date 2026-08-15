@@ -205,13 +205,23 @@ export function badgeToneClass(tone: BadgeTone): string {
   return `${bg} ${fg} ${border}`;
 }
 
-/** Status pill — color by group; label Vietnamese. Used in pipeline dashboards. */
+/**
+ * Status pill — colour by tone, label supplied by the caller. Pipeline lists.
+ *
+ * Takes no `status`. It used to require one and never read it, so a caller
+ * passing the wrong value changed nothing on screen while the signature
+ * advertised that it would — `onboarding` passed `proc.status` but drew both
+ * label and tone from a separate `isComplete`, and nothing noticed (#322).
+ *
+ * Making it read `status` instead was considered and rejected: three of the
+ * eight callers do not look a status up in a map at all, so the component
+ * would have had to accept two mutually exclusive prop shapes. That option
+ * reopens once #313 gives every status map a `labelKey`.
+ */
 export function StatusPill({
-  status,
   label,
   tone = 'slate',
 }: {
-  status: string;
   label: string;
   tone?: BadgeTone;
 }) {

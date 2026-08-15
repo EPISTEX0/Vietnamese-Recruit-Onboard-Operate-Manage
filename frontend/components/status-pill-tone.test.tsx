@@ -34,7 +34,7 @@ const classesOf = (el: Element) => el.getAttribute('class')?.split(/\s+/) ?? [];
  * document-wide lookup would find all seven.
  */
 function pillWith(props: { tone?: BadgeTone }): Element {
-  const { container } = render(<StatusPill status="any" label="Trạng thái" {...props} />);
+  const { container } = render(<StatusPill label="Trạng thái" {...props} />);
   const pill = container.firstElementChild;
   if (!pill) throw new Error('StatusPill rendered nothing');
   return pill;

@@ -233,7 +233,7 @@ function InboxCard(props: CardProps) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <StatusPill status={item.inbox_status} label={tc(meta.labelKey)} tone={meta.tone} />
+            <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />
             {item.prediction_intent && (
               <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                 AI: {t('intent_' + (item.prediction_intent || 'unknown'))}
