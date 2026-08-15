@@ -68,10 +68,33 @@ const ROUTE_QUERY_MAP: Record<string, import('@tanstack/react-query').QueryKey[]
     ['gmail-connection'],
     ['gmail-messages'],
   ],
-  '/settings': [
+  // One entry per system admin console section, each naming its own query key
+  // family. `/settings` used to be a single entry that pulled three unrelated
+  // keys on hover, back when all seven sections shared one route.
+  //
+  // `audit-logs` is the family prefix, not the exact key: the audit page runs
+  // `['audit-logs', params]` because its filters are part of the key, the same
+  // prefix it invalidates against.
+  '/settings/ai': [
     ['ai-config'],
+  ],
+  '/settings/tools': [
+    ['assistant-tools'],
+  ],
+  '/settings/health': [
     ['runtime-health'],
+  ],
+  '/settings/audit': [
     ['audit-logs'],
+  ],
+  '/settings/users': [
+    ['admin-users'],
+  ],
+  '/settings/whitelist': [
+    ['whitelist'],
+  ],
+  '/settings/domains': [
+    ['org-domains'],
   ],
   '/employee': [
     ['employee-dashboard'],
