@@ -62,7 +62,7 @@ vừa phải — đọc được, không trang trí.
 
 ## Colors
 
-Palette xoay quanh slate (neutrals) và một accent indigo. Sáu tone ngữ nghĩa cho **trạng thái** là một
+Palette xoay quanh slate (neutrals) và một accent indigo. Bảy tone ngữ nghĩa cho **trạng thái** là một
 trục riêng — xem [Semantic palette](#semantic-palette) bên dưới.
 
 - **Ink (`#0f172a`, slate-900):** tiêu đề, text cốt lõi.
@@ -84,9 +84,9 @@ Có **hai trục màu**, và luật "một accent duy nhất" ở trên chỉ n�
    icon trang trí của header và card. Đúng một accent, không trộn accent thứ hai. Đây là luật cũ, không
    đổi.
 2. **Palette ngữ nghĩa — `BadgeTone`.** Trả lời "cái này đang ở trạng thái nào": xong / đang chờ / hỏng.
-   Sáu tone có tên, class chính tắc ở `frontend/components/shared-ui.tsx:191-212`
+   Bảy tone có tên, class chính tắc ở `frontend/components/shared-ui.tsx:172-200`
    (`BadgeTone` + `BADGE_TONE_PARTS`). **Đó là nguồn chân lý** — bảng class không chép lại vào đây; sửa
-   ở đó, không sửa ở tài liệu.
+   ở đó, không sửa ở tài liệu. Một bảng duy nhất cho cả `Badge` lẫn `StatusPill` kể từ #316.
 
 Hai trục độc lập và một màn hình mang cả hai: nút "Lưu" indigo đứng cạnh badge "Thất bại" rose không vi
 phạm gì cả. Cái luật cấm là dùng **màu thứ hai làm affordance** — ví dụ nút hành động chính màu
@@ -98,11 +98,12 @@ Rút từ call site đang có, không tự đặt. Cột cuối là chứng cứ
 
 | Tone | Nghĩa | Call site |
 |---|---|---|
-| `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `statusTone` (`active`/`approved`/`published`/`completed`/`healthy`, `shared-ui.tsx:238`), `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
+| `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `statusTone` (`active`/`approved`/`published`/`completed`/`healthy`, `shared-ui.tsx:243`), `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
 | `amber` | Chưa xong, đang chờ ai đó làm gì đó — cảnh báo chứ chưa hỏng | `statusTone` (`submitted`/`draft`/`checked_in`), `INBOX_STATUS_META.needs_classification`, `PROC_STATUS_META.needs_review`, `CONFLICT_STATUS_META.pending`, khối bắt buộc xác nhận chính sách dữ liệu ở `settings/ai/page.tsx:280` |
-| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `statusTone` (`inactive`/`rejected`/`cancelled`/`unhealthy`), `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `DangerButton` (`shared-ui.tsx:583`) |
+| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `statusTone` (`inactive`/`rejected`/`cancelled`/`unhealthy`), `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `ButtonDanger` (`shared-ui.tsx:584`) |
 | `indigo` | Đang chạy theo luồng chính, chưa mang tin tốt hay xấu | `CANDIDATE_STATUS_META.reviewing`, `INBOX_STATUS_META.ready_for_review`, `PROC_STATUS_META.ocr_processing`/`llm_parsing`, `onboarding/page.tsx:61` (`in_progress`) |
 | `slate` | Không có trạng thái đáng tô màu — chưa bắt đầu, hoặc đã khép lại và không cần chú ý | `statusTone` (nhánh `default`), `CANDIDATE_STATUS_META.new`/`archived`, `INBOX_STATUS_META.resolved`, `PROC_STATUS_META.skipped`/`dismissed` |
+| `violet` | Đúng **một** việc: bước "đã lên lịch phỏng vấn" của pipeline tuyển dụng. Không phải một nghĩa tổng quát — xem dưới. | `CANDIDATE_STATUS_META.interview_scheduled` (`shared-ui.tsx:275`) |
 | `sky` | **Chưa có nghĩa.** Xem dưới. | — |
 
 **`sky` không rút được nghĩa nhất quán.** Ba cách dùng khác hẳn nhau, nên ở đây ghi đúng như vậy thay vì
@@ -116,14 +117,22 @@ bịa một dòng cho đủ bảng:
 - `settings/page.tsx` thẻ Tài khoản — thuần trang trí, để bốn thẻ trong hàng khác màu nhau.
 
 Chọn `sky` cho việc mới là đang chọn một màu chưa ai định nghĩa. Nếu cần nó, chốt nghĩa ở đây trước.
-Hợp nhất về một bảng và quyết số phận của `sky` (cùng `violet`, tone thứ bảy chỉ `StatusPill` có) là
-việc của #316.
 
-### Chỗ hai bảng đang mâu thuẫn
+**`violet` thì ngược lại: có nghĩa, nhưng hẹp.** Nó không trả lời một câu hỏi trạng thái tổng quát nào
+cả — nó tồn tại vì `interview_scheduled` phải phân biệt được với `reviewing` (`indigo`) ở
+`recruitment/interviews/page.tsx:196`, chỗ hai trạng thái liền kề của cùng một pipeline đứng cạnh nhau
+trong một danh sách. Dùng `violet` cho việc khác là đang mượn màu của một bước tuyển dụng cụ thể.
 
-Ghi lại vì đây là dữ kiện, không phải luật — ai chạm vào status map thì cần biết:
+#316 hợp nhất hai bảng và **giữ cả hai tone**: khuyết tật là hai bảng lệch nhau, không phải thừa tone,
+và bỏ tone nào cũng buộc phải viết lại call site rồi chọn màu thay. `sky` vì thế vẫn nằm trong bảng
+chính tắc mà vẫn chưa có nghĩa — ghi đúng như vậy có ích hơn là bịa một dòng cho đủ.
 
-- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:290`) nhưng `amber` trong `statusTone` và ở
+### Chỗ các status map mâu thuẫn nhau
+
+Không liên quan tới hai bảng tone mà #316 vừa hợp nhất — đây là chuyện các status map gán tone khác
+nhau cho cùng một status. Ghi lại vì đây là dữ kiện, không phải luật — ai chạm vào status map thì cần biết:
+
+- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:295`) nhưng `amber` trong `statusTone` và ở
   `payroll/payslips/page.tsx:369`. Hai cách đọc đều có lý — "chưa phát hành nên chưa cần chú ý" so với
   "đang chờ bạn phát hành".
 - `cancelled` là `rose` trong `statusTone` và `JOB_STATUS_META` nhưng `slate` ở

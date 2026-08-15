@@ -156,39 +156,20 @@ export function EmptyState({
 // Status pill + Badge (two distinct primitives)
 // ---------------------------------------------------------------------------
 
-/** Status pill — color by group; label Vietnamese. Used in pipeline dashboards. */
-export function StatusPill({
-  status,
-  label,
-  tone = 'slate',
-}: {
-  status: string;
-  label: string;
-  tone?: 'slate' | 'indigo' | 'amber' | 'emerald' | 'rose' | 'violet';
-}) {
-  const tones: Record<string, string> = {
-    slate: 'bg-slate-100 text-slate-700 border-slate-200',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    rose: 'bg-rose-50 text-rose-700 border-rose-200',
-    violet: 'bg-violet-50 text-violet-700 border-violet-200',
-  };
-  return (
-    <span className={`inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${tones[tone]}`}>
-      {label}
-    </span>
-  );
-}
-
 /**
  * The semantic palette: the tones a surface uses to say *what state something
  * is in*, as opposed to indigo the brand accent, which says *this is where you
  * act*. The two are separate axes and a screen may carry both — see the
  * "Semantic palette" section of `DESIGN.md`, which reads its meanings off this
  * table rather than restating the classes.
+ *
+ * Seven tones, one table, every consumer. `StatusPill` used to hold a table of
+ * its own ten lines above this one; the two disagreed on `violet` (pill only),
+ * `sky` (badge only) and the shade of `slate`, which is why
+ * `CANDIDATE_STATUS_META` had to declare a private union to reach `violet` and
+ * so could not be handed to `Badge` (#316).
  */
-export type BadgeTone = 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'sky';
+export type BadgeTone = 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'sky' | 'violet';
 
 /**
  * Canonical class strings per tone — the source of truth `DESIGN.md` points at.
@@ -201,20 +182,44 @@ export type BadgeTone = 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'sky
  *
  * The values are literals on purpose — Tailwind scans source text, so a
  * composed `` `bg-${tone}-50` `` would generate no CSS at all.
+ *
+ * `slate` keeps `bg-*-100` where the others take `bg-*-50`, and that one is
+ * deliberate: `slate-50` is the page background, so a `slate-50` chip on a
+ * white card does not read as a chip at all. Its foreground is `700` like
+ * everything else — the `600` this table shipped with was the other half of
+ * the split, not a considered exception (#316).
  */
 export const BADGE_TONE_PARTS: Record<BadgeTone, { bg: string; fg: string; border: string }> = {
-  slate: { bg: 'bg-slate-100', fg: 'text-slate-600', border: 'border-slate-200' },
+  slate: { bg: 'bg-slate-100', fg: 'text-slate-700', border: 'border-slate-200' },
   indigo: { bg: 'bg-indigo-50', fg: 'text-indigo-700', border: 'border-indigo-200' },
   emerald: { bg: 'bg-emerald-50', fg: 'text-emerald-700', border: 'border-emerald-200' },
   amber: { bg: 'bg-amber-50', fg: 'text-amber-700', border: 'border-amber-200' },
   rose: { bg: 'bg-rose-50', fg: 'text-rose-700', border: 'border-rose-200' },
   sky: { bg: 'bg-sky-50', fg: 'text-sky-700', border: 'border-sky-200' },
+  violet: { bg: 'bg-violet-50', fg: 'text-violet-700', border: 'border-violet-200' },
 };
 
 /** All three parts of a tone, for a surface that wears the full badge look. */
 export function badgeToneClass(tone: BadgeTone): string {
   const { bg, fg, border } = BADGE_TONE_PARTS[tone];
   return `${bg} ${fg} ${border}`;
+}
+
+/** Status pill — color by group; label Vietnamese. Used in pipeline dashboards. */
+export function StatusPill({
+  status,
+  label,
+  tone = 'slate',
+}: {
+  status: string;
+  label: string;
+  tone?: BadgeTone;
+}) {
+  return (
+    <span className={`inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${badgeToneClass(tone)}`}>
+      {label}
+    </span>
+  );
 }
 
 /** Simple badge — children-driven. Use StatusPill for pipeline status with predefined labels. */
@@ -263,7 +268,7 @@ export function statusTone(status: string): BadgeTone {
 
 export const CANDIDATE_STATUS_META: Record<
   string,
-  { label: string; tone: 'slate' | 'indigo' | 'amber' | 'emerald' | 'rose' | 'violet'; labelKey: string }
+  { label: string; tone: BadgeTone; labelKey: string }
 > = {
   new: { label: 'Mới', tone: 'slate', labelKey: 'candidateNew' },
   reviewing: { label: 'Đang review', tone: 'indigo', labelKey: 'candidateReviewing' },

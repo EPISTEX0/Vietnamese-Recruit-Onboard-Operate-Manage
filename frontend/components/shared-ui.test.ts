@@ -163,25 +163,47 @@ describe('formatAuditDetails', () => {
  * string exactly, so the split stayed a refactor.
  */
 describe('BADGE_TONE_PARTS', () => {
-  it('names exactly the six tones the design system publishes', () => {
-    // Not five, not seven: `DESIGN.md` documents a meaning per tone, and a
-    // tone added here without one is a colour nobody can look up. `StatusPill`
-    // keeps a seventh (`violet`) in a table of its own — see #316.
+  it('names exactly the seven tones the design system publishes', () => {
+    // Not six, not eight: `DESIGN.md` documents a meaning per tone, and a tone
+    // added here without one is a colour nobody can look up. `violet` is the
+    // seventh — #316 folded `StatusPill`'s private table into this one rather
+    // than dropping the tone, because `interview_scheduled` has to stay
+    // distinguishable from `reviewing` (`indigo`) where the two statuses sit
+    // side by side in `recruitment/interviews`.
     expect(Object.keys(BADGE_TONE_PARTS).sort()).toEqual(
-      ['amber', 'emerald', 'indigo', 'rose', 'sky', 'slate'],
+      ['amber', 'emerald', 'indigo', 'rose', 'sky', 'slate', 'violet'],
     );
   });
 
-  it('carries the class strings the badge has always rendered', () => {
-    // Slate is the odd one and is meant to be: it tints `bg-*-100`/`text-*-600`
-    // where every other tone is `bg-*-50`/`text-*-700`, because it is the
-    // neutral and has to read as unemphatic against a white card.
-    expect(badgeToneClass('slate')).toBe('bg-slate-100 text-slate-600 border-slate-200');
+  it('carries the class strings the badge renders', () => {
+    // Slate's background is the odd one and is meant to be: `bg-*-100` where
+    // every other tone takes `bg-*-50`, because `slate-50` is the page
+    // background and a chip in it would not read as a chip on a white card.
+    //
+    // Its foreground is not an exception. This table shipped `text-slate-600`
+    // while `StatusPill`'s table said `700`; #316 settled on `700`, so `slate`
+    // now matches the other six on the axis where nothing justified a split.
+    // That is a visible change to every slate `Badge`.
+    expect(badgeToneClass('slate')).toBe('bg-slate-100 text-slate-700 border-slate-200');
     expect(badgeToneClass('indigo')).toBe('bg-indigo-50 text-indigo-700 border-indigo-200');
     expect(badgeToneClass('emerald')).toBe('bg-emerald-50 text-emerald-700 border-emerald-200');
     expect(badgeToneClass('amber')).toBe('bg-amber-50 text-amber-700 border-amber-200');
     expect(badgeToneClass('rose')).toBe('bg-rose-50 text-rose-700 border-rose-200');
     expect(badgeToneClass('sky')).toBe('bg-sky-50 text-sky-700 border-sky-200');
+    expect(badgeToneClass('violet')).toBe('bg-violet-50 text-violet-700 border-violet-200');
+  });
+
+  it('gives every tone but slate the same shape', () => {
+    // States the rule the `slate` exception is an exception *to*, so a future
+    // tone added as `bg-*-100`/`text-*-600` fails here instead of quietly
+    // becoming a second precedent.
+    for (const [tone, parts] of Object.entries(BADGE_TONE_PARTS)) {
+      if (tone === 'slate') continue;
+
+      expect(parts.bg, tone).toMatch(/-50$/);
+      expect(parts.fg, tone).toMatch(/-700$/);
+      expect(parts.border, tone).toMatch(/-200$/);
+    }
   });
 
   it('spells every part as a whole Tailwind class', () => {
