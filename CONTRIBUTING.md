@@ -85,13 +85,23 @@ Compose does **not** pick `docker-compose.dev.yml` up on its own:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-| Service   | Endpoint                              | Notes                          |
-| --------- | ------------------------------------- | ------------------------------ |
-| PostgreSQL | `localhost:5432` (`postgres/postgres`, db `vroom_hr`) | pgvector-enabled              |
-| Redis     | `localhost:6379`                      |                               |
-| MinIO     | API `localhost:9000` · Console `localhost:9001` | Object storage for CVs/KB   |
-| Backend   | `http://localhost:8000` (Swagger at `/docs`) | FastAPI                     |
-| Frontend  | `http://localhost:3000`               | Next.js                        |
+Only the backend and the frontend are published to your host. PostgreSQL, Redis and
+MinIO are attached solely to `vroom-internal-net` (`internal: true`), and Docker never
+publishes ports out of an internal network — `localhost:5432`, `:6379`, `:9000` and
+`:9001` are connection-refused even while the stack is healthy. Reach those three with
+`docker compose exec`:
+
+| Service    | How to reach it                       | Notes                          |
+| ---------- | ------------------------------------- | ------------------------------ |
+| Backend    | `http://localhost:8000` (Swagger at `/docs`) | FastAPI                 |
+| Frontend   | `http://localhost:3000`               | Next.js                        |
+| PostgreSQL | `docker compose exec postgres psql -U postgres -d vroom_hr` | pgvector-enabled; db `vroom_hr`, user `postgres`, no password needed inside the container |
+| Redis      | `docker compose exec redis redis-cli -a '<REDIS_PASSWORD>'` | Password is `REDIS_PASSWORD` from the root `.env` |
+| MinIO      | `docker compose exec minio mc ls local` | Object storage for CVs/KB; the `local` alias ships with the image |
+
+Inside the Docker network the same three are `postgres:5432`, `redis:6379` and
+`minio:9000` — those are the addresses `docker-compose.yml` hands to the backend and
+the workers, and what you should use in any container-side config.
 
 ### Backend (Python / uv)
 
@@ -104,15 +114,28 @@ stops at the first `.env` it finds walking upward.
 
 cd backend
 
-# Install dependencies and sync environment
+# Install dependencies and sync environment (host-side, no database needed)
 uv sync
-
-# Run database migrations
-uv run alembic upgrade head
-
-# Start the development server
-uv run uvicorn src.main:app --reload --port 8000
 ```
+
+Anything that talks to PostgreSQL, Redis or MinIO has to run **inside** the stack,
+because those three are not published to your host (see the table above). Migrations
+and the API server are both in that category:
+
+```bash
+# Run database migrations
+docker compose exec backend uv run alembic upgrade head
+
+# The API server is already running as the `backend` service; for hot-reload
+# on source edits, bring the stack up with the dev overrides instead:
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+Running `uv run alembic upgrade head` or `uv run uvicorn src.main:app` directly on
+your host will fail with `Connect call failed ('127.0.0.1', 5432)`: their default DSNs
+point at `localhost:5432`, and nothing listens there. If you genuinely need a host-side
+backend, publish the three services yourself first — the host-only section at the bottom
+of `.env.example` explains what that takes.
 
 **Test accounts** (local dev):
 

@@ -26,12 +26,24 @@ Repo single-context: một [`CONTEXT.md`](./CONTEXT.md) ở root, một [`docs/a
 
 ### Docker services
 
-Services chạy qua `docker compose up -d`:
+Services chạy qua `docker compose up -d`. Chỉ hai service mở ra host:
 - **Backend**: `http://localhost:8000` (Swagger: `http://localhost:8000/docs`)
 - **Frontend**: `http://localhost:3000`
-- **PostgreSQL**: `localhost:5432`, user `postgres`, pass `postgres`, db `vroom_hr`
-- **Redis**: `localhost:6379`
-- **MinIO**: `http://localhost:9000` (console: `http://localhost:9001`)
+
+PostgreSQL, Redis và MinIO **không** với tới được từ host. Ba service này chỉ nối
+`vroom-internal-net` (`internal: true`) và Docker không publish port từ mạng đó ra
+ngoài — `localhost:5432` / `:6379` / `:9000` / `:9001` đều bị connection refused,
+kể cả khi stack đang chạy khoẻ. Vào bằng `docker compose exec`:
+
+- **PostgreSQL** — db `vroom_hr`, pgvector; trong container không cần mật khẩu:
+  `docker compose exec postgres psql -U postgres -d vroom_hr`
+- **Redis** — cache & ARQ broker; mật khẩu là `REDIS_PASSWORD` trong `.env` gốc:
+  `docker compose exec redis redis-cli -a '<REDIS_PASSWORD>'`
+- **MinIO** — object storage cho CV/KB; alias `local` có sẵn trong container:
+  `docker compose exec minio mc ls local`
+
+Trong mạng Docker, ba service này là `postgres:5432`, `redis:6379`, `minio:9000` —
+đó là các địa chỉ `docker-compose.yml` cấp cho backend và các worker.
 
 ### Tài khoản test
 
@@ -47,7 +59,7 @@ from src.modules.identity.infrastructure.password_utils import hash_password
 print(hash_password('NEW_PASSWORD'))
 "
 # Copy hash và chạy:
-docker exec vroom-postgres psql -U postgres -d vroom_hr \
+docker compose exec postgres psql -U postgres -d vroom_hr \
   -c "UPDATE users SET password_hash = 'PASTE_HASH' WHERE email = 'USER_EMAIL';"
 ```
 
@@ -56,13 +68,15 @@ docker exec vroom-postgres psql -U postgres -d vroom_hr \
 Xoá toàn bộ dữ liệu và chạy lại migrations từ đầu:
 
 ```bash
-docker exec vroom-postgres psql -U postgres \
+docker compose exec postgres psql -U postgres \
   -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'vroom_hr' AND pid <> pg_backend_pid();"
 
-docker exec vroom-postgres psql -U postgres -c "DROP DATABASE vroom_hr;"
-docker exec vroom-postgres psql -U postgres -c "CREATE DATABASE vroom_hr;"
+docker compose exec postgres psql -U postgres -c "DROP DATABASE vroom_hr;"
+docker compose exec postgres psql -U postgres -c "CREATE DATABASE vroom_hr;"
 
-cd backend && uv run alembic upgrade head
+# Alembic phải chạy TRONG container: từ host, `cd backend && uv run alembic`
+# dùng URL mặc định `localhost:5432` và sẽ chết vì connection refused.
+docker compose exec backend uv run alembic upgrade head
 ```
 
 ### Test cases
