@@ -39,8 +39,15 @@ kể cả khi stack đang chạy khoẻ. Vào bằng `docker compose exec`:
   `docker compose exec postgres psql -U postgres -d vroom_hr`
 - **Redis** — cache & ARQ broker; mật khẩu là `REDIS_PASSWORD` trong `.env` gốc:
   `docker compose exec redis redis-cli -a '<REDIS_PASSWORD>'`
-- **MinIO** — object storage cho CV/KB; alias `local` có sẵn trong container:
-  `docker compose exec minio mc ls local`
+- **MinIO** — object storage cho CV/KB:
+  `docker compose exec minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc ls local'`
+
+  Đừng rút gọn về `mc ls local` trần. Container **có** alias `local` với đúng root
+  credential, nhưng `mc` chỉ ghi `/tmp/.mc/config.json` bất đồng bộ khoảng một phút
+  sau khi container start. Trước mốc đó lệnh trần chết với `Access Denied`, sau mốc
+  đó lại exit 0 — nghĩa là nó hỏng đúng lúc hay chạy nhất (vừa `up -d` xong, kiểm
+  ngay) rồi tự "khỏi" khi thử lại lúc rảnh, nên rất dễ tưởng câu `mc alias set` là
+  thừa. Set alias tường minh thì không phụ thuộc thời điểm.
 
 Trong mạng Docker, ba service này là `postgres:5432`, `redis:6379`, `minio:9000` —
 đó là các địa chỉ `docker-compose.yml` cấp cho backend và các worker.

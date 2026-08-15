@@ -97,7 +97,16 @@ publishes ports out of an internal network — `localhost:5432`, `:6379`, `:9000
 | Frontend   | `http://localhost:3000`               | Next.js                        |
 | PostgreSQL | `docker compose exec postgres psql -U postgres -d vroom_hr` | pgvector-enabled; db `vroom_hr`, user `postgres`, no password needed inside the container |
 | Redis      | `docker compose exec redis redis-cli -a '<REDIS_PASSWORD>'` | Password is `REDIS_PASSWORD` from the root `.env` |
-| MinIO      | `docker compose exec minio mc ls local` | Object storage for CVs/KB; the `local` alias ships with the image |
+| MinIO      | `docker compose exec minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc ls local'` | Object storage for CVs/KB; set the alias explicitly — see the note below |
+
+**Why the MinIO command sets an alias instead of just running `mc ls local`.** The
+container does ship a `local` alias with the correct root credentials — but `mc` only
+writes `/tmp/.mc/config.json` asynchronously, roughly a minute after the container
+starts. Run the bare `mc ls local` before that and it dies with `Access Denied`; run it
+later and it exits 0. So the short form is a race, and it loses exactly when you are
+most likely to try it — right after `docker compose up -d` — then appears to work when
+you retry at leisure. That is what makes it tempting to shorten the command back; don't.
+Setting the alias explicitly is time-independent.
 
 Inside the Docker network the same three are `postgres:5432`, `redis:6379` and
 `minio:9000` — those are the addresses `docker-compose.yml` hands to the backend and
