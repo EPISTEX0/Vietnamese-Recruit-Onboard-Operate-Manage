@@ -10,7 +10,7 @@ import { listDepartments } from '@/lib/api/departments';
 import { listPositions } from '@/lib/api/positions';
 import type { Employee, EmployeeListResponse, Department, Position } from '@/lib/api/types';
 import {
-  PageHeader, Card, LoadingRows, EmptyState, ErrorAlert, Badge, statusTone,
+  PageHeader, Card, LoadingRows, EmptyState, ErrorAlert, Badge,
   ButtonPrimary, ButtonGhost, Field, TextInput, Select,
 } from '@/components/shared-ui';
 

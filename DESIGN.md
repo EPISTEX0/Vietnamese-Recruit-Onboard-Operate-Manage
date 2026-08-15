@@ -98,12 +98,12 @@ Rút từ call site đang có, không tự đặt. Cột cuối là chứng cứ
 
 | Tone | Nghĩa | Call site |
 |---|---|---|
-| `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `statusTone` (`active`/`approved`/`published`/`completed`/`healthy`, `shared-ui.tsx:243`), `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
-| `amber` | Chưa xong, đang chờ ai đó làm gì đó — cảnh báo chứ chưa hỏng | `statusTone` (`submitted`/`draft`/`checked_in`), `INBOX_STATUS_META.needs_classification`, `PROC_STATUS_META.needs_review`, `CONFLICT_STATUS_META.pending`, khối bắt buộc xác nhận chính sách dữ liệu ở `settings/ai/page.tsx:280` |
-| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `statusTone` (`inactive`/`rejected`/`cancelled`/`unhealthy`), `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `ButtonDanger` (`shared-ui.tsx:584`) |
+| `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
+| `amber` | Chưa xong, đang chờ ai đó làm gì đó — cảnh báo chứ chưa hỏng | `INBOX_STATUS_META.needs_classification`, `PROC_STATUS_META.needs_review`, `CONFLICT_STATUS_META.pending`, khối bắt buộc xác nhận chính sách dữ liệu ở `settings/ai/page.tsx:280` |
+| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `ButtonDanger` (`shared-ui.tsx:561`) |
 | `indigo` | Đang chạy theo luồng chính, chưa mang tin tốt hay xấu | `CANDIDATE_STATUS_META.reviewing`, `INBOX_STATUS_META.ready_for_review`, `PROC_STATUS_META.ocr_processing`/`llm_parsing`, `onboarding/page.tsx:61` (`in_progress`) |
-| `slate` | Không có trạng thái đáng tô màu — chưa bắt đầu, hoặc đã khép lại và không cần chú ý | `statusTone` (nhánh `default`), `CANDIDATE_STATUS_META.new`/`archived`, `INBOX_STATUS_META.resolved`, `PROC_STATUS_META.skipped`/`dismissed` |
-| `violet` | Đúng **một** việc: bước "đã lên lịch phỏng vấn" của pipeline tuyển dụng. Không phải một nghĩa tổng quát — xem dưới. | `CANDIDATE_STATUS_META.interview_scheduled` (`shared-ui.tsx:275`) |
+| `slate` | Không có trạng thái đáng tô màu — chưa bắt đầu, hoặc đã khép lại và không cần chú ý | `CANDIDATE_STATUS_META.new`/`archived`, `INBOX_STATUS_META.resolved`, `PROC_STATUS_META.skipped`/`dismissed` |
+| `violet` | Đúng **một** việc: bước "đã lên lịch phỏng vấn" của pipeline tuyển dụng. Không phải một nghĩa tổng quát — xem dưới. | `CANDIDATE_STATUS_META.interview_scheduled` (`shared-ui.tsx:252`) |
 | `sky` | **Chưa có nghĩa.** Xem dưới. | — |
 
 **`sky` không rút được nghĩa nhất quán.** Ba cách dùng khác hẳn nhau, nên ở đây ghi đúng như vậy thay vì
@@ -132,10 +132,10 @@ chính tắc mà vẫn chưa có nghĩa — ghi đúng như vậy có ích hơn 
 Không liên quan tới hai bảng tone mà #316 vừa hợp nhất — đây là chuyện các status map gán tone khác
 nhau cho cùng một status. Ghi lại vì đây là dữ kiện, không phải luật — ai chạm vào status map thì cần biết:
 
-- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:295`) nhưng `amber` trong `statusTone` và ở
+- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:272`) nhưng `amber` ở
   `payroll/payslips/page.tsx:369`. Hai cách đọc đều có lý — "chưa phát hành nên chưa cần chú ý" so với
   "đang chờ bạn phát hành".
-- `cancelled` là `rose` trong `statusTone` và `JOB_STATUS_META` nhưng `slate` ở
+- `cancelled` là `rose` trong `JOB_STATUS_META` nhưng `slate` ở
   `requests/page.tsx:361` và `employee/requests/page.tsx:328`.
 
 Chưa chốt hướng nào đúng; đừng đọc bảng trên như thể đã chốt.

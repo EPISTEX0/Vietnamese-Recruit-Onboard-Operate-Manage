@@ -28,7 +28,7 @@ import type {
 import {
   PageHeader, Card, SectionTitle, Loading, LoadingRows, EmptyState,
   Badge, ButtonPrimary, ButtonGhost, ButtonDanger, TextInput, Select,
-  Field, Modal, ErrorBanner, formatDateTime, statusTone,
+  Field, Modal, ErrorBanner, formatDateTime,
 } from '@/components/shared-ui';
 
 // ---------------------------------------------------------------------------

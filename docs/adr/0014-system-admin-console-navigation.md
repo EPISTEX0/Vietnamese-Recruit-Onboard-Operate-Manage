@@ -16,7 +16,7 @@ Lý do trực tiếp: trên deployment vừa setup xong, console nhìn như mộ
 
 ## Considered Options
 
-- **Giữ tab, chỉ restyle cho giống Dashboard HR**: bị loại. Nó không chạm vào nguyên nhân — sidebar vẫn một item và vẫn trống. Phần restyle vốn đã đi kèm miễn phí khi dùng `PageHeader` sẵn có trong `components/shared-ui.tsx:444`, không cần đánh đổi gì để lấy.
+- **Giữ tab, chỉ restyle cho giống Dashboard HR**: bị loại. Nó không chạm vào nguyên nhân — sidebar vẫn một item và vẫn trống. Phần restyle vốn đã đi kèm miễn phí khi dùng `PageHeader` sẵn có trong `components/shared-ui.tsx`, không cần đánh đổi gì để lấy.
 
 - **Chuyển tab sang sidebar nhưng vẫn giữ state, URL đứng yên ở `/settings`**: bị loại. Sidebar mà không đổi URL là cái bẫy: người dùng bookmark "Nhật ký hoạt động", quay lại thấy "Cấu hình AI".
 
