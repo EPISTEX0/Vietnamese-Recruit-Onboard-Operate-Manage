@@ -109,6 +109,12 @@ def app(
     app.dependency_overrides[get_rate_limiter] = lambda: rate_limiter
     session = MagicMock()
     session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+    # Writing endpoints commit before returning (#320), so the double has to
+    # honour that await the same way it already does for ``execute``. This
+    # stands in for a session; it asserts nothing about the commit -- that is
+    # test_router_commit.py's job, which is why it calls handlers directly
+    # instead of overriding this dependency away.
+    session.commit = AsyncMock()
     app.dependency_overrides[get_session] = lambda: session
 
     return app

@@ -126,7 +126,18 @@ chưa bền, và một `commit()` hỏng ở teardown không còn đường nào
 Nên teardown là **lưới đỡ**, không phải ranh giới transaction. Endpoint ghi phải tự `await
 session.commit()` trước khi handler trả về — đặt sau lời gọi audit, để bản ghi audit cũng bền trước khi
 response đi. Đa số use case đã commit tường minh ở tầng application/infrastructure; nơi nào chưa thì
-commit ở handler. `identity/api/admin_router.py` theo quy ước này cho cả 25 endpoint ghi của nó.
+commit ở handler. `identity/api/admin_router.py` theo quy ước này cho cả 25 endpoint ghi của nó,
+`identity/api/router.py` cho cả 12 endpoint ghi của nó (#320).
+
+Phân loại "có ghi hay không" phải truy tới tầng thật sự chạm DB, **không** suy theo HTTP method:
+`GET /api/auth/callback` hoàn tất OAuth consent và `GET /api/auth/organization-google-connection`
+thu hồi legacy grant, nên guard chống-bỏ-sót phải phân hoạch mọi route chứ không lọc
+`POST/PUT/PATCH/DELETE`. Ngược lại `POST /api/auth/refresh` chỉ đọc rồi ký JWT, không cần commit.
+Endpoint mà tầng application đã commit **vô điều kiện** (`AuthService.setup_first_run`,
+`PasswordResetService.reset_password`) thì **không** thêm commit thứ hai ở handler. Commit **có điều
+kiện** thì ngược lại: `PasswordResetService.create_reset_token` chỉ commit trên nhánh gửi được email,
+nhánh gửi hỏng trả về sớm với các row đã flush — nên `/forgot-password` vẫn commit ở handler để cả hai
+nhánh đều bền, chấp nhận commit thứ hai (không có gì để ghi) trên nhánh thành công.
 
 Nếu audit đi qua `log_audit` (`recruitment`, nuốt lỗi theo R17.5) thì **không** viết `commit()` trần —
 dùng dạng `InterviewSchedulerService._commit_audit()`, vì một flush audit hỏng để lại session cần

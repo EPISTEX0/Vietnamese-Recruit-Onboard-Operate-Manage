@@ -243,6 +243,7 @@ async def save_google_connection_config(
     current_user: HROnlyDep,
     manager: OAuthConfigManagerDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
     await manager.update_config(
         client_id=body.client_id,
@@ -251,6 +252,7 @@ async def save_google_connection_config(
         admin=current_user,
     )
     res = await connection_service.get_status()
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -258,8 +260,14 @@ async def save_google_connection_config(
 async def authorize_google_connection(
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
+    # A GET that writes: ``initiate`` persists the OAuth state hash and expiry
+    # on the singleton, and the browser is sent to Google the moment this
+    # returns. If that state is not durable before the redirect, the callback
+    # comes back with a state no row can match.
     res = await connection_service.initiate(current_user)
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -267,8 +275,14 @@ async def authorize_google_connection(
 async def get_google_connection(
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
+    # Reads, except when ``_reconcile_legacy_grants`` finds legacy HR-owned
+    # grants: it then revokes them, clears the sync cursor and flags the
+    # connection. Commits unconditionally -- an empty transaction is free, and
+    # branching here would only make the durable path easy to lose.
     res = await connection_service.get_status()
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -276,8 +290,10 @@ async def get_google_connection(
 async def reconnect_google_connection(
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.initiate(current_user)
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -287,9 +303,14 @@ async def callback_google_connection_redirect(
     state: str,
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
     """Complete Organization Google consent using the env-configured redirect URI."""
+    # A GET that writes: consent completion consumes the OAuth state, clears
+    # the sync cursor, upserts the credentials and audits. The 303 sends the
+    # browser straight to a page that reads this connection back.
     await connection_service.callback(hr=current_user, state=state, code=code)
+    await session.commit()
     frontend_url = get_settings().frontend_url.rstrip("/")
     return RedirectResponse(f"{frontend_url}/gmail?google_connection=connected", status_code=303)
 
@@ -298,8 +319,10 @@ async def callback_google_connection_redirect(
 async def disconnect_google_connection(
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.disconnect(current_user)
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -308,8 +331,10 @@ async def callback_google_connection(
     body: GoogleWorkspaceCallbackRequest,
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> GoogleWorkspaceConnectionResponse:
     res = await connection_service.callback(hr=current_user, state=body.state, code=body.code)
+    await session.commit()
     return GoogleWorkspaceConnectionResponse(**res.__dict__)
 
 
@@ -382,12 +407,14 @@ async def save_selected_calendar(
     body: SelectCalendarRequest,
     current_user: HROnlyDep,
     connection_service: OrganizationGoogleConnectionService = Depends(_get_connection_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """Save the selected calendar ID for interview scheduling."""
     await connection_service.update_selected_calendar(
         calendar_id=body.calendar_id,
         hr=current_user,
     )
+    await session.commit()
 
 
 @router.post("/login", response_model=AuthSessionResponse)
@@ -396,6 +423,7 @@ async def local_login(
     body: AuthLoginRequest,
     auth_service: AuthServiceDep,
     rate_limiter: RateLimiterDep,
+    session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     """Local email/password login."""
     client_ip = request.client.host if request.client else "unknown"
@@ -404,6 +432,10 @@ async def local_login(
         raise RateLimitExceededError()
 
     result = await auth_service.login(body.email, body.password)
+    # The refresh token below is about to be set as a cookie. Commit before
+    # building that response, or the browser leaves holding a token whose row
+    # a failing teardown commit would erase.
+    await session.commit()
     response = JSONResponse(
         content={
             "user": UserResponse(
@@ -444,6 +476,7 @@ async def forgot_password(
     password_reset_service: PasswordResetServiceDep,
     rate_limiter: RateLimiterDep,
     settings: AuthSettingsDep,
+    session: AsyncSession = Depends(get_db_session),
 ) -> ForgotPasswordResponse:
     """Send a password reset email if the account exists.
 
@@ -481,6 +514,11 @@ async def forgot_password(
         raise RateLimitExceededError()
 
     sent = await password_reset_service.create_reset_token(body.email, client_ip)
+    # ``create_reset_token`` commits itself only on the path where the email
+    # went out; the send-failure path returns early with the token rows already
+    # flushed. Committing here covers both, so the invalidation of the user's
+    # previous tokens is durable either way.
+    await session.commit()
     if not sent:
         # No account matched, or email delivery failed — the caller must
         # not be able to tell which (anti-enumeration). The send failure
@@ -522,11 +560,16 @@ async def change_password(
     body: ChangePasswordRequest,
     current_user: CurrentUserDep,
     auth_service: AuthServiceDep,
+    session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     """Change current password and refresh session."""
     result = await auth_service.change_password(
         current_user, body.current_password, body.new_password
     )
+    # Same reasoning as ``local_login``: the new password hash, the revoked old
+    # refresh tokens and the freshly issued one all have to be durable before
+    # the replacement session cookie goes out.
+    await session.commit()
     response = JSONResponse(
         content={
             "user": UserResponse(
@@ -581,11 +624,16 @@ async def refresh(
 async def logout(
     request: Request,
     auth_service: AuthServiceDep,
+    session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     """Revoke refresh token and clear session cookies."""
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
         await auth_service.logout(refresh_token)
+    # The revocation is the whole point of logging out: the cookies are cleared
+    # below regardless, so a lost revocation leaves a live token nobody holds a
+    # record of having revoked.
+    await session.commit()
     response = JSONResponse(content={"message": "Logged out"})
     _clear_auth_cookies(response)
     return response
