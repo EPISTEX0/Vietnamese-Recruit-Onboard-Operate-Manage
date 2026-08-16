@@ -133,7 +133,7 @@ export default function CandidateDetailPage() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <StatusPill status={candidate.status} label={tc(meta.labelKey)} tone={meta.tone} />
+              <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />
               <span className="text-[11px] font-mono text-slate-400">confidence {confidencePct(candidate.confidence_score)}</span>
             </div>
             <h1 className="text-xl font-bold text-slate-900">{candidate.name}</h1>

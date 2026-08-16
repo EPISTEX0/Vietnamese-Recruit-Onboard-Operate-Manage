@@ -30,6 +30,7 @@ import {
   Badge, ButtonPrimary, ButtonGhost, ButtonDanger, TextInput, Select,
   Field, Modal, ErrorBanner, formatDateTime,
 } from '@/components/shared-ui';
+import type { BadgeTone } from '@/components/shared-ui';
 
 // ---------------------------------------------------------------------------
 // Helpers (no translations needed)
@@ -107,18 +108,6 @@ export default function KnowledgeBasePage() {
     { value: 'all', label: t('allCategories') },
     ...CATEGORIES,
   ];
-
-  const STATUS_META: Record<DocumentStatus, { label: string; tone: 'slate' | 'amber' | 'emerald' | 'rose' | 'sky' }> = {
-    pending: { label: t('statusPending'), tone: 'slate' },
-    processing: { label: t('statusProcessing'), tone: 'sky' },
-    ready: { label: t('statusReady'), tone: 'emerald' },
-    error: { label: t('statusError'), tone: 'rose' },
-  };
-
-  function StatusBadge({ status }: { status: DocumentStatus }) {
-    const meta = STATUS_META[status] ?? { label: status, tone: 'slate' as const };
-    return <Badge tone={meta.tone}>{meta.label}</Badge>;
-  }
 
   // ── Data ──
 
@@ -505,15 +494,32 @@ function DocumentRow({
 // Status badge helper
 // ---------------------------------------------------------------------------
 
+const DOCUMENT_STATUS_META: Record<DocumentStatus, { labelKey: string; tone: BadgeTone }> = {
+  pending: { labelKey: 'statusPending', tone: 'slate' },
+  processing: { labelKey: 'statusProcessing', tone: 'sky' },
+  ready: { labelKey: 'statusReady', tone: 'emerald' },
+  error: { labelKey: 'statusError', tone: 'rose' },
+};
+
+/**
+ * The page's only status badge, and it reads its own translations.
+ *
+ * There used to be a second one nested inside `KnowledgeBasePage`, closed over
+ * that component's `t`. It was dead: both render sites — `DocumentRow` and
+ * `DetailModal` — are top-level siblings of the page rather than nested in it,
+ * so neither could see it, and both landed here on the hardcoded English
+ * labels this used to hold (#318). Calling `useTranslations` here rather than
+ * threading `t` down is what makes the nested copy unnecessary instead of
+ * merely unused: there is nothing left for a caller to forget to pass.
+ *
+ * The fallback is for a status the API adds before this map does — the row
+ * casts `doc.status` in from the wire, so the union is a claim about the
+ * server, not a guarantee. Showing the raw value beats showing nothing.
+ */
 function StatusBadge({ status }: { status: DocumentStatus }) {
-  const STATUS_META: Record<DocumentStatus, { label: string; tone: 'slate' | 'amber' | 'emerald' | 'rose' | 'sky' }> = {
-    pending: { label: 'Pending', tone: 'slate' },
-    processing: { label: 'Processing', tone: 'sky' },
-    ready: { label: 'Ready', tone: 'emerald' },
-    error: { label: 'Error', tone: 'rose' },
-  };
-  const meta = STATUS_META[status] ?? { label: status, tone: 'slate' as const };
-  return <Badge tone={meta.tone}>{meta.label}</Badge>;
+  const t = useTranslations('knowledgeBase');
+  const meta = DOCUMENT_STATUS_META[status];
+  return <Badge tone={meta?.tone ?? 'slate'}>{meta ? t(meta.labelKey) : status}</Badge>;
 }
 
 // ---------------------------------------------------------------------------

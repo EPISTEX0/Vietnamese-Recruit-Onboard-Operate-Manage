@@ -132,7 +132,7 @@ function ReviewCard({
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <StatusPill status={item.processing_status} label={meta.label} tone={meta.tone} />
+            <StatusPill label={meta.label} tone={meta.tone} />
             {item.confidence_score != null && (
               <span className="text-[10px] font-mono bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">confidence {confidencePct(item.confidence_score)}</span>
             )}

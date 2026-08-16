@@ -140,7 +140,7 @@ export default function InterviewsPage() {
                   <div className="min-w-0">
                     <p className="text-xs text-slate-500">{t('conflictItem', { id: c.id.slice(0, 8), ivId: c.interview_id.slice(0, 8), candId: c.candidate_id.slice(0, 8) })}</p>
                     <div className="flex gap-1.5 mt-1">
-                      {(() => { const meta = CONFLICT_STATUS_META[c.status] ?? { label: c.status, tone: "rose" as const, labelKey: c.status }; return <StatusPill status={c.status} label={tc(meta.labelKey)} tone={meta.tone} />; })()}
+                      {(() => { const meta = CONFLICT_STATUS_META[c.status] ?? { label: c.status, tone: "rose" as const, labelKey: c.status }; return <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />; })()}
                       {c.conflict_details && typeof c.conflict_details === 'object' && (
                         <span className="text-[10px] text-slate-400">{formatAuditDetails(c.conflict_details).slice(0, 80)}</span>
                       )}
@@ -193,7 +193,7 @@ export default function InterviewsPage() {
                   <p className="text-xs text-slate-500 truncate">{cand.email}{cand.job_opening_title ? ` · ${cand.job_opening_title}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <StatusPill status={cand.status} label={cand.status === 'interview_scheduled' ? t('scheduled') : t('reviewing')} tone={cand.status === 'interview_scheduled' ? 'violet' : 'indigo'} />
+                  <StatusPill label={cand.status === 'interview_scheduled' ? t('scheduled') : t('reviewing')} tone={cand.status === 'interview_scheduled' ? 'violet' : 'indigo'} />
                   <button onClick={() => router.push(`/recruitment/candidates/${cand.id}`)} className="text-xs px-2.5 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled={!selectedCalendarId}>
                     {selectedCalendarId ? t('openProfile') : t('needCalendar')}
                   </button>

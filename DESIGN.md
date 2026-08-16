@@ -100,18 +100,18 @@ Rút từ call site đang có, không tự đặt. Cột cuối là chứng cứ
 |---|---|---|
 | `emerald` | Xong, đạt, đang hoạt động — kết quả tốt đã chốt | `JOB_STATUS_META.open`, `CONFLICT_STATUS_META.resolved`, hộp thành công ở `forgot-password/page.tsx:76`, `change-password/page.tsx:104` |
 | `amber` | Chưa xong, đang chờ ai đó làm gì đó — cảnh báo chứ chưa hỏng | `INBOX_STATUS_META.needs_classification`, `PROC_STATUS_META.needs_review`, `CONFLICT_STATUS_META.pending`, khối bắt buộc xác nhận chính sách dữ liệu ở `settings/ai/page.tsx:280` |
-| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `ButtonDanger` (`shared-ui.tsx:561`) |
+| `rose` | Hỏng, thất bại, bị từ chối — và hành động phá huỷ | `PROC_STATUS_META.failed`, mọi hộp lỗi form (`login/page.tsx:118`), `ButtonDanger` (`shared-ui.tsx:571`) |
 | `indigo` | Đang chạy theo luồng chính, chưa mang tin tốt hay xấu | `CANDIDATE_STATUS_META.reviewing`, `INBOX_STATUS_META.ready_for_review`, `PROC_STATUS_META.ocr_processing`/`llm_parsing`, `onboarding/page.tsx:61` (`in_progress`) |
 | `slate` | Không có trạng thái đáng tô màu — chưa bắt đầu, hoặc đã khép lại và không cần chú ý | `CANDIDATE_STATUS_META.new`/`archived`, `INBOX_STATUS_META.resolved`, `PROC_STATUS_META.skipped`/`dismissed` |
-| `violet` | Đúng **một** việc: bước "đã lên lịch phỏng vấn" của pipeline tuyển dụng. Không phải một nghĩa tổng quát — xem dưới. | `CANDIDATE_STATUS_META.interview_scheduled` (`shared-ui.tsx:252`) |
+| `violet` | Đúng **một** việc: bước "đã lên lịch phỏng vấn" của pipeline tuyển dụng. Không phải một nghĩa tổng quát — xem dưới. | `CANDIDATE_STATUS_META.interview_scheduled` (`shared-ui.tsx:262`) |
 | `sky` | **Chưa có nghĩa.** Xem dưới. | — |
 
 **`sky` không rút được nghĩa nhất quán.** Ba cách dùng khác hẳn nhau, nên ở đây ghi đúng như vậy thay vì
 bịa một dòng cho đủ bảng:
 
-- `knowledge-base/page.tsx:113` và `:509` — `processing`, tức "đang xử lý". Nhưng cùng ý đó,
+- `knowledge-base/page.tsx:499` — `processing`, tức "đang xử lý". Nhưng cùng ý đó,
   `gmail/historical-import.tsx:295` dùng `amber` và `recruitment/review/page.tsx:15` dùng `indigo`.
-  (Hai dòng vì file có hai `StatusBadge` trùng nhau — xem #318.)
+  (Trước #318 chỗ này là hai dòng, vì file có hai `StatusBadge` trùng nhau.)
 - `requests/page.tsx:240` và `employee/requests/page.tsx:268` — phân biệt `leave` với `overtime`. Đây là
   **phân loại**, không phải trạng thái; cùng cấu trúc với việc dùng indigo cho nhánh còn lại.
 - `settings/page.tsx` thẻ Tài khoản — thuần trang trí, để bốn thẻ trong hàng khác màu nhau.
@@ -132,7 +132,7 @@ chính tắc mà vẫn chưa có nghĩa — ghi đúng như vậy có ích hơn 
 Không liên quan tới hai bảng tone mà #316 vừa hợp nhất — đây là chuyện các status map gán tone khác
 nhau cho cùng một status. Ghi lại vì đây là dữ kiện, không phải luật — ai chạm vào status map thì cần biết:
 
-- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:272`) nhưng `amber` ở
+- `draft` là `slate` trong `JOB_STATUS_META` (`shared-ui.tsx:282`) nhưng `amber` ở
   `payroll/payslips/page.tsx:369`. Hai cách đọc đều có lý — "chưa phát hành nên chưa cần chú ý" so với
   "đang chờ bạn phát hành".
 - `cancelled` là `rose` trong `JOB_STATUS_META` nhưng `slate` ở

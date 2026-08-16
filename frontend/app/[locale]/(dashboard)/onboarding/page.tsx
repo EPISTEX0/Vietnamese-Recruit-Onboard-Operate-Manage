@@ -130,7 +130,7 @@ function ProcessRow({
         <div className="mt-0.5 text-slate-400">{expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <StatusPill status={proc.status} label={isComplete ? t('processComplete') : t('processActive')} tone={isComplete ? 'emerald' : 'indigo'} />
+            <StatusPill label={isComplete ? t('processComplete') : t('processActive')} tone={isComplete ? 'emerald' : 'indigo'} />
             <span className="text-[11px] font-mono text-slate-400">{t('taskProgress', { done: proc.completed_count, total: proc.total_count })}</span>
             {proc.employee_code && <span className="text-[10px] font-mono text-slate-400">{proc.employee_code}</span>}
           </div>

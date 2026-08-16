@@ -135,7 +135,7 @@ export default function JobOpeningsPage() {
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <StatusPill status={job.status} label={tc(meta.labelKey)} tone={meta.tone} />
+                          <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />
                           <span className="text-[11px] font-mono text-slate-400">{job.position_name}</span>
                         </div>
                         <p className="font-semibold text-sm text-slate-900">{job.title}</p>

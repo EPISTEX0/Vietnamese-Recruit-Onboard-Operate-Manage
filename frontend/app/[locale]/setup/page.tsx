@@ -206,7 +206,7 @@ export default function SetupPage() {
         )}
 
         {serverError && (
-          <div id="setup-error-msg" className="p-3 mb-6 bg-rose-50 border border-rose-250 text-rose-600 rounded-xl text-sm flex items-start gap-2">
+          <div id="setup-error-msg" className="p-3 mb-6 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{serverError}</span>
           </div>
@@ -356,7 +356,7 @@ export default function SetupPage() {
               </p>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-250 space-y-3 font-mono text-sm">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 font-mono text-sm">
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <span className="text-slate-500">TỔ CHỨC:</span>
                 <span className="text-indigo-600 font-bold">{values.organization_name}</span>
