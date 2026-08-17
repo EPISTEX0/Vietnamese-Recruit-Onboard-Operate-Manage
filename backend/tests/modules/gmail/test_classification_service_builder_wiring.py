@@ -272,9 +272,11 @@ async def test_email_sync_service_classify_new_emails_creates_a_recruitment_inbo
     email = await _seed_email(session, seeded.user.id, "sync")
     email_repo = EmailRepository(session)
     sync_service = EmailSyncService(
+        session=session,
         gmail_adapter=MagicMock(),
         email_repo=email_repo,
         sync_cursor_repo=MagicMock(),
+        connection_repo=MagicMock(),
         crypto=MagicMock(),
         audit_logger=AuditLogger(session, settings),
         settings=settings,

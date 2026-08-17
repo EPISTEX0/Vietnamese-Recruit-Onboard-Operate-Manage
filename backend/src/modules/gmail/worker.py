@@ -171,9 +171,11 @@ async def poll_gmail_emails(ctx: dict[str, Any]) -> None:
             audit_logger = AuditLogger(session, gmail_settings)
 
             email_sync_service = EmailSyncService(
+                session=session,
                 gmail_adapter=gmail_adapter,
                 email_repo=email_repo,
                 sync_cursor_repo=sync_cursor_repo,
+                connection_repo=connection_repo,
                 crypto=crypto,
                 audit_logger=audit_logger,
                 settings=gmail_settings,

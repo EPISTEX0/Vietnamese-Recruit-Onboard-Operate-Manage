@@ -245,6 +245,34 @@ class EmailRepository:
         result = await self.session.execute(statement)
         return result.scalar_one()
 
+    async def get_unprocessed_by_gmail_ids(
+        self, user_id: UUID, gmail_message_ids: list[str]
+    ) -> list[EmailMessage]:
+        """Retrieve still-unprocessed email messages for a user by Gmail message ID.
+
+        Re-queries by ID after a write to get session-attached instances, since
+        ``batch_upsert()`` uses Core INSERT and returns transient objects that
+        cannot be handed to downstream ORM operations (e.g. classification).
+
+        Args:
+            user_id: The UUID of the user who owns the emails.
+            gmail_message_ids: Gmail message IDs to look up.
+
+        Returns:
+            EmailMessage entities still in "unprocessed" status.
+        """
+        if not gmail_message_ids:
+            return []
+
+        statement = (
+            select(EmailMessage)
+            .where(EmailMessage.user_id == user_id)
+            .where(EmailMessage.gmail_message_id.in_(gmail_message_ids))  # type: ignore[attr-defined]
+            .where(EmailMessage.processing_status == "unprocessed")
+        )
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
     async def get_failed_messages(
         self, user_id: UUID, permanent_only: bool = False
     ) -> list[EmailMessage]:

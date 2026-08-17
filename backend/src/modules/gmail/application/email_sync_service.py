@@ -19,6 +19,7 @@ from uuid import UUID
 
 import httpx
 import redis.asyncio as redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.gmail.domain.entities import EmailMessage, SyncCursor
 from src.modules.gmail.domain.exceptions import (
@@ -39,10 +40,9 @@ if TYPE_CHECKING:
     from src.modules.gmail.infrastructure.sync_cursor_repository import (
         SyncCursorRepository,
     )
-
-from src.modules.identity.infrastructure.connection_state_repository import (
-    OrganizationGoogleConnectionRepository,
-)
+    from src.modules.identity.infrastructure.connection_state_repository import (
+        OrganizationGoogleConnectionRepository,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -55,49 +55,55 @@ class EmailSyncService:
     token refresh on 401, partial failure handling, and manual sync rate limiting.
 
     Args:
+        session: Async database session, threaded to collaborators built
+            outside the constructor (the classification service factory,
+            the re-query in ``_classify_new_emails``).
         gmail_adapter: Gmail API adapter for fetching messages.
         email_repo: Repository for persisting email messages.
         sync_cursor_repo: Repository for sync cursor management.
+        connection_repo: Repository for the singleton Organization Google
+            Connection.
         crypto: AES-256-GCM encryption utilities for token decryption.
         audit_logger: Structured audit logger for operation tracking.
         settings: Gmail module configuration.
         redis_client: Async Redis client for manual sync rate limiting.
         client_id: Google OAuth2 client ID for token refresh.
         client_secret: Google OAuth2 client secret for token refresh.
-        connection_repo: Repository for the singleton Organization Google
-            Connection. If not provided it is constructed from the
-            email_repo session at runtime.
     """
 
     def __init__(
         self,
+        session: AsyncSession,
         gmail_adapter: GmailAdapter,
         email_repo: EmailRepository,
         sync_cursor_repo: SyncCursorRepository,
+        connection_repo: OrganizationGoogleConnectionRepository,
         crypto: CryptoUtils,
         audit_logger: AuditLogger,
         settings: GmailSettings,
         redis_client: redis.Redis,
         client_id: str,
         client_secret: str,
-        connection_repo: OrganizationGoogleConnectionRepository | None = None,
     ) -> None:
         """Initialize EmailSyncService with dependencies.
 
         Args:
+            session: Async database session, threaded to collaborators built
+                outside the constructor (the classification service factory,
+                the re-query in ``_classify_new_emails``).
             gmail_adapter: Gmail API adapter for fetching messages.
             email_repo: Repository for persisting email messages.
             sync_cursor_repo: Repository for sync cursor management.
+            connection_repo: Repository for the singleton Organization Google
+                Connection.
             crypto: AES-256-GCM encryption utilities for token decryption.
             audit_logger: Structured audit logger for operation tracking.
             settings: Gmail module configuration.
             redis_client: Async Redis client for manual sync rate limiting.
             client_id: Google OAuth2 client ID for token refresh.
             client_secret: Google OAuth2 client secret for token refresh.
-            connection_repo: Repository for the singleton Organization Google
-                Connection. If not provided it is constructed from the
-                email_repo session at runtime.
         """
+        self._session = session
         self._gmail_adapter = gmail_adapter
         self._email_repo = email_repo
         self._sync_cursor_repo = sync_cursor_repo
@@ -177,9 +183,7 @@ class EmailSyncService:
         retrieves the access token, fetches emails (initial or incremental),
         and persists them. Handles 401 errors by attempting token refresh.
         """
-        connection_repo = self._connection_repo or OrganizationGoogleConnectionRepository(
-            self._email_repo.session
-        )
+        connection_repo = self._connection_repo
         connection = await connection_repo.get_singleton()
 
         if connection is not None and connection.status != "disconnected":
@@ -248,9 +252,7 @@ class EmailSyncService:
         """Trigger an immediate email sync outside the regular schedule."""
         await self._check_manual_sync_rate_limit(user_id)
 
-        connection_repo = self._connection_repo or OrganizationGoogleConnectionRepository(
-            self._email_repo.session
-        )
+        connection_repo = self._connection_repo
         connection = await connection_repo.get_singleton()
         if connection is not None and connection.status != "disconnected":
             if connection.status == "reauthorization_required":
@@ -524,25 +526,15 @@ class EmailSyncService:
             gmail_message_ids: List of Gmail message IDs to classify.
         """
         try:
-            from sqlmodel import select
-
             from src.modules.gmail.container import build_classification_service
-            from src.modules.gmail.domain.entities import EmailMessage as EmailMessageEntity
 
             # Re-query persisted emails from DB to get session-attached instances
-            statement = (
-                select(EmailMessageEntity)
-                .where(EmailMessageEntity.user_id == user_id)
-                .where(EmailMessageEntity.gmail_message_id.in_(gmail_message_ids))  # type: ignore[attr-defined]
-                .where(EmailMessageEntity.processing_status == "unprocessed")
-            )
-            result = await self._email_repo.session.execute(statement)
-            emails = list(result.scalars().all())
+            emails = await self._email_repo.get_unprocessed_by_gmail_ids(user_id, gmail_message_ids)
 
             if not emails:
                 return
 
-            classification_service = await build_classification_service(self._email_repo.session)
+            classification_service = await build_classification_service(self._session)
 
             classified_count = await classification_service.classify_batch(
                 user_id=user_id, emails=emails

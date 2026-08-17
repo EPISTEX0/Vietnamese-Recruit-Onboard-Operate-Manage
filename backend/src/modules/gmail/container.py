@@ -238,6 +238,7 @@ async def get_organization_google_connection_repository(
 
 
 async def get_email_sync_service(
+    session: AsyncSession = Depends(get_db_session),
     email_repo: EmailRepository = Depends(get_email_repository),
     sync_cursor_repo: SyncCursorRepository = Depends(get_sync_cursor_repository),
     connection_repo: OrganizationGoogleConnectionRepository = Depends(
@@ -248,6 +249,7 @@ async def get_email_sync_service(
     """Provide an EmailSyncService instance.
 
     Args:
+        session: The async database session from DI.
         email_repo: The email repository from DI.
         sync_cursor_repo: The sync cursor repository from DI.
         connection_repo: The organization Google connection repository from DI.
@@ -260,6 +262,7 @@ async def get_email_sync_service(
     gmail_adapter = await get_gmail_adapter()
 
     return EmailSyncService(
+        session=session,
         gmail_adapter=gmail_adapter,
         email_repo=email_repo,
         sync_cursor_repo=sync_cursor_repo,

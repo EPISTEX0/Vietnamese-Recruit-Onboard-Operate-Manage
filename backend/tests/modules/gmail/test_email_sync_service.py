@@ -38,6 +38,12 @@ def email_repo() -> AsyncMock:
 
 
 @pytest.fixture
+def session() -> AsyncMock:
+    """Create a mocked AsyncSession."""
+    return AsyncMock()
+
+
+@pytest.fixture
 def sync_cursor_repo() -> AsyncMock:
     """Create a mocked SyncCursorRepository."""
     return AsyncMock()
@@ -88,6 +94,7 @@ def mock_connection_repo(user_id: UUID) -> AsyncMock:
 
 @pytest.fixture
 def sync_service(
+    session: AsyncMock,
     gmail_adapter: AsyncMock,
     email_repo: AsyncMock,
     sync_cursor_repo: AsyncMock,
@@ -99,6 +106,7 @@ def sync_service(
 ) -> EmailSyncService:
     """Create an EmailSyncService with mocked dependencies."""
     return EmailSyncService(
+        session=session,
         gmail_adapter=gmail_adapter,
         email_repo=email_repo,
         sync_cursor_repo=sync_cursor_repo,
@@ -777,6 +785,7 @@ class TestOrganizationConnectionSync:
         connection_repo.get_singleton = AsyncMock(return_value=connection)
         connection_repo.upsert_singleton = AsyncMock()
         return EmailSyncService(
+            session=AsyncMock(),
             gmail_adapter=gmail_adapter,
             email_repo=email_repo,
             sync_cursor_repo=sync_cursor_repo,
