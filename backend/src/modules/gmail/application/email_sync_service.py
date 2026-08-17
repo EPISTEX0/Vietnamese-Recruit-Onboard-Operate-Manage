@@ -542,9 +542,7 @@ class EmailSyncService:
             if not emails:
                 return
 
-            classification_service = await build_classification_service(
-                self._email_repo.session
-            )
+            classification_service = await build_classification_service(self._email_repo.session)
 
             classified_count = await classification_service.classify_batch(
                 user_id=user_id, emails=emails
