@@ -47,39 +47,32 @@ users into the same tables.
 
 from __future__ import annotations
 
-import os
+import asyncio
+from collections.abc import AsyncIterator
+from typing import Any
 
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
-os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
-
-import asyncio  # noqa: E402
-from collections.abc import AsyncIterator  # noqa: E402
-from typing import Any  # noqa: E402
-
-import pytest  # noqa: E402
-import pytest_asyncio  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy import text  # noqa: E402
-from sqlalchemy.ext.asyncio import (  # noqa: E402
+import pytest
+import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import NullPool  # noqa: E402
-from sqlmodel import select  # noqa: E402
+from sqlalchemy.pool import NullPool
+from sqlmodel import select
 
-from src.modules.identity.api.error_handler import register_auth_error_handlers  # noqa: E402
-from src.modules.identity.api.router import router as auth_router  # noqa: E402
-from src.modules.identity.container import get_db_session, get_rate_limiter  # noqa: E402
-from src.modules.identity.domain.entities import User, UserRole  # noqa: E402
-from src.modules.recruitment.domain.entities import OrganizationSettings  # noqa: E402
-from src.modules.recruitment.infrastructure.org_settings_repository import (  # noqa: E402
+from src.modules.identity.api.error_handler import register_auth_error_handlers
+from src.modules.identity.api.router import router as auth_router
+from src.modules.identity.container import get_db_session, get_rate_limiter
+from src.modules.identity.domain.entities import User, UserRole
+from src.modules.recruitment.domain.entities import OrganizationSettings
+from src.modules.recruitment.infrastructure.org_settings_repository import (
     OrganizationSettingsRepository,
 )
-from tests.conftest import _create_probe_database  # noqa: E402
+from tests.conftest import _create_probe_database
 
 pytestmark = pytest.mark.integration
 

@@ -22,19 +22,12 @@ holds the line that it exists.
 
 from __future__ import annotations
 
-import os
+import re
+from pathlib import Path
 
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
-os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
+import pytest
 
-import re  # noqa: E402
-from pathlib import Path  # noqa: E402
-
-import pytest  # noqa: E402
-
-from src.modules.assistant.api.employee_router import (  # noqa: E402
+from src.modules.assistant.api.employee_router import (
     employee_assistant_router,
 )
 

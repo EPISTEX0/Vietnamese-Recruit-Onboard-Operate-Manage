@@ -64,9 +64,8 @@ from src.modules.identity.domain.entities import OrganizationAIConfiguration, Us
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 from src.modules.recruitment.domain.entities import RecruitmentInboxItem
 
-# ``tests/env_isolation.py`` seeds AUTH_OAUTH_TOKEN_ENCRYPTION_KEY with a value
-# that decodes to 28 bytes, so the real ``get_crypto_utils`` raises before the
-# service is ever built. Same workaround as ``test_reclassify_endpoint_di.py``.
+# Matches the key ``tests/env_isolation.py`` pins for AUTH_OAUTH_TOKEN_ENCRYPTION_KEY,
+# so ciphertext built here decrypts through the real, unpatched container too.
 _TEST_KEY_B64 = base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
 
 # Below GmailSettings' default 0.5 review threshold, so every site under test
@@ -107,14 +106,6 @@ async def session(postgres_async_url: str) -> AsyncIterator[AsyncSession]:
 def settings() -> GmailSettings:
     """Plain GmailSettings; nothing under test reads GMAIL_* credentials."""
     return GmailSettings()
-
-
-@pytest.fixture(autouse=True)
-def usable_crypto_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give the container a 32-byte key so it can decrypt the seeded provider key."""
-    monkeypatch.setattr(
-        "src.modules.gmail.container.get_crypto_utils", lambda: CryptoUtils(_TEST_KEY_B64)
-    )
 
 
 @pytest.fixture(autouse=True)

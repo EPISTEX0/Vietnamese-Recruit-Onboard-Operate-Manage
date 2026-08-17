@@ -25,7 +25,6 @@ second, independent connection -- an uncommitted row is invisible to it.
 
 from __future__ import annotations
 
-import base64
 from collections.abc import AsyncIterator, Awaitable, Callable, MutableMapping
 from typing import Any
 from uuid import uuid4
@@ -46,14 +45,12 @@ from sqlalchemy.pool import NullPool
 from src.modules.identity.api.admin_router import admin_router, require_system_admin
 from src.modules.identity.application.oauth_config_manager import OAuthConfigManager
 from src.modules.identity.domain.entities import User, UserRole
-from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 from tests.conftest import _create_probe_database
 
 pytestmark = pytest.mark.integration
 
 _CLIENT_ID = "312-explicit-commit.apps.googleusercontent.com"
 _REDIRECT_URI = "https://app.example.com/api/auth/google/callback"
-_TEST_KEY_B64 = base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
 
 _Scope = MutableMapping[str, Any]
 _Message = MutableMapping[str, Any]
@@ -115,20 +112,13 @@ def app(admin_user: User, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     """The real admin router with only the auth guard and Google check swapped.
 
     ``validate_credentials`` is the single outbound call in this path; stubbing
-    it keeps the test off the network without touching the session wiring. The
-    crypto key is supplied here too, because the deployment ``.env`` this repo
-    ships carries a key of the wrong length -- irrelevant to a transaction
-    boundary, but it would stop the request before it reached one.
+    it keeps the test off the network without touching the session wiring.
     """
 
     async def _always_valid(_self: OAuthConfigManager, _client_id: str) -> bool:
         return True
 
     monkeypatch.setattr(OAuthConfigManager, "validate_credentials", _always_valid)
-    monkeypatch.setattr(
-        "src.modules.identity.container.get_crypto_utils",
-        lambda: CryptoUtils(_TEST_KEY_B64),
-    )
 
     application = FastAPI()
     application.include_router(admin_router)

@@ -71,6 +71,8 @@ from tests.conftest import _create_probe_database
 
 pytestmark = pytest.mark.integration
 
+# Matches the key ``tests/env_isolation.py`` pins for AUTH_OAUTH_TOKEN_ENCRYPTION_KEY,
+# so ciphertext seeded here decrypts through the real, unpatched container too.
 _TEST_KEY_B64 = base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
 _WRITE_PREFIXES = ("INSERT", "UPDATE", "DELETE")
 
@@ -204,19 +206,6 @@ def app(seeded: _Fixtures, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
         return []
 
     monkeypatch.setattr(CalendarAdapter, "list_calendars", _no_calendars)
-    # Every module that bound ``get_crypto_utils`` by name, not just the two in
-    # identity: ``gmail.container`` imports it at module level, and
-    # ``get_password_reset_service`` reaches it through there when FastAPI
-    # resolves ``/reset-password-token-info``. Patching only identity's copies
-    # passes this module in isolation and fails in the full suite, where
-    # ``tests/env_isolation.py`` installs a 28-byte key the real
-    # ``CryptoUtils`` rejects.
-    for target in (
-        "src.modules.identity.container.get_crypto_utils",
-        "src.modules.identity.api.router.get_crypto_utils",
-        "src.modules.gmail.container.get_crypto_utils",
-    ):
-        monkeypatch.setattr(target, lambda: CryptoUtils(_TEST_KEY_B64))
 
     application = FastAPI()
     application.include_router(router)

@@ -23,51 +23,44 @@ route, the ownership guard, the SSE framing, and the telemetry writes.
 
 from __future__ import annotations
 
-import os
+import json
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any
+from unittest.mock import MagicMock
+from uuid import UUID, uuid4
 
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
-os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
-
-import json  # noqa: E402
-from collections.abc import AsyncIterator  # noqa: E402
-from dataclasses import dataclass  # noqa: E402
-from typing import Any  # noqa: E402
-from unittest.mock import MagicMock  # noqa: E402
-from uuid import UUID, uuid4  # noqa: E402
-
-import pytest  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from httpx import ASGITransport, AsyncClient, Response  # noqa: E402
-from sqlalchemy.ext.asyncio import (  # noqa: E402
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient, Response
+from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import NullPool  # noqa: E402
-from sqlmodel import select  # noqa: E402
+from sqlalchemy.pool import NullPool
+from sqlmodel import select
 
-from src.modules.assistant.api.employee_router import (  # noqa: E402
+from src.modules.assistant.api.employee_router import (
     employee_assistant_router,
     get_employee_assistant_service,
 )
-from src.modules.assistant.api.sse import STREAM_ERROR_MESSAGE  # noqa: E402
-from src.modules.assistant.application import (  # noqa: E402
+from src.modules.assistant.api.sse import STREAM_ERROR_MESSAGE
+from src.modules.assistant.application import (
     employee_assistant_service as ess_module,
 )
-from src.modules.assistant.application.employee_assistant_service import (  # noqa: E402
+from src.modules.assistant.application.employee_assistant_service import (
     EmployeeAssistantService,
 )
-from src.modules.assistant.infrastructure.config import AssistantSettings  # noqa: E402
-from src.modules.assistant.infrastructure.quality_models import (  # noqa: E402
+from src.modules.assistant.infrastructure.config import AssistantSettings
+from src.modules.assistant.infrastructure.quality_models import (
     AssistantChatSession,
     AssistantToolCallEvent,
 )
-from src.modules.employee.domain.entities import Employee  # noqa: E402
-from src.modules.identity.container import get_current_user, get_db_session  # noqa: E402
-from src.modules.identity.domain.entities import User, UserRole  # noqa: E402
-from tests.modules.assistant.assistant_support import (  # noqa: E402
+from src.modules.employee.domain.entities import Employee
+from src.modules.identity.container import get_current_user, get_db_session
+from src.modules.identity.domain.entities import User, UserRole
+from tests.modules.assistant.assistant_support import (
     ExplodingLLMClient,
     FakeLLMClient,
     FakeRegistry,

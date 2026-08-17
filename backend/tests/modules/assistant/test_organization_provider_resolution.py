@@ -74,7 +74,6 @@ async def test_assistant_settings_dependency_uses_organization_runtime(monkeypat
             )
 
     monkeypatch.setattr(container, "OrganizationAIConfigService", lambda **_: FakeService())
-    monkeypatch.setattr(container, "get_crypto_utils", lambda: MagicMock())
 
     settings = await container.get_configured_assistant_settings(MagicMock())
 

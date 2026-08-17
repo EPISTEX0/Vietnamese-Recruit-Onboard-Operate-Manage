@@ -6,13 +6,6 @@ mocked dependencies following the project's test patterns.
 
 from __future__ import annotations
 
-import os
-
-os.environ["AUTH_GOOGLE_CLIENT_ID"] = "test-client-id"
-os.environ["AUTH_GOOGLE_CLIENT_SECRET"] = "test-client-secret"
-os.environ["AUTH_JWT_SECRET_KEY"] = "test-secret-key-32-chars-min-for-hs256!"
-os.environ["AUTH_OAUTH_TOKEN_ENCRYPTION_KEY"] = "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw=="
-
 from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
