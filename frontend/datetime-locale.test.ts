@@ -71,7 +71,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createFormatter } from 'use-intl';
+// `createFormatter` via `next-intl`, not via `use-intl` directly. `use-intl` is
+// where it is actually defined, and importing it from there typechecks locally
+// — but it is a *transitive* dependency (`next-intl` depends on it; nothing in
+// `package.json` does), so reaching for it by name is a phantom dependency.
+// Measured: it resolves on this machine and fails `tsc --noEmit` in CI, where
+// `pnpm install --frozen-lockfile` builds the layout the lockfile actually
+// describes. `next-intl` re-exports the whole of `use-intl/core`, so this is
+// the same function through the dependency the app really declares.
+import { createFormatter } from 'next-intl';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
