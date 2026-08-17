@@ -854,20 +854,8 @@ class HistoricalImportService:
         """
         from sqlmodel import desc, select
 
-        from src.modules.gmail.application.classification_service import (
-            ClassificationService,
-        )
-        from src.modules.gmail.application.rules_classifier import (
-            RulesClassifier,
-        )
+        from src.modules.gmail.container import build_classification_service
         from src.modules.gmail.domain.entities import EmailMessage
-        from src.modules.gmail.infrastructure.ai_classifier import (
-            AIClassifier,
-        )
-        from src.modules.gmail.infrastructure.audit_logger import AuditLogger
-        from src.modules.recruitment.application.job_application_service import (
-            build_job_application_ingestion,
-        )
 
         stmt = (
             select(EmailMessage)
@@ -881,21 +869,7 @@ class HistoricalImportService:
         if not imported_emails:
             return 0
 
-        rules_classifier = RulesClassifier()
-        ai_classifier = AIClassifier(self._settings)
-        audit_logger = AuditLogger(self._session, self._settings)
-
-        classification_service = ClassificationService(
-            rules_classifier=rules_classifier,
-            ai_classifier=ai_classifier,
-            email_repo=self._email_repo,
-            audit_logger=audit_logger,
-            settings=self._settings,
-            session=self._session,
-            on_application_created=build_job_application_ingestion(
-                self._session
-            ).create_from_classification,
-        )
+        classification_service = await build_classification_service(self._session)
 
         await classification_service.classify_batch(user_id=user_id, emails=imported_emails)
 

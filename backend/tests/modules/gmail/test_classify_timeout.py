@@ -68,10 +68,18 @@ def _make_mock_session(emails, total_remaining):
     ``side_effect`` list ties the mock to the current query *order and count*,
     which is what broke this file. One result object that answers each accessor
     independently survives the flow gaining or reordering a query.
+
+    ``candidate_classifier_version`` is pinned falsy: since #336 this site
+    builds through ``build_classification_service``, which reads it to decide
+    whether a rollout is active. A bare ``MagicMock()`` answers truthy and
+    sends ``RolloutMode(...)`` a value that isn't a real mode -- these tests
+    are about the endpoint's timeout wrapper, not about rollout state.
     """
     result = MagicMock()
     result.scalars.return_value.all.return_value = emails
-    result.scalars.return_value.first.return_value = MagicMock()
+    org_config = MagicMock()
+    org_config.candidate_classifier_version = None
+    result.scalars.return_value.first.return_value = org_config
     result.scalar.return_value = total_remaining
 
     session = AsyncMock()

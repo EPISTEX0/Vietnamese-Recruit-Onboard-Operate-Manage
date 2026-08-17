@@ -259,13 +259,6 @@ async def get_email_sync_service(
     auth_settings = get_auth_settings()
     gmail_adapter = await get_gmail_adapter()
 
-    from src.modules.identity.infrastructure.organization_ai_config_repository import (
-        OrganizationAIConfigRepository,
-    )
-
-    org_config = await OrganizationAIConfigRepository(email_repo.session).get()
-    ai_classifier = _build_ai_classifier(get_gmail_settings(), org_config)
-
     return EmailSyncService(
         gmail_adapter=gmail_adapter,
         email_repo=email_repo,
@@ -277,7 +270,6 @@ async def get_email_sync_service(
         redis_client=get_redis_client(),
         client_id=auth_settings.google_client_id,
         client_secret=auth_settings.google_client_secret,
-        ai_classifier=ai_classifier,
     )
 
 

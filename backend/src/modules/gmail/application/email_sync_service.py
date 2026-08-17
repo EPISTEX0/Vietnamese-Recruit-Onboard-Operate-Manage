@@ -81,7 +81,6 @@ class EmailSyncService:
         client_id: str,
         client_secret: str,
         connection_repo: OrganizationGoogleConnectionRepository | None = None,
-        ai_classifier: object | None = None,
     ) -> None:
         """Initialize EmailSyncService with dependencies.
 
@@ -109,7 +108,6 @@ class EmailSyncService:
         self._client_id = client_id
         self._client_secret = client_secret
         self._connection_repo = connection_repo
-        self._ai_classifier = ai_classifier
 
     async def _handle_connection_token_refresh(
         self,
@@ -528,15 +526,8 @@ class EmailSyncService:
         try:
             from sqlmodel import select
 
-            from src.modules.gmail.application.classification_service import (
-                ClassificationService,
-            )
-            from src.modules.gmail.application.rules_classifier import RulesClassifier
+            from src.modules.gmail.container import build_classification_service
             from src.modules.gmail.domain.entities import EmailMessage as EmailMessageEntity
-            from src.modules.gmail.infrastructure.ai_classifier import AIClassifier
-            from src.modules.recruitment.application.job_application_service import (
-                build_job_application_ingestion,
-            )
 
             # Re-query persisted emails from DB to get session-attached instances
             statement = (
@@ -551,19 +542,8 @@ class EmailSyncService:
             if not emails:
                 return
 
-            rules_classifier = RulesClassifier()
-            ai_classifier = self._ai_classifier or AIClassifier(self._settings)
-
-            classification_service = ClassificationService(
-                rules_classifier=rules_classifier,
-                ai_classifier=ai_classifier,
-                email_repo=self._email_repo,
-                audit_logger=self._audit_logger,
-                settings=self._settings,
-                session=self._email_repo.session,
-                on_application_created=build_job_application_ingestion(
-                    self._email_repo.session
-                ).create_from_classification,
+            classification_service = await build_classification_service(
+                self._email_repo.session
             )
 
             classified_count = await classification_service.classify_batch(

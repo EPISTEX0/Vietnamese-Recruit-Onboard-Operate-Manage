@@ -794,7 +794,6 @@ async def classify_emails(
             current_user_id=current_user.id,
             unclassified_emails=unclassified_emails,
             email_repo=email_repo,
-            settings=settings,
         )
 
         cv_processed_count = await _update_database_and_process_cvs(
@@ -1046,7 +1045,6 @@ async def _evaluate_rules(
     current_user_id: UUID,
     unclassified_emails: list[Any],
     email_repo: EmailRepository,
-    settings: Any,
 ) -> int:
     """Evaluate classification rules for a batch of emails.
 
@@ -1054,40 +1052,13 @@ async def _evaluate_rules(
         current_user_id: The UUID of the user.
         unclassified_emails: List of unclassified EmailMessage entities.
         email_repo: The email repository.
-        settings: The Gmail settings.
 
     Returns:
         The number of emails successfully classified.
     """
-    from src.modules.gmail.application.classification_service import (
-        ClassificationService,
-    )
-    from src.modules.gmail.application.rules_classifier import RulesClassifier
-    from src.modules.gmail.container import _build_ai_classifier
-    from src.modules.gmail.infrastructure.audit_logger import AuditLogger
-    from src.modules.identity.infrastructure.organization_ai_config_repository import (
-        OrganizationAIConfigRepository,
-    )
-    from src.modules.recruitment.application.job_application_service import (
-        build_job_application_ingestion,
-    )
+    from src.modules.gmail.container import build_classification_service
 
-    rules_classifier = RulesClassifier()
-    org_config = await OrganizationAIConfigRepository(email_repo.session).get()
-    ai_classifier = _build_ai_classifier(settings, org_config)
-    audit_logger = AuditLogger(email_repo.session, settings)
-
-    classification_service = ClassificationService(
-        rules_classifier=rules_classifier,
-        ai_classifier=ai_classifier,
-        email_repo=email_repo,
-        audit_logger=audit_logger,
-        settings=settings,
-        session=email_repo.session,
-        on_application_created=build_job_application_ingestion(
-            email_repo.session
-        ).create_from_classification,
-    )
+    classification_service = await build_classification_service(email_repo.session)
 
     return await classification_service.classify_batch(
         user_id=current_user_id,
