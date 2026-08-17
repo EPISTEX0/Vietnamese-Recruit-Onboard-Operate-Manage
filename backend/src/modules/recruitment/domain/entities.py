@@ -15,6 +15,7 @@ from sqlmodel import Field, SQLModel
 
 from src.modules.recruitment.domain.enums import (
     ApplicationSource,
+    CalendarConflictStatus,
     CorrectionEvaluationStatus,
     InboxStatus,
     JobApplicationStatus,
@@ -445,8 +446,13 @@ class CalendarConflict(SQLModel, table=True):
     conflict_details: dict[str, Any] = Field(
         default_factory=dict, sa_column=Column(JSONB, nullable=False)
     )
-    # status: unresolved, resolved_keep_google, resolved_overwrite_vroom
-    status: str = Field(default="unresolved", max_length=30, nullable=False, index=True)
+    # Values: CalendarConflictStatus (src/modules/recruitment/domain/enums.py).
+    # Stays a bare ``str`` column, matching every other status field in this
+    # module (Candidate.status, JobOpening.status, ...) — the enum is a
+    # Python-side contract, not a Postgres enum, so no migration is needed.
+    status: str = Field(
+        default=CalendarConflictStatus.UNRESOLVED, max_length=30, nullable=False, index=True
+    )
     resolved_by: UUID | None = Field(default=None, foreign_key="users.id")
     resolved_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     created_at: datetime = Field(

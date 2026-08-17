@@ -31,7 +31,8 @@ export type ProcessingStatus =
   | "skipped"
   | "dismissed"
   | "upload_failed"
-  | "permanently_failed";
+  | "permanently_failed"
+  | "ai_unavailable";
 
 // ---------------------------------------------------------------------------
 // Response Interfaces
@@ -219,6 +220,8 @@ export interface CreateInterviewRequest {
   notes?: string | null;
 }
 
+export type ConflictStatus = "unresolved" | "resolved_keep_google" | "resolved_overwrite_vroom";
+
 export interface CalendarConflict {
   id: string;
   interview_id: string;
@@ -227,7 +230,7 @@ export interface CalendarConflict {
   local_snapshot: Record<string, unknown>;
   remote_snapshot: Record<string, unknown>;
   conflict_details: Record<string, unknown>;
-  status: string;
+  status: ConflictStatus;
   resolved_by: string | null;
   resolved_at: string | null;
   created_at: string;
@@ -866,7 +869,7 @@ export async function createReplacementInterview(
  */
 export async function listCalendarConflicts(
   params: {
-    status?: string;
+    status?: ConflictStatus;
     candidate_id?: string;
   } = {},
 ): Promise<CalendarConflictListResponse> {

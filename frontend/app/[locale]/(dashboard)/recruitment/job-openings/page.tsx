@@ -91,7 +91,7 @@ export default function JobOpeningsPage() {
       <div className="flex flex-wrap items-center gap-2">
         {(['all', 'draft', 'open', 'closed', 'cancelled'] as StatusFilter[]).map((f) => (
           <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${filter === f ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            {JOB_STATUS_META[f]?.labelKey ? tc(JOB_STATUS_META[f].labelKey) : t('all')}
+            {f === 'all' ? t('all') : tc(JOB_STATUS_META[f].labelKey)}
           </button>
         ))}
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('searchJobOpenings')} className="ml-auto px-3 py-1 text-xs bg-white border border-slate-200 rounded-lg w-48" />

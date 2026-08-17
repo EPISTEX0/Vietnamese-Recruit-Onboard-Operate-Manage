@@ -50,8 +50,9 @@
     "jobOpen": "Open",
     "jobClosed": "Closed",
     "jobCancelled": "Cancelled",
-    "conflictPending": "Pending",
-    "conflictResolved": "Resolved",
+    "conflictUnresolved": "Unresolved",
+    "conflictResolvedKeepGoogle": "Kept Google",
+    "conflictResolvedOverwriteVroom": "Overwrote Vroom",
     "statusDraft": "Draft",
     "statusPublished": "Published"
   },

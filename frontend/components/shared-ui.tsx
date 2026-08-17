@@ -13,6 +13,7 @@
 import React from 'react';
 import { AlertTriangle, Inbox } from 'lucide-react';
 import type { ApiError } from '@/lib/api/types';
+import type { CandidateStatus, ConflictStatus, InboxStatus, JobOpeningStatus } from '@/lib/api/recruitment';
 import { getErrorMessage } from '@/lib/api/error-codes';
 import { useFormatter, useTranslations } from 'next-intl';
 
@@ -254,7 +255,7 @@ export function Badge({
 // ---------------------------------------------------------------------------
 
 export const CANDIDATE_STATUS_META: Record<
-  string,
+  CandidateStatus,
   { label: string; tone: BadgeTone; labelKey: string }
 > = {
   new: { label: 'Mới', tone: 'slate', labelKey: 'candidateNew' },
@@ -266,7 +267,7 @@ export const CANDIDATE_STATUS_META: Record<
 };
 
 export const INBOX_STATUS_META: Record<
-  string,
+  InboxStatus,
   { label: string; tone: 'amber' | 'rose' | 'indigo' | 'slate'; labelKey: string }
 > = {
   needs_classification: { label: 'Cần xác nhận phân loại', tone: 'amber', labelKey: 'inboxNeedsClassification' },
@@ -276,7 +277,7 @@ export const INBOX_STATUS_META: Record<
 };
 
 export const JOB_STATUS_META: Record<
-  string,
+  JobOpeningStatus,
   { label: string; tone: 'slate' | 'emerald' | 'indigo' | 'rose'; labelKey: string }
 > = {
   draft: { label: 'Bản nháp', tone: 'slate', labelKey: 'jobDraft' },
@@ -285,12 +286,20 @@ export const JOB_STATUS_META: Record<
   cancelled: { label: 'Đã hủy', tone: 'rose', labelKey: 'jobCancelled' },
 };
 
+// Chỉ `unresolved` render được hôm nay — consumer duy nhất
+// (app/[locale]/(dashboard)/recruitment/interviews/page.tsx) gọi
+// `listCalendarConflicts({ status: 'unresolved' })` cố định, không có state
+// hay filter nào đổi được giá trị đó. Hai `resolved_*` vẫn có mặt vì map này
+// mô tả domain (ba giá trị `CalendarConflict.status` sinh ra), không phải
+// đúng một query đang được gọi — nhưng đừng đọc chúng như một triệu chứng
+// đã kiểm chứng: chưa có màn hình nào render chúng để so sánh tone (#356).
 export const CONFLICT_STATUS_META: Record<
-  string,
+  ConflictStatus,
   { label: string; tone: 'amber' | 'emerald' | 'rose' | 'slate'; labelKey: string }
 > = {
-  pending: { label: 'Chờ xử lý', tone: 'amber', labelKey: 'conflictPending' },
-  resolved: { label: 'Đã giải quyết', tone: 'emerald', labelKey: 'conflictResolved' },
+  unresolved: { label: 'Chưa xử lý', tone: 'amber', labelKey: 'conflictUnresolved' },
+  resolved_keep_google: { label: 'Đã giữ Google', tone: 'emerald', labelKey: 'conflictResolvedKeepGoogle' },
+  resolved_overwrite_vroom: { label: 'Đã ghi đè Vroom', tone: 'emerald', labelKey: 'conflictResolvedOverwriteVroom' },
 };
 
 // Nhãn cho các giá trị action_type lịch sử KHÔNG còn trong AuditActionType
