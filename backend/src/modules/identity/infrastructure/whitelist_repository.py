@@ -10,7 +10,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from src.modules.identity.domain.entities import WhitelistEntry
+from src.modules.identity.domain.entities import User, WhitelistEntry
 
 
 class WhitelistRepository:
@@ -95,3 +95,17 @@ class WhitelistRepository:
         statement = select(WhitelistEntry).where(func.lower(WhitelistEntry.value) == value.lower())
         result = await self.session.execute(statement)
         return result.scalars().first() is not None
+
+    async def get_user_email(self, user_id: UUID) -> str | None:
+        """Look up a User's email by id, for display alongside whitelist entries.
+
+        Args:
+            user_id: The UUID of the admin user who added an entry.
+
+        Returns:
+            The user's email address, or None if no such user exists.
+        """
+        statement = select(User).where(User.id == user_id)
+        result = await self.session.execute(statement)
+        user = result.scalars().first()
+        return user.email if user else None

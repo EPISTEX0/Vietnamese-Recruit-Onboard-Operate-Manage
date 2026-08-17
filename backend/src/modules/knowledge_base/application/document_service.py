@@ -321,7 +321,7 @@ class DocumentService:
         from datetime import UTC, datetime
 
         doc.updated_at = datetime.now(UTC)
-        await self._repo._session.flush()  # type: ignore[attr-defined]
+        await self._repo.flush()
 
         # 8. Enqueue re-index
         await self._enqueue_ingestion(document_id, kb_type)

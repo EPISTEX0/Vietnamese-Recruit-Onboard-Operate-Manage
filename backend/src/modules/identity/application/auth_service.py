@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.identity.domain.entities import UserRole
 from src.modules.identity.domain.exceptions import (
@@ -67,7 +68,7 @@ class AuthService:
         user_repository: UserRepository,
         refresh_token_repository: RefreshTokenRepository,
         organization_repository: OrganizationSettingsRepository | None = None,
-        session: Any | None = None,
+        session: AsyncSession | None = None,
     ) -> None:
         """Initialize AuthService with local auth dependencies."""
         self._settings = settings
@@ -185,9 +186,7 @@ class AuthService:
             raise InvalidCredentialsError()
         if not user.is_active:
             raise AccessDeniedError("Account is inactive")
-        user.last_login = datetime.now(UTC)
-        self._user_repository.session.add(user)
-        await self._user_repository.session.flush()
+        user = await self._user_repository.record_login(user.id)
         return await self._issue_session(user)
 
     async def change_password(
