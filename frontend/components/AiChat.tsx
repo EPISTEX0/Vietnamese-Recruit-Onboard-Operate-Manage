@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFormatter } from 'next-intl';
 import {
   Sparkles, Send, Bot, User, Check, AlertCircle, RefreshCw,
@@ -343,13 +343,6 @@ export default function AiChat({
   onOpenRequestDialog, defaultOpen = true, className,
 }: AiChatProps) {
   const format = useFormatter();
-  const welcome: ChatMessage = {
-    role: 'assistant',
-    content: assistantType === 'hr'
-      ? 'Xin chào HR! Tôi là Trợ lý AI Vroom HR. Tôi có thể đọc dữ liệu ứng viên, lịch phỏng vấn, onboarding và soạn nháp email mời phỏng vấn / chúc mừng. Mọi ghi dữ liệu đều do bạn xác nhận.'
-      : 'Chào bạn! Tôi là Trợ lý nhân viên. Tôi có thể kiểm tra chấm công, số dư phép và soạn nháp yêu cầu nghỉ phép / tăng ca của bạn. Bạn cần tự xác nhận mọi yêu cầu.',
-    tool_call_id: undefined, tool_calls: undefined, name: undefined,
-  };
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -606,8 +599,6 @@ export default function AiChat({
     setDraftAction(null);
     setToast('Đã hủy đề xuất.');
   }, [api, draftAction]);
-
-  const displayMessages = messages.length === 0 ? [welcome] : messages;
 
   return (
     <div

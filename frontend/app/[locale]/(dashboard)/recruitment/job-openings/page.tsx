@@ -3,11 +3,11 @@ import { useTranslations } from 'next-intl';
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Briefcase, Plus, X, Pencil, Eye, EyeOff } from 'lucide-react';
+import { Briefcase, Plus, X, Pencil } from 'lucide-react';
 import {
   listJobOpenings, getJobOpeningMetrics,
   createJobOpening, updateJobOpening, openJobOpening, closeJobOpening, cancelJobOpening,
-  type JobOpeningListItem, type JobOpeningMetrics, type JobOpeningCreateInput, type JobOpeningUpdateInput,
+  type JobOpeningMetrics, type JobOpeningCreateInput, type JobOpeningUpdateInput,
 } from '@/lib/api/recruitment';
 import { listPositions } from '@/lib/api/positions';
 import type { Position } from '@/lib/api/types';
@@ -177,7 +177,6 @@ export default function JobOpeningsPage() {
 }
 
 function MetricCard({ label, value, tone = 'slate' }: { label: string; value: number; tone?: 'slate' | 'emerald' | 'indigo' | 'rose' }) {
-  const t = useTranslations('recruitment');
   const tones: Record<string, string> = {
     slate: 'text-slate-700', emerald: 'text-emerald-600', indigo: 'text-indigo-600', rose: 'text-rose-600',
   };

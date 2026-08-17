@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import {
-  FileSpreadsheet, Plus, Search, Eye, Pencil, Send, Trash2, ChevronLeft, ChevronRight, Undo2, CheckSquare, X,
+  FileSpreadsheet, Plus, Search, Eye, Pencil, Send, Trash2, ChevronLeft, ChevronRight, Undo2, X,
 } from 'lucide-react';
 import {
   fetchPayslips, fetchPayslip, createPayslip, updatePayslip, publishPayslip, unpublishPayslip, deletePayslip, bulkPublishPayslips,
@@ -415,7 +415,7 @@ export default function PayslipsPage() {
                   type="text"
                   placeholder={t('searchEmployee')}
                   value={draft.employee_id ? empName(employees, draft.employee_id) : ''}
-                  onChange={(e) => { setDraft({ ...draft, employee_id: '' }); }}
+                  onChange={() => { setDraft({ ...draft, employee_id: '' }); }}
                   onFocus={() => setEmpDropdownOpen(true)}
                   className="flex-1 text-xs outline-none bg-transparent"
                 />

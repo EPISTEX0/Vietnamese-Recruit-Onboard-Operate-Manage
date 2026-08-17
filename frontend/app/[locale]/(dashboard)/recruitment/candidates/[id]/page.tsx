@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  UserCheck, ArrowLeft, CheckCircle2, XCircle, Archive, Link2, Unlink,
+  ArrowLeft, CheckCircle2, XCircle, Archive, Link2, Unlink,
   FileText, Calendar, Briefcase, ExternalLink, AlertTriangle, Plus,
 } from 'lucide-react';
     import {
@@ -389,7 +389,6 @@ export default function CandidateDetailPage() {
 }
 
 function Section({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
-  const t = useTranslations('recruitment');
   return (
     <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm shadow-slate-100">
       <div className="flex items-center gap-2 mb-3">

@@ -23,13 +23,6 @@ import {
 const INTENTS = ['job_application', 'partner', 'event', 'internal', 'other'] as const;
 export default function InboxPage() {
   const t = useTranslations('recruitment');
-  const INTENT_LABELS: Record<string, string> = {
-    job_application: 'Ứng tuyển',
-    partner: 'Đối tác',
-    event: 'Sự kiện',
-    internal: 'Nội bộ',
-    other: 'Khác',
-  };
   const GROUPS: { status: InboxStatus | 'all'; label: string; icon: React.ElementType }[] = [
     { status: 'needs_classification', label: t('needsClassification'), icon: AlertTriangle },
     { status: 'needs_information', label: t('needsInformation'), icon: Pencil },
@@ -128,7 +121,6 @@ export default function InboxPage() {
           {t('all')} <span className="ml-1 font-mono opacity-70">{counts.all ?? 0}</span>
         </button>
         {GROUPS.map((g) => {
-          const meta = INBOX_STATUS_META[g.status];
           const active = activeGroup === g.status;
           return (
             <button

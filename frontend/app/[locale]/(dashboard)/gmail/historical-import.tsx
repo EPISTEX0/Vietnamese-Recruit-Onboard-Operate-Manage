@@ -94,7 +94,7 @@ export default function HistoricalImportPanel() {
         <History className="w-4 h-4 text-indigo-600" />
         <h2 className="font-bold text-sm text-slate-900">{t('importTitle')}</h2>
         {hasStatus && (
-          <span className={`ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full border ${trangThaiMau(t, status.data?.status)}`}>
+          <span className={`ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full border ${trangThaiMau(status.data?.status)}`}>
             {trangThaiNhan(t, status.data?.status)}
           </span>
         )}
@@ -290,7 +290,7 @@ function trangThaiNhan(t: (key: string) => string, status: string | undefined | 
   return map[status] ?? status;
 }
 
-function trangThaiMau(t: (key: string) => string, status: string | undefined | null): string {
+function trangThaiMau(status: string | undefined | null): string {
   if (!status) return 'bg-slate-50 text-slate-400 border-slate-100';
   const map: Record<string, string> = {
     running: 'bg-amber-50 text-amber-700 border-amber-200',

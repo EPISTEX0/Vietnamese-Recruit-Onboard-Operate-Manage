@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 
 import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  BookOpen, Upload, FileText, Search, ChevronLeft, ChevronRight,
-  CheckCircle, Clock, AlertTriangle, XCircle, Loader2,
+  BookOpen, Upload, FileText, ChevronLeft, ChevronRight,
+  AlertTriangle, Loader2,
   Pencil, UploadCloud, Trash2, Filter, Info,
 } from 'lucide-react';
 import {

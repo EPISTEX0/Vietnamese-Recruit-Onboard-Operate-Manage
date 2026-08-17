@@ -10,7 +10,7 @@ import { listPositions } from '@/lib/api/positions';
 import type { Employee, Department, Position } from '@/lib/api/types';
 import { useSession } from '@/lib/auth/session';
 import {
-  PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
+  PageHeader, Card, SectionTitle, Field, TextInput, TextArea,
   ButtonPrimary, ErrorAlert, Badge, useFormatDateTime,
 } from '@/components/shared-ui';
 
