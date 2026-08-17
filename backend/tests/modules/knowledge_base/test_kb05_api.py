@@ -174,6 +174,8 @@ class TestPatchDocumentMetadata:
 
     def test_update_display_name(self, kb_client: TestClient):
         """AC: PATCH updates display_name without re-indexing."""
+        from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
         doc = _create_test_document(kb_client, display_name="Original Name")
         doc_id = doc["document_id"]
 
@@ -184,7 +186,7 @@ class TestPatchDocumentMetadata:
         assert response.status_code == 200, response.json()
         body = response.json()
         assert body["display_name"] == "Updated Name"
-        assert body["status"] == "pending"  # Status unchanged
+        assert body["status"] == KnowledgeBaseDocumentStatus.PENDING  # Status unchanged
 
     def test_update_category(self, kb_client: TestClient):
         """AC: PATCH updates category without touching file/chunks."""
@@ -359,6 +361,8 @@ class TestFilteredDocumentList:
 
     def test_filter_by_status(self, kb_client: TestClient):
         """AC: Filter by status returns only matching documents."""
+        from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
         _create_test_document(kb_client, display_name="Pending Doc")
         # All new docs have status "pending"
 
@@ -367,10 +371,12 @@ class TestFilteredDocumentList:
         )
         assert response.status_code == 200
         items = response.json()["items"]
-        assert all(item["status"] == "pending" for item in items)
+        assert all(item["status"] == KnowledgeBaseDocumentStatus.PENDING for item in items)
 
     def test_filter_by_category_and_status(self, kb_client: TestClient):
         """AC: Combined category + status filter both apply."""
+        from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
         _create_test_document(kb_client, display_name="Policy Pending", category="policy")
 
         response = kb_client.get(
@@ -378,7 +384,10 @@ class TestFilteredDocumentList:
         )
         assert response.status_code == 200
         items = response.json()["items"]
-        assert all(item["category"] == "policy" and item["status"] == "pending" for item in items)
+        assert all(
+            item["category"] == "policy" and item["status"] == KnowledgeBaseDocumentStatus.PENDING
+            for item in items
+        )
 
     def test_filter_empty_result(self, kb_client: TestClient):
         """AC: Filter that matches nothing returns empty list with total=0."""
@@ -402,6 +411,8 @@ class TestReplaceDocumentFile:
 
     def test_replace_file_resets_status(self, kb_client: TestClient):
         """AC: PUT uploads new file, resets status to 'pending'."""
+        from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
         doc = _create_test_document(kb_client, display_name="Old File")
         doc_id = doc["document_id"]
 
@@ -415,7 +426,7 @@ class TestReplaceDocumentFile:
         )
         assert response.status_code == 200, response.json()
         body = response.json()
-        assert body["status"] == "pending"
+        assert body["status"] == KnowledgeBaseDocumentStatus.PENDING
         assert body["file_name"] == "new.pdf"
 
     def test_replace_nonexistent_document_returns_404(self, kb_client: TestClient):

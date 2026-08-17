@@ -20,6 +20,7 @@ from src.modules.knowledge_base.domain.entities import (
     EmployeeKnowledgeBaseDocument,
     KnowledgeBaseDocument,
 )
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 from src.modules.knowledge_base.infrastructure.config import KnowledgeBaseSettings
 from src.modules.knowledge_base.infrastructure.repository import (
     KnowledgeBaseRepository,
@@ -141,7 +142,7 @@ class DocumentService:
                 storage_path=storage_path,
                 file_size=file_size,
                 mime_type=mime_type,
-                status="pending",
+                status=KnowledgeBaseDocumentStatus.PENDING,
             )
         else:
             doc = KnowledgeBaseDocument(
@@ -152,7 +153,7 @@ class DocumentService:
                 storage_path=storage_path,
                 file_size=file_size,
                 mime_type=mime_type,
-                status="pending",
+                status=KnowledgeBaseDocumentStatus.PENDING,
             )
         doc = await self._repo.insert_document(doc)
 
@@ -314,7 +315,7 @@ class DocumentService:
         doc.storage_path = new_storage_path
         doc.file_size = file_size
         doc.mime_type = mime_type
-        doc.status = "pending"
+        doc.status = KnowledgeBaseDocumentStatus.PENDING
         doc.error_message = None
         doc.chunk_count = 0
 
