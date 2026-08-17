@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen, Upload, FileText, Search, ChevronLeft, ChevronRight,
@@ -55,7 +55,6 @@ function formatFileSize(bytes: number): string {
 // ---------------------------------------------------------------------------
 
 export default function KnowledgeBasePage() {
-  const locale = useLocale();
   const t = useTranslations('knowledgeBase');
 
   const [page, setPage] = useState(1);

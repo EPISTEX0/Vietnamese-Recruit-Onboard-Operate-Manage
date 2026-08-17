@@ -1,5 +1,5 @@
 'use client';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,6 @@ function relativeTime(iso: string | null, t: any): string | null {
 
 export default function EmployeeAttendancePage() {
   const t = useTranslations('employee');
-  const locale = useLocale();
   const formatDateTime = useFormatDateTime();
   const qc = useQueryClient();
 

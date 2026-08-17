@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { FileText, Check, X, Search, CheckCheck, XCircle } from 'lucide-react';
 import {
   fetchSubmittedRequests, approveRequest, rejectRequest,
@@ -19,7 +19,6 @@ import {
 
 export default function RequestsReviewPage() {
   const t = useTranslations('requests');
-      const locale = useLocale();
   const formatDate = useFormatDate();
   const formatDateTime = useFormatDateTime();
   const qc = useQueryClient();

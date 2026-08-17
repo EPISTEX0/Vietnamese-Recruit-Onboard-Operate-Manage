@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   FileSpreadsheet, Plus, Search, Eye, Pencil, Send, Trash2, ChevronLeft, ChevronRight, Undo2, CheckSquare, X,
 } from 'lucide-react';
@@ -63,7 +63,6 @@ function joinMonth(year: string, month: string): string {
 }
 
 export default function PayslipsPage() {
-  const locale = useLocale();
   const formatDateTime = useFormatDateTime();
   const t = useTranslations('payroll');
   const qc = useQueryClient();

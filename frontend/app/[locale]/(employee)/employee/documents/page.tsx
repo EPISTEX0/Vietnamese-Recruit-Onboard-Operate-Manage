@@ -1,5 +1,5 @@
 'use client';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,6 @@ const DOC_TYPES = ['Hợp đồng', 'CMND/CCCD', 'Bằng cấp', 'Sổ bảo hi�
 
 export default function EmployeeDocumentsPage() {
   const t = useTranslations('employee');
-  const locale = useLocale();
   const formatDate = useFormatDate();
   const { user } = useSession();
   const employeeId = user?.employee_id ?? null;

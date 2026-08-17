@@ -1,5 +1,5 @@
 'use client';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +12,6 @@ import {
 
 export default function EmployeePayslipsPage() {
  const t = useTranslations('employee');
- const locale = useLocale();
  const formatDateTime = useFormatDateTime();
 
   const [yearFilter, setYearFilter] = useState<string>('');

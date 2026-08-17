@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 
 import { routing } from '@/i18n/routing';
-import { formats } from '@/i18n/request';
+import { APP_TIME_ZONE, formats } from '@/i18n/request';
 import {
   formatRuntimeDetail,
   formatLatency,
@@ -57,11 +57,22 @@ describe('the locales these formatters are actually called with', () => {
   });
 });
 
-/** Wrap a hook under test with the same locale + formats config the app runs. */
+/**
+ * Wrap a hook under test with the same locale + formats + time zone the app runs.
+ *
+ * `timeZone` is not optional here, and leaving it out was a real failure rather
+ * than an omission of detail: without it the formatter falls back to whatever
+ * zone the machine running the suite is in, so the fixed UTC instant below
+ * lands on a different wall-clock date depending on where CI happens to run.
+ * Measured before this was pinned — `TZ=Pacific/Midway pnpm test` failed the
+ * two assertions in this block (`expected '2/8/2026' to be '3/8/2026'`), and
+ * nothing in `vitest.config.mts` or CI pins `TZ`. Passing `APP_TIME_ZONE` also
+ * makes the comment above true: this is the app's config, not a subset of it.
+ */
 function withLocale(locale: string) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <NextIntlClientProvider locale={locale} messages={{}} formats={formats}>
+      <NextIntlClientProvider locale={locale} messages={{}} formats={formats} timeZone={APP_TIME_ZONE}>
         {children}
       </NextIntlClientProvider>
     );

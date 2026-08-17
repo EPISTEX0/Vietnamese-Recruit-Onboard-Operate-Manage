@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   Users, FileText, KeyRound, Save, Upload, Download, Trash2, Plus, ArrowLeft,
 } from 'lucide-react';
@@ -24,7 +24,6 @@ import {
 const DOC_TYPES_KEY = ['docContract', 'docIdCard', 'docDegree', 'docInsurance', 'docOther'] as const;
 
 export default function EmployeeDetailPage() {
-  const locale = useLocale();
   const formatDateTime = useFormatDateTime();
   const formatDate = useFormatDate();
   const t = useTranslations('employees');

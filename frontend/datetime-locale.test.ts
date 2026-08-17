@@ -98,7 +98,7 @@ vi.mock('next-intl/server', () => ({
   getRequestConfig: <T,>(createRequestConfig: T): T => createRequestConfig,
 }));
 
-import getRequestConfig, { formats } from '@/i18n/request';
+import getRequestConfig, { APP_TIME_ZONE, formats } from '@/i18n/request';
 
 const THIS_FILE = fileURLToPath(import.meta.url);
 const PACKAGE_ROOT = dirname(THIS_FILE);
@@ -312,10 +312,11 @@ describe('datetime locale literals', () => {
  *    preset deleted while a caller still asks for it). Nothing typechecks the
  *    second argument of `format.dateTime` against `formats.dateTime`'s keys.
  *
- * On the production path itself: `app/layout.tsx` and `app/[locale]/layout.tsx`
- * both render `NextIntlClientProvider` *without* a `formats` prop, which is
- * correct and not a third failure mode. Neither file declares `'use client'`,
- * so React resolves `next-intl` through its `react-server` export condition
+ * On the production path itself: `app/layout.tsx` — the app's only layout that
+ * renders `NextIntlClientProvider`, and the only `layout.tsx` in the tree —
+ * renders it *without* a `formats` prop, which is correct and not a third
+ * failure mode. It does not declare `'use client'`, so React resolves
+ * `next-intl` through its `react-server` export condition
  * (`next-intl/package.json`) to `index.react-server.js`, which re-exports
  * `NextIntlClientProvider` as `NextIntlClientProviderServer`. That component
  * fills the gap from the request config:
@@ -325,6 +326,11 @@ describe('datetime locale literals', () => {
  * and `getFormats()` is `(await getConfig()).formats` — the very object
  * asserted below. So the config is the single source for every server-rendered
  * datetime in the app, which is what makes assertion 1 load-bearing.
+ *
+ * The same provider resolves `timeZone` by the same route, with one difference
+ * that matters: an absent `timeZone` is not left absent. `getConfig` substitutes
+ * the server process's own zone, which the container makes UTC. That is asserted
+ * separately below, and explained on `APP_TIME_ZONE` in `i18n/request.ts`.
  */
 describe('datetime format presets resolve', () => {
   /**
@@ -411,6 +417,47 @@ describe('datetime format presets resolve', () => {
     } as never);
 
     expect(config.formats).toBe(formats);
+  });
+
+  it('pins an explicit time zone, so the container clock cannot become the app clock', async () => {
+    // Dropping `timeZone` does not leave datetimes on the reader's own zone —
+    // `getConfig` substitutes the server process's zone and the provider ships
+    // it to the browser as an explicit prop. In the production image
+    // (`node:22-slim`, no `TZ`) that is UTC. See `APP_TIME_ZONE`'s own comment.
+    const config = await getRequestConfig({
+      requestLocale: Promise.resolve('vi'),
+      locale: 'vi',
+    } as never);
+
+    expect(config.timeZone).toBe(APP_TIME_ZONE);
+    // Named, not just non-empty: `'UTC'` is a perfectly valid IANA zone, so a
+    // test that only asked for truthiness would pass on the exact regression.
+    expect(APP_TIME_ZONE).toBe('Asia/Ho_Chi_Minh');
+  });
+
+  it('renders a stored instant at its Vietnamese wall-clock time', () => {
+    // The seed script's own example: 08:00 in Vietnam, stored as 01:00Z. This
+    // is the assertion that fails if `APP_TIME_ZONE` is dropped or changed —
+    // and it fails identically whatever zone the machine running it is in,
+    // which is the property the dev-machine blind spot needs.
+    const checkIn = new Date('2026-08-03T01:00:00Z');
+    const format = createFormatter({
+      locale: 'vi',
+      formats,
+      timeZone: APP_TIME_ZONE,
+      onError: () => {},
+    });
+
+    expect(format.dateTime(checkIn, 'full')).toBe('08:00:00 3/8/2026');
+    // The regression this pins, spelled out: the container default renders the
+    // same instant seven hours early, on a date that can also be the day before.
+    const asContainerWould = createFormatter({
+      locale: 'vi',
+      formats,
+      timeZone: 'UTC',
+      onError: () => {},
+    });
+    expect(asContainerWould.dateTime(checkIn, 'full')).toBe('01:00:00 3/8/2026');
   });
 
   it('degrades to an unlocalized `String(date)` when a preset is missing', () => {

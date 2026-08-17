@@ -1,5 +1,5 @@
 'use client';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -61,7 +61,6 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 
 export default function EmployeeRequestsPage() {
   const t = useTranslations('employee');
-  const locale = useLocale();
   const formatDateTime = useFormatDateTime();
   const formatDate = useFormatDate();
   const qc = useQueryClient();
