@@ -3,7 +3,7 @@
 ## Status
 - owner: EPISTEX0 (ngocnt@aidia.vn)
 - status: accepted
-- version: 1
+- version: 2
 - last_reviewed: 2026-08-17
 - approved: 2026-08-17 bởi owner
 - applies_to: `/home/epistex/Projects/Vietnamese-Recruit-Onboard-Operate-Manage`
@@ -85,17 +85,20 @@ pnpm test
 pnpm run build
 ```
 
-### Baseline đã đo — 2026-08-17 @ `c16f1b1`
+### Baseline đã đo — 2026-08-17 @ `364dd62`
 
 | Gate | Kết quả |
 |---|---|
 | `ruff check src tests` | All checks passed! |
-| `ruff format --check src tests` | 521 files already formatted |
-| `pytest` | **2767 passed, 2 skipped** (180.53s) |
+| `ruff format --check src tests` | 526 files already formatted |
+| `pytest` | **2788 passed, 2 skipped** (~150s) |
 | `pnpm run lint` | 0 error, **2 warning** — `inbox/page.tsx:57`, `AiChat.tsx:547` |
 | `pnpm exec tsc --noEmit` | sạch |
-| `pnpm test` | **254 passed** (21 file) |
+| `pnpm test` | **270 passed** (23 file) |
 | `pnpm run build` | xanh |
+
+Bảng trước đó đo tại `c16f1b1` (2767 passed / 254 frontend); #359–#367 đã nâng số. Đổi số gate thì
+sửa bảng này cùng lúc — bảng rot còn tệ hơn không có bảng, vì nó khiến một hồi quy trông như baseline.
 
 Hai warning lint là baseline có chủ ý. **Warning thứ ba là hồi quy.**
 `noUnusedLocals`/`noUnusedParameters` bật từ `40d6d5b` — một biến thừa làm gate đỏ.
