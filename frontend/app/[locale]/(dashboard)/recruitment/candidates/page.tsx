@@ -96,7 +96,7 @@ export default function CandidatesPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {candidates.map((c) => {
-              const meta = CANDIDATE_STATUS_META[c.status] ?? { label: c.status, tone: 'slate' as const };
+              const meta = CANDIDATE_STATUS_META[c.status] ?? { label: c.status, tone: 'slate' as const, labelKey: c.status };
               return (
                 <button
                   key={c.id}
