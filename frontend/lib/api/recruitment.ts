@@ -1,5 +1,6 @@
 import { ApiError } from "./types";
 import { API_BASE_URL } from "./client";
+import type { OutboundEmailStatus } from "./gmail";
 
 
 // ---------------------------------------------------------------------------
@@ -195,10 +196,16 @@ export interface InterviewParticipant {
   employee_id: string | null;
 }
 
+// `Interview.status` (backend `entities.py:361`) is a raw `str` column with
+// no backend StrEnum. Closed set confirmed by grepping every literal
+// assignment site (#363): `interview_scheduler_service.py:525,693,720,881,1842`,
+// `calendar_sync_service.py:251`.
+export type InterviewStatus = "scheduled" | "completed" | "cancelled";
+
 export interface InterviewResponse {
   id: string;
   candidate_id: string;
-  status: string;
+  status: InterviewStatus;
   round_name: string;
   start_at: string;
   end_at: string;
@@ -701,7 +708,9 @@ export async function getJobOpeningMetrics(): Promise<JobOpeningMetrics> {
 // Outbound Email Types and API Functions
 // ---------------------------------------------------------------------------
 
-export type OutboundEmailStatus = "pending" | "sending" | "sent" | "failed";
+// `OutboundEmailStatus` was declared twice (here and `gmail.ts:356`) with
+// identical values — canonical source is `gmail.ts` (#363), since the backend
+// enum it mirrors lives in `gmail/domain/enums.py`.
 
 export interface OutboundEmailResponse {
   id: string;
@@ -936,7 +945,9 @@ export interface InboxSourceHint {
 export interface CorrectionHistoryEntry {
   previous_intent: string | null;
   corrected_intent: string;
-  previous_inbox_status: string;
+  // Always `item.inbox_status` at correction time (`inbox_service.py:431`),
+  // a non-nullable `InboxStatus`-typed column — never a free-form string.
+  previous_inbox_status: InboxStatus;
   corrected_by_user_id: string;
   corrected_at: string;
 }
@@ -1036,6 +1047,12 @@ export async function dismissInboxItem(id: string): Promise<InboxItem> {
 
 export type ApplicationSource = "direct" | "employee_referral" | "agency";
 
+// Backend `JobApplication.status` (`entities.py:519`) is a raw `str` column
+// but every write site sets it from this enum
+// (`recruitment/domain/enums.py:95`) — `job_application_service.py:170`,
+// `inbox_service.py:284`, `job_application_decision_service.py:178`.
+export type JobApplicationStatus = "new" | "dismissed" | "promoted";
+
 export interface SplitApplicantInput {
   name: string;
   email?: string;
@@ -1060,7 +1077,7 @@ export interface JobApplicationInboxResult {
   sender_name: string;
   sender_email: string;
   job_opening_id: string | null;
-  status: string;
+  status: JobApplicationStatus;
   message_references: Array<Record<string, unknown>>;
 }
 
@@ -1099,7 +1116,7 @@ export interface JobApplicationAssignmentResponse {
   id: string;
   job_opening_id: string | null;
   candidate_id: string | null;
-  status: string;
+  status: JobApplicationStatus;
 }
 
 export interface JobApplicationPromoteRequest {
@@ -1114,7 +1131,7 @@ export interface JobApplicationPromoteResponse {
   candidate_name: string;
   candidate_email: string;
   job_opening_id: string | null;
-  status: string;
+  status: JobApplicationStatus;
 }
 
 export async function assignJobApplication(

@@ -18,6 +18,7 @@ import type {
   EmailMessage,
 } from "./types";
 import { ApiError } from "./types";
+import type { ProcessingStatus } from "./recruitment";
 
 const BASE = `${API_BASE_URL}/api/gmail`;
 const AUTH_BASE = `${API_BASE_URL}/api/auth`;
@@ -256,7 +257,7 @@ export interface ProcessAttachmentsResponse {
   cv_documents?: Array<{
     id: string;
     original_filename: string;
-    processing_status: string;
+    processing_status: ProcessingStatus;
     confidence_score: number | null;
   }>;
   message?: string;
@@ -282,14 +283,21 @@ export interface ImportPreviewResponse {
 
 export interface ImportStartResponse {
   job_id: string;
-  status: string;
+  // Backend constructs this literally (`gmail/api/router.py:240`); the
+  // docstring calls it "always 'running'" (`gmail/api/schemas.py:246`).
+  status: "running";
   days: number;
   message: string;
 }
 
+// Backend docstring: "One of 'running', 'completed', 'cancelled', 'failed',
+// 'none'." (`gmail/api/schemas.py:262`, mirrored in
+// `gmail/application/import_service.py:86`).
+export type ImportJobStatus = "running" | "completed" | "cancelled" | "failed" | "none";
+
 export interface ImportStatusResponse {
   job_id: string | null;
-  status: string;
+  status: ImportJobStatus;
   days: number | null;
   total_count: number;
   processed_count: number;
@@ -300,8 +308,12 @@ export interface ImportStatusResponse {
   error_message: string | null;
 }
 
+// Backend docstring: "Result status ('cancelled' or 'no_active_job')."
+// (`gmail/api/schemas.py:289`).
+export type ImportCancelStatus = "cancelled" | "no_active_job";
+
 export interface ImportCancelResponse {
-  status: string;
+  status: ImportCancelStatus;
   message: string;
 }
 
