@@ -95,7 +95,7 @@ export default function KnowledgeBasePage() {
     { value: 'employee', label: t('employeeTab') },
   ];
 
-  const STATUS_OPTIONS: { value: string; label: string }[] = [
+  const STATUS_OPTIONS: { value: DocumentStatus | 'all'; label: string }[] = [
     { value: 'all', label: t('allStatuses') },
     { value: 'ready', label: t('statusReady') },
     { value: 'pending', label: t('statusPending') },
