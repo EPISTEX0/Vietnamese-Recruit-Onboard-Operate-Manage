@@ -12,7 +12,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.modules.employee.domain.entities import Position
 from src.modules.recruitment.domain.entities import JobOpening
 from src.modules.recruitment.domain.enums import JobOpeningStatus
 from src.modules.recruitment.domain.exceptions import (
@@ -82,11 +81,9 @@ class JobOpeningService:
             PositionNotFoundError: If position_id does not reference an existing Position.
         """
         # Validate position exists
-        from sqlmodel import select as sqlmodel_select
+        from src.modules.employee.infrastructure.position_repository import PositionRepository
 
-        position_stmt = sqlmodel_select(Position).where(Position.id == position_id)
-        position_result = await self.session.execute(position_stmt)
-        position = position_result.scalars().first()
+        position = await PositionRepository(self.session).get_by_id(position_id)
         if position is None:
             raise PositionNotFoundError(f"Position not found: {position_id}")
 

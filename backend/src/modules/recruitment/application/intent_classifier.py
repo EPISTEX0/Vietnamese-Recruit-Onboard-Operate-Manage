@@ -327,20 +327,15 @@ class IntentClassifierService:
             return
 
         try:
-            from sqlmodel import select
+            from src.modules.gmail.infrastructure.email_repository import EmailRepository
 
-            from src.modules.gmail.domain.entities import EmailMessage
-
-            statement = select(EmailMessage).where(EmailMessage.id == email_message_id)
-            result = await self._session.execute(statement)
-            email_msg = result.scalars().first()
+            email_msg = await EmailRepository(self._session).update_processing_status(
+                email_message_id,
+                processing_status="classification_failed",
+                category=reason,
+            )
 
             if email_msg:
-                email_msg.processing_status = "classification_failed"
-                email_msg.category = reason
-                self._session.add(email_msg)
-                await self._session.flush()
-
                 logger.info(
                     "Marked email %s as classification_failed (reason: %s)",
                     email_message_id,
@@ -368,19 +363,13 @@ class IntentClassifierService:
             return
 
         try:
-            from sqlmodel import select
+            from src.modules.gmail.infrastructure.email_repository import EmailRepository
 
-            from src.modules.gmail.domain.entities import EmailMessage
-
-            statement = select(EmailMessage).where(EmailMessage.id == email_message_id)
-            result = await self._session.execute(statement)
-            email_msg = result.scalars().first()
-
-            if email_msg:
-                email_msg.category = category
-                email_msg.processing_status = "classified"
-                self._session.add(email_msg)
-                await self._session.flush()
+            await EmailRepository(self._session).update_processing_status(
+                email_message_id,
+                processing_status="classified",
+                category=category,
+            )
         except Exception as exc:
             logger.error(
                 "Failed to update email category for %s: %s",

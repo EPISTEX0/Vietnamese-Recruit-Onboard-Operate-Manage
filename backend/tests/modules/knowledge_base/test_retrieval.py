@@ -185,17 +185,10 @@ class TestContextBuilderKBIntegration:
     """Tests for ContextBuilder with KB retrieval injection."""
 
     @pytest.fixture
-    def mock_session(self) -> AsyncMock:
-        session = AsyncMock()
-        # Set up the mock so _get_org_name returns test org name
-        mock_row = MagicMock()
-        mock_row.name = "Test Corp"
-        mock_scalars = MagicMock()
-        mock_scalars.first.return_value = mock_row
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        session.execute = AsyncMock(return_value=mock_result)
-        return session
+    def mock_org_settings_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.get_name = AsyncMock(return_value="Test Corp")
+        return repo
 
     @pytest.fixture
     def mock_retrieval(self) -> AsyncMock:
@@ -203,16 +196,13 @@ class TestContextBuilderKBIntegration:
         service.retrieve.return_value = ""
         return service
 
-    async def test_hr_context_includes_kb_block(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
-    ) -> None:
+    async def test_hr_context_includes_kb_block(self, mock_retrieval: AsyncMock) -> None:
         """HR context includes KB retrieval block when query provided."""
         mock_retrieval.retrieve.return_value = (
             '---\n[TÀI LIỆU NỘI BỘ LIÊN QUAN]\n(Nội quy): "Nội dung mẫu"\n---\n'
         )
 
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
         )
 
@@ -220,15 +210,12 @@ class TestContextBuilderKBIntegration:
 
         assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" in result
 
-    async def test_hr_context_no_kb_when_no_query(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
-    ) -> None:
+    async def test_hr_context_no_kb_when_no_query(self, mock_retrieval: AsyncMock) -> None:
         """HR context does NOT call retrieval when no user_query provided."""
         mock_retrieval.retrieve.return_value = (
             '---\n[TÀI LIỆU NỘI BỘ LIÊN QUAN]\n(Nội quy): "Nội dung mẫu"\n---\n'
         )
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
         )
 
@@ -237,15 +224,12 @@ class TestContextBuilderKBIntegration:
         mock_retrieval.retrieve.assert_not_called()
         assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
-    async def test_hr_context_no_kb_when_empty_query(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
-    ) -> None:
+    async def test_hr_context_no_kb_when_empty_query(self, mock_retrieval: AsyncMock) -> None:
         """HR context does NOT call retrieval when query is empty/whitespace."""
         mock_retrieval.retrieve.return_value = (
             '---\n[TÀI LIỆU NỘI BỘ LIÊN QUAN]\n(Nội quy): "Nội dung mẫu"\n---\n'
         )
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
         )
 
@@ -254,10 +238,9 @@ class TestContextBuilderKBIntegration:
         mock_retrieval.retrieve.assert_not_called()
         assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
-    async def test_hr_context_no_kb_when_service_none(self, mock_session: AsyncMock) -> None:
+    async def test_hr_context_no_kb_when_service_none(self) -> None:
         """HR context degrades gracefully when no retrieval service."""
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=None,
         )
 
@@ -267,14 +250,14 @@ class TestContextBuilderKBIntegration:
         assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
     async def test_hr_context_no_kb_when_retrieval_fails(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
+        self, mock_org_settings_repo: AsyncMock, mock_retrieval: AsyncMock
     ) -> None:
         """HR context degrades gracefully when retrieval raises."""
         mock_retrieval.retrieve.side_effect = RuntimeError("Boom")
 
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
+            org_settings_repo=mock_org_settings_repo,
         )
 
         result = await builder.build_hr_context(user_query="Test")
@@ -284,12 +267,9 @@ class TestContextBuilderKBIntegration:
         # Standard context should still be present
         assert "Tổ chức: Test Corp" in result
 
-    async def test_employee_context_uses_employee_kb(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
-    ) -> None:
+    async def test_employee_context_uses_employee_kb(self, mock_retrieval: AsyncMock) -> None:
         """Employee context queries only Employee KB (security boundary)."""
         builder = ContextBuilder(
-            session=mock_session,
             employee_service=AsyncMock(),
             retrieval_service=mock_retrieval,
         )
@@ -303,14 +283,11 @@ class TestContextBuilderKBIntegration:
         call_kwargs = mock_retrieval.retrieve.call_args.kwargs
         assert call_kwargs["kb_types"] == ["employee"]
 
-    async def test_similarity_threshold_no_injection(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
-    ) -> None:
+    async def test_similarity_threshold_no_injection(self, mock_retrieval: AsyncMock) -> None:
         """When retrieval returns empty (below threshold), no KB section injected."""
         mock_retrieval.retrieve.return_value = ""
 
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
         )
 
@@ -319,7 +296,7 @@ class TestContextBuilderKBIntegration:
         assert "[TÀI LIỆU NỘI BỘ LIÊN QUAN]" not in result
 
     async def test_hr_context_kb_after_standard_context(
-        self, mock_session: AsyncMock, mock_retrieval: AsyncMock
+        self, mock_org_settings_repo: AsyncMock, mock_retrieval: AsyncMock
     ) -> None:
         """KB section appears after standard context blocks."""
         mock_retrieval.retrieve.return_value = (
@@ -327,9 +304,9 @@ class TestContextBuilderKBIntegration:
         )
 
         builder = ContextBuilder(
-            session=mock_session,
             retrieval_service=mock_retrieval,
             onboarding_service=AsyncMock(),
+            org_settings_repo=mock_org_settings_repo,
         )
 
         result = await builder.build_hr_context(user_query="Test query")
@@ -392,7 +369,6 @@ class TestEmployeeKBSecurityIsolation:
         Verifies that build_employee_context passes kb_types=["employee"]
         to the retrieval service, never ["hr"].
         """
-        mock_session = AsyncMock()
         mock_retrieval = AsyncMock(spec=RetrievalService)
         mock_retrieval.retrieve.return_value = ""
 
@@ -406,7 +382,6 @@ class TestEmployeeKBSecurityIsolation:
         mock_employee_svc.get_employee = AsyncMock(return_value=mock_employee)
 
         builder = ContextBuilder(
-            session=mock_session,
             employee_service=mock_employee_svc,
             retrieval_service=mock_retrieval,
         )

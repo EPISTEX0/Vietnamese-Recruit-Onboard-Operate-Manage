@@ -18,10 +18,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 if TYPE_CHECKING:
     from src.modules.employee.application.employee_service import EmployeeService
+    from src.modules.employee.infrastructure.department_repository import DepartmentRepository
+    from src.modules.employee.infrastructure.position_repository import PositionRepository
     from src.modules.employee_request.application.leave_service import LeaveService
     from src.modules.employee_request.application.overtime_service import OvertimeService
     from src.modules.knowledge_base.application.retrieval_service import RetrievalService
@@ -59,7 +59,6 @@ class ContextBuilder:
 
     def __init__(
         self,
-        session: AsyncSession,
         candidate_service: CandidateLifecycleService | None = None,
         onboarding_service: OnboardingService | None = None,
         org_settings_repo: OrganizationSettingsRepository | None = None,
@@ -69,8 +68,9 @@ class ContextBuilder:
         payslip_service: PayslipService | None = None,
         overtime_service: OvertimeService | None = None,
         retrieval_service: RetrievalService | None = None,
+        department_repo: DepartmentRepository | None = None,
+        position_repo: PositionRepository | None = None,
     ) -> None:
-        self._session = session
         self._candidate_service = candidate_service
         self._onboarding_service = onboarding_service
         self._org_settings_repo = org_settings_repo
@@ -80,6 +80,8 @@ class ContextBuilder:
         self._payslip_service = payslip_service
         self._overtime_service = overtime_service
         self._retrieval_service = retrieval_service
+        self._department_repo = department_repo
+        self._position_repo = position_repo
 
     # ------------------------------------------------------------------
     # HR Assistant context (real-time per request)
@@ -198,19 +200,13 @@ class ContextBuilder:
 
     async def _get_org_name(self) -> str:
         """Read the organization name from the settings singleton."""
+        if self._org_settings_repo is None:
+            return ""
+
         try:
-            from sqlalchemy import select
-
-            from src.modules.recruitment.domain.entities import OrganizationSettings
-
-            statement = select(OrganizationSettings).limit(1)
-            result = await self._session.execute(statement)
-            row = result.scalars().first()
-            if row and row.name:
-                return row.name
+            return await self._org_settings_repo.get_name()
         except Exception:
-            pass
-        return ""
+            return ""
 
     async def _get_pipeline_summary(self) -> str:
         """Count candidates by status for the pipeline summary."""
@@ -289,15 +285,14 @@ class ContextBuilder:
             lines = [
                 f"Nhân viên: {employee.full_name}",
             ]
-            if employee.department_id:
-                # Resolve department name via raw query
-                dept = await self._get_entity_name("departments", employee.department_id)
+            if employee.department_id and self._department_repo is not None:
+                dept = await self._department_repo.get_by_id(employee.department_id)
                 if dept:
-                    lines.append(f"Phòng ban: {dept}")
-            if employee.position_id:
-                pos = await self._get_entity_name("positions", employee.position_id)
+                    lines.append(f"Phòng ban: {dept.name}")
+            if employee.position_id and self._position_repo is not None:
+                pos = await self._position_repo.get_by_id(employee.position_id)
                 if pos:
-                    lines.append(f"Vị trí: {pos}")
+                    lines.append(f"Vị trí: {pos.name}")
             if employee.employee_code:
                 lines.append(f"Mã NV: {employee.employee_code}")
             return "\n".join(lines)
@@ -405,19 +400,3 @@ class ContextBuilder:
             )
         except Exception:
             return ""
-
-    async def _get_entity_name(self, table: str, entity_id: UUID) -> str | None:
-        """Resolve a name field from a generic table by id."""
-        from sqlalchemy import text
-
-        try:
-            result = await self._session.execute(
-                text(f"SELECT name FROM {table} WHERE id = :id"),
-                {"id": entity_id},
-            )
-            row = result.fetchone()
-            if row:
-                return row[0]
-        except Exception:
-            pass
-        return None

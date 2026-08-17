@@ -53,6 +53,36 @@ class PositionRepository:
         result = await self.session.execute(statement)
         return result.scalars().first()
 
+    async def get_by_ids(self, position_ids: list[UUID]) -> dict[UUID, Position]:
+        """Retrieve multiple positions by their IDs in one query.
+
+        Args:
+            position_ids: List of position UUIDs to fetch.
+
+        Returns:
+            Dict mapping position ID to Position entity.
+        """
+        if not position_ids:
+            return {}
+        statement = select(Position).where(Position.id.in_(position_ids))  # type: ignore[attr-defined]
+        result = await self.session.execute(statement)
+        return {p.id: p for p in result.scalars().all()}
+
+    async def list_by_department(self, department_id: UUID) -> list[Position]:
+        """Retrieve all positions belonging to a department, ordered by name.
+
+        Args:
+            department_id: The UUID of the department to filter by.
+
+        Returns:
+            A list of Position entities sorted alphabetically by name.
+        """
+        statement = (
+            select(Position).where(Position.department_id == department_id).order_by(Position.name)
+        )
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
     async def get_by_name(self, name: str) -> Position | None:
         """Retrieve a position by name (case-insensitive).
 

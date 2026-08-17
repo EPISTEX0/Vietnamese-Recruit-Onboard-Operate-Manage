@@ -4,6 +4,7 @@ Provides async database access for user lookup and upsert operations
 using SQLAlchemy async sessions with SQLModel.
 """
 
+import builtins
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -60,6 +61,36 @@ class UserRepository:
         statement = select(User).where(User.employee_id == employee_id)
         result = await self.session.execute(statement)
         return result.scalars().first()
+
+    async def get_by_ids(self, user_ids: builtins.list[UUID]) -> dict[UUID, User]:
+        """Retrieve multiple users by their IDs in one query.
+
+        Args:
+            user_ids: List of user UUIDs to fetch.
+
+        Returns:
+            Dict mapping user ID to User entity.
+        """
+        if not user_ids:
+            return {}
+        statement = select(User).where(User.id.in_(user_ids))  # type: ignore[attr-defined]
+        result = await self.session.execute(statement)
+        return {user.id: user for user in result.scalars().all()}
+
+    async def update_role(self, user: User, role: UserRole) -> User:
+        """Persist a new role for an already-loaded user.
+
+        Args:
+            user: The User entity to update, loaded by the caller.
+            role: The role to assign.
+
+        Returns:
+            The updated User entity.
+        """
+        user.role = role
+        self.session.add(user)
+        await self.session.flush()
+        return user
 
     async def count_users(self) -> int:
         """Count total users in system."""
