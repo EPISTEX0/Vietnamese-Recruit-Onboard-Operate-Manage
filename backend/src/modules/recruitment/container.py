@@ -22,6 +22,7 @@ from arq.connections import RedisSettings
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.modules.employee.infrastructure.employee_repository import EmployeeRepository
 from src.modules.identity.container import (
     get_crypto_utils,
     get_current_user,
@@ -56,6 +57,7 @@ from src.modules.recruitment.infrastructure.org_settings_repository import (
 )
 from src.modules.recruitment.infrastructure.pii_redactor import PIIRedactor
 from src.modules.recruitment.infrastructure.repositories import (
+    CalendarConflictRepository,
     CandidateRepository,
     CVDocumentRepository,
     InterviewRepository,
@@ -215,7 +217,8 @@ async def get_interview_scheduler_service(
     """Provide an InterviewSchedulerService instance with all dependencies.
 
     Wires Calendar scheduling dependencies (per ADR-0008):
-    InterviewRepository, CalendarPort, OrgSettingsRepo, ConnectionRepo, Crypto.
+    InterviewRepository, CalendarConflictRepository, EmployeeRepository,
+    CalendarPort, OrgSettingsRepo, ConnectionRepo, Crypto.
 
     Args:
         session: The async database session from DI.
@@ -226,6 +229,8 @@ async def get_interview_scheduler_service(
     """
     candidate_repo = CandidateRepository(session)
     interview_repo = InterviewRepository(session)
+    calendar_conflict_repo = CalendarConflictRepository(session)
+    employee_repo = EmployeeRepository(session)
 
     # Calendar scheduling dependencies (ADR-0008).
     org_settings_repo = OrganizationSettingsRepository(session, get_recruitment_settings())
@@ -235,6 +240,8 @@ async def get_interview_scheduler_service(
     return InterviewSchedulerService(
         candidate_repo=candidate_repo,
         interview_repo=interview_repo,
+        calendar_conflict_repo=calendar_conflict_repo,
+        employee_repo=employee_repo,
         calendar_port=get_calendar_adapter(),
         org_settings_repo=org_settings_repo,
         connection_repo=connection_repo,

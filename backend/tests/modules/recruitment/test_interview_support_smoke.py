@@ -3,10 +3,11 @@
 Verifies that the reusable seams in ``_interview_support`` import cleanly and
 behave as the downstream property tests (tasks 5.2-5.13, 7.x, 8.x, 10.x) will
 rely on: the fake ``CalendarPort`` records calls and honours scripted outcomes,
-the in-memory candidate repository commits/rolls back, the fake session resolves
-interviewers through the real ``select(Employee)`` query, the spy audit sink
-captures and can fail, the identity seams drive grant + refresh, the clock is
-deterministic, and the timezone strategy yields valid IANA zones.
+the in-memory candidate repository commits/rolls back, the fake employee
+repository resolves interviewers through the real ``_resolve_interviewers``
+helper, the spy audit sink captures and can fail, the identity seams drive
+grant + refresh, the clock is deterministic, and the timezone strategy yields
+valid IANA zones.
 
 This is test infrastructure validation only - it asserts the seams are usable,
 not feature behaviour (the feature lands in tasks 5.1+).
@@ -151,8 +152,8 @@ class TestCandidateRepoAndSession:
         assert live is not None
         assert live.status == CandidateStatus.INTERVIEW_SCHEDULED
 
-    async def test_session_resolves_interviewers_via_real_query(self) -> None:
-        """The session executes the service's real select(Employee) lookup."""
+    async def test_employee_repo_resolves_interviewers_via_real_lookup(self) -> None:
+        """The fake employee repository backs the service's real interviewer lookup."""
         emp_ok = make_employee(email="ok@example.com")
         emp_blank = make_employee(email="")
         harness = build_calendar_harness(

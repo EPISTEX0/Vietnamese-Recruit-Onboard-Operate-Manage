@@ -155,6 +155,27 @@ Xanh vẫn không tự merge được: squash-only, cần 1 review, không đư�
 Refactor `1dcb4a7` (tách `CandidateService`) **không** bảo toàn hành vi. Ở repo này, test đỏ sau khi
 gỡ một coupling thường là **đúng**, không phải stale. Sửa thành khẳng định hành vi, đừng đổi tên mock.
 
+### Luật `add()`/`flush()`: repository đầy đủ, application chỉ `commit()`/`rollback()`
+
+- **rule:** mọi `session.add()`/`session.flush()` cho một entity đi qua method của repository entity
+  đó (repository trả về entity đã persist, gọi `add`/`flush` bên trong). Application layer chỉ gọi
+  `commit()`/`rollback()` trên session — không bao giờ `add()`/`flush()` trực tiếp.
+- **why:** đo bằng AST trên toàn `backend/src/` (#365): `infrastructure/` đã có 83 `add()` / 105
+  `flush()` theo đúng khuôn này trên 32 file; `application/` có 23 `add()` / 8 `flush()` không theo
+  luật nào — hai khuôn cùng tồn tại mà không ai chốt cái nào đúng. Khuôn `infrastructure/` là khuôn áp
+  đảo, không phải khuôn thiểu số cần sửa.
+- **origin:** `CalendarConflictRepository.create()`/`update()` (`infrastructure/repositories.py`) là
+  ví dụ dùng luật này; `InterviewSchedulerService` (#365) đã sửa ba chỗ `self._session.add(conflict)`
+  thành gọi repository để khớp luật.
+- **known debt, không sửa trong #365:** `interview_scheduler_service.py` còn nhiều chỗ
+  `self._session.add(interview)` gọi thẳng thay vì qua `InterviewRepository.update()`/`.create()` đã
+  có sẵn — để nguyên có chủ ý, vì `InterviewRepository.update()` set `updated_at` và `flush()` ngay,
+  khác hành vi với `add()` trần; đổi mù sang gọi repo rủi ro đổi hành vi các property test đang xanh.
+  Đây là một trong 31 chỗ mà #365 không phải sửa; áp dụng luật cho các chỗ đó là việc của ticket khác.
+- **allowed response khi thấy vi phạm luật này ở chỗ khác:** đừng sửa mù. Đọc method repository tương
+  ứng trước — nếu nó làm nhiều hơn `add`/`flush` trần (set field, side effect khác), đối chiếu hành vi
+  trước khi đổi call site.
+
 ### `log_audit` nuốt lỗi
 
 Một `commit()` trần đặt sau `log_audit` biến một audit-failure vốn bị nuốt thành 500; bỏ nó đi thì

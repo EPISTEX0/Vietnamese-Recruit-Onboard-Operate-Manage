@@ -19,11 +19,15 @@ Seams provided
 * :class:`FakeCandidateRepository`, :class:`FakeInterviewRepository`, and
   :class:`FakeCalendarSession` - in-memory candidate/interview persistence with
   explicit staging + commit/rollback semantics (for the atomic-rollback
-  property) and an employee lookup compatible with how
-  :meth:`InterviewSchedulerService._resolve_interviewers` reads ``select(Employee)``.
-  Calendar state (event id, scheduled start, applied timezone) lives on
-  :class:`Interview`, so tests seed it with ``build_calendar_harness(interviews=...)``
-  and read it back via ``harness.scheduled_interview(candidate_id)``.
+  property). Calendar state (event id, scheduled start, applied timezone)
+  lives on :class:`Interview`, so tests seed it with
+  ``build_calendar_harness(interviews=...)`` and read it back via
+  ``harness.scheduled_interview(candidate_id)``.
+* :class:`FakeEmployeeRepository` and :class:`FakeCalendarConflictRepository` -
+  plain dict-backed stand-ins for the Employee lookup
+  (:meth:`InterviewSchedulerService._resolve_interviewers`) and CalendarConflict
+  persistence. Neither entity is staged/rolled back by the session, so these
+  need no coordination with :class:`FakeCalendarSession`.
 * :class:`SpyAuditSink` - a stand-in for the module-level ``log_audit`` that
   records audit entries and can be configured to raise (to test R12.5 - audit
   failure must never roll back the action). Tests install it with
@@ -72,8 +76,13 @@ from src.modules.recruitment.application.interview_scheduler_service import (
     CalendarPort,
     InterviewSchedulerService,
 )
-from src.modules.recruitment.domain.entities import Candidate, Interview, InterviewParticipant
-from src.modules.recruitment.domain.enums import CandidateStatus
+from src.modules.recruitment.domain.entities import (
+    CalendarConflict,
+    Candidate,
+    Interview,
+    InterviewParticipant,
+)
+from src.modules.recruitment.domain.enums import CalendarConflictStatus, CandidateStatus
 from src.modules.recruitment.domain.value_objects import (
     CalendarEvent,
     CalendarEventSpec,
@@ -511,16 +520,33 @@ def _snapshot_interview(interview: Interview) -> dict[str, Any]:
     return {name: getattr(interview, name) for name in _INTERVIEW_SNAPSHOT_FIELDS}
 
 
+class FakeEmployeeRepository:
+    """In-memory ``EmployeeRepository`` stand-in seeded with fixed employees.
+
+    Unlike :class:`FakeInterviewRepository`, ``InterviewSchedulerService``
+    never mutates an Employee, so a plain dict seeded once at construction is
+    enough -- no session-backed commit/rollback coordination is needed.
+    """
+
+    def __init__(self, employees: Sequence[Employee] = ()) -> None:
+        """Seed the repository with the given employees."""
+        self._employees: dict[UUID, Employee] = {e.id: e for e in employees}
+
+    async def get_by_id(self, employee_id: UUID) -> Employee | None:
+        """Return the seeded Employee for ``employee_id``, or ``None``."""
+        return self._employees.get(employee_id)
+
+
 class FakeInterviewRepository:
     """In-memory ``InterviewRepository`` stand-in over the session's store.
 
-    :class:`InterviewSchedulerService` reads interviews two ways: through
-    ``select(Interview)`` on the session (``_get_interview_by_event_id``) and
-    through ``self._interview_repo`` (``_get_scheduled_interview``,
-    ``_get_interview_or_raise``). Both must see the same rows -- an Interview
-    that ``schedule_interview`` staged with ``session.add`` has to be visible to
-    the very next ``reschedule_interview`` -- so this repository holds no state
-    of its own and reads straight out of :class:`FakeCalendarSession`.
+    :class:`InterviewSchedulerService` reads every Interview through
+    ``self._interview_repo`` (``_get_interview_by_event_id``,
+    ``_get_scheduled_interview``, ``_get_interview_or_raise``), so this
+    repository must see every staged row -- an Interview that
+    ``schedule_interview`` staged with ``session.add`` has to be visible to the
+    very next ``reschedule_interview`` -- hence it holds no state of its own
+    and reads straight out of :class:`FakeCalendarSession`.
     """
 
     def __init__(self, session: FakeCalendarSession) -> None:
@@ -534,6 +560,15 @@ class FakeInterviewRepository:
     async def get_by_id(self, interview_id: UUID) -> Interview | None:
         """Return the live Interview for ``interview_id``, or ``None``."""
         return self._session.interviews.get(interview_id)
+
+    async def find_by_candidate_and_event_id(
+        self, candidate_id: UUID, event_id: str
+    ) -> Interview | None:
+        """Return the live Interview matching both fields, or ``None``."""
+        for iv in self._session.interviews.values():
+            if iv.candidate_id == candidate_id and iv.calendar_event_id == event_id:
+                return iv
+        return None
 
     async def update(self, interview: Interview) -> Interview:
         """Stage an Interview mutation (visible on commit, undone on rollback)."""
@@ -552,36 +587,28 @@ class FakeInterviewRepository:
 
 
 class FakeCalendarSession:
-    """Minimal async session modelling commit/rollback + employee lookup.
+    """Minimal async session modelling commit/rollback over staged Interviews.
 
-    Provides the two things :class:`InterviewSchedulerService` needs from its
-    ``AsyncSession`` during the interview flows:
-
-    1. ``commit`` / ``rollback`` that drive the staged Candidate mutations held
-       by :class:`FakeCandidateRepository` (atomicity for R3 / Property 12).
-    2. ``execute`` for the ``select(Employee).where(col(Employee.id).in_(...))``
-       query used by :meth:`InterviewSchedulerService._resolve_interviewers`. The session
-       returns a result whose ``.scalars().all()`` yields the seeded Employees
-       whose ids appear in the query's ``IN`` clause.
-
-    Employees are matched by inspecting the compiled statement's bind
-    parameters, so the service's real ``select(Employee)`` expression is used
-    unchanged - no monkeypatching of ``_resolve_interviewers`` is required.
+    Provides what :class:`InterviewSchedulerService` needs from its
+    ``AsyncSession`` during the interview flows: ``commit`` / ``rollback``
+    that drive the staged Candidate and Interview mutations held by
+    :class:`FakeCandidateRepository` and :class:`FakeInterviewRepository`
+    (atomicity for R3 / Property 12). Employee lookups and CalendarConflict
+    persistence go through :class:`FakeEmployeeRepository` and
+    :class:`FakeCalendarConflictRepository` instead -- the service holds no
+    ``select()`` query against this session at all.
     """
 
     def __init__(
         self,
-        employees: Sequence[Employee] | None = None,
         interviews: Sequence[Interview] | None = None,
     ) -> None:
-        """Initialize the session and seed the employee/interview lookups.
+        """Initialize the session and seed the interview lookup.
 
         Args:
-            employees: Employees available to the interviewer lookup.
             interviews: Interviews that already exist (committed state), i.e.
                 Candidates that are already scheduled on the calendar.
         """
-        self.employees: dict[UUID, Employee] = {e.id: e for e in (employees or [])}
         self.interviews: dict[UUID, Interview] = {iv.id: iv for iv in (interviews or [])}
         self.participants: list[InterviewParticipant] = []
         self.commit_count = 0
@@ -646,121 +673,48 @@ class FakeCalendarSession:
                     setattr(live, field_name, value)
         self._staged_interview_ids.clear()
 
-    async def execute(self, statement: Any) -> _FakeEmployeeResult | _FakeInterviewResult:
-        """Execute an interviewer ``select(Employee)`` or ``select(Interview)`` against seeded data.
 
-        When the statement targets ``Employee``, extracts the requested ids from the
-        statement's ``IN`` clause and returns the matching seeded Employees.
-        When the statement targets ``Interview``, returns a result matching on
-        ``candidate_id`` or ``calendar_event_id``.
+class FakeCalendarConflictRepository:
+    """In-memory ``CalendarConflictRepository`` stand-in seeded with fixed conflicts.
 
-        Args:
-            statement: The SQLAlchemy/SQLModel select statement.
-
-        Returns:
-            A result object exposing ``.scalars().all()`` and ``.all()``.
-        """
-        # Detect if this is an Interview query by checking the compiled columns.
-        try:
-            compiled = statement.compile()
-            raw_sql = str(compiled).lower()
-        except Exception:
-            raw_sql = ""
-
-        if "from interviews" in raw_sql or "from interview" in raw_sql:
-            return self._execute_interview_query(compiled, statement)
-
-        # Default: Employee query
-        requested_ids = _extract_in_clause_uuids(statement)
-        if requested_ids is None:
-            matched = list(self.employees.values())
-        else:
-            matched = [self.employees[id_] for id_ in requested_ids if id_ in self.employees]
-        return _FakeEmployeeResult(matched)
-
-    def _execute_interview_query(self, compiled: Any, statement: Any) -> _FakeInterviewResult:
-        """Execute an Interview query against seeded interviews."""
-        # Extract bind parameters
-        params = {}
-        try:
-            params = compiled.params
-        except Exception:
-            pass
-
-        matched = list(self.interviews.values())
-        # Filter by candidate_id if present
-        candidate_id = params.get("candidate_id_1") or params.get("candidate_id")
-        if candidate_id is not None and isinstance(candidate_id, UUID):
-            matched = [i for i in matched if i.candidate_id == candidate_id]
-        # Filter by calendar_event_id if present
-        event_id = params.get("calendar_event_id_1") or params.get("calendar_event_id")
-        if event_id is not None:
-            matched = [i for i in matched if i.calendar_event_id == event_id]
-        return _FakeInterviewResult(matched)
-
-
-class _FakeEmployeeResult:
-    """Result stand-in exposing the SQLAlchemy access patterns used here."""
-
-    def __init__(self, employees: list[Employee]) -> None:
-        self._employees = employees
-
-    def scalars(self) -> _FakeScalars:
-        """Return a scalars accessor (``_resolve_interviewers`` path)."""
-        return _FakeScalars(self._employees)
-
-    def all(self) -> list[tuple[Any, ...]]:
-        """Return ``(id,)`` rows (legacy ``_validate_interviewer_ids`` path)."""
-        return [(e.id,) for e in self._employees]
-
-
-class _FakeInterviewResult:
-    """Result stand-in for ``select(Interview)`` queries."""
-
-    def __init__(self, interviews: list[Interview]) -> None:
-        self._interviews = interviews
-
-    def scalars(self) -> _FakeScalars:
-        """Return a scalars accessor wrapping Interview entities."""
-        return _FakeScalars(self._interviews)
-
-
-class _FakeScalars:
-    """Scalars accessor returning the matched Employee entities."""
-
-    def __init__(self, employees: list[Employee]) -> None:
-        self._employees = employees
-
-    def all(self) -> list[Employee]:
-        """Return all matched Employee entities."""
-        return list(self._employees)
-
-    def first(self) -> Employee | None:
-        """Return the first matched row, matching SQLAlchemy scalars."""
-        return self._employees[0] if self._employees else None
-
-
-def _extract_in_clause_uuids(statement: Any) -> list[UUID] | None:
-    """Best-effort extraction of UUIDs from a statement's ``IN`` parameters.
-
-    Compiles the statement and reads its bind parameter values, returning the
-    UUID-valued ones. Returns ``None`` when extraction is not possible, so the
-    caller falls back to returning all seeded employees.
-
-    Args:
-        statement: The SQLAlchemy/SQLModel select statement.
-
-    Returns:
-        The list of UUID bind values, or ``None`` if they cannot be read.
+    Like :class:`FakeEmployeeRepository`, this holds a plain dict: nothing
+    under test asserts on conflict rollback, so no session-backed
+    commit/rollback coordination is needed.
     """
-    try:
-        compiled = statement.compile()
-        params = compiled.params
-    except Exception:  # noqa: BLE001 - extraction is best-effort
-        return None
 
-    uuids = [value for value in params.values() if isinstance(value, UUID)]
-    return uuids or None
+    def __init__(self, conflicts: Sequence[CalendarConflict] = ()) -> None:
+        """Seed the repository with the given conflicts."""
+        self._conflicts: dict[UUID, CalendarConflict] = {c.id: c for c in conflicts}
+
+    async def create(self, conflict: CalendarConflict) -> CalendarConflict:
+        """Store a new CalendarConflict."""
+        self._conflicts[conflict.id] = conflict
+        return conflict
+
+    async def get_by_id(self, id: UUID) -> CalendarConflict | None:
+        """Return the seeded CalendarConflict for ``id``, or ``None``."""
+        return self._conflicts.get(id)
+
+    async def list_conflicts(
+        self,
+        status: str | None = None,
+        candidate_id: UUID | None = None,
+    ) -> list[CalendarConflict]:
+        """Return conflicts matching the optional status/candidate filters."""
+        matched = list(self._conflicts.values())
+        if status is not None:
+            matched = [c for c in matched if c.status == status]
+        else:
+            matched = [c for c in matched if c.status == CalendarConflictStatus.UNRESOLVED]
+        if candidate_id is not None:
+            matched = [c for c in matched if c.candidate_id == candidate_id]
+        matched.sort(key=lambda c: c.created_at, reverse=True)
+        return matched
+
+    async def update(self, conflict: CalendarConflict) -> CalendarConflict:
+        """Store the mutated CalendarConflict."""
+        self._conflicts[conflict.id] = conflict
+        return conflict
 
 
 # ─── Spy audit sink ────────────────────────────────────────────────────
@@ -1220,7 +1174,9 @@ class CalendarServiceHarness:
         candidate_repo: The in-memory candidate repository.
         interview_repo: The in-memory interview repository (shares the session's
             interview store).
-        session: The fake session coordinating commit/rollback + employee lookup.
+        calendar_conflict_repo: The in-memory calendar conflict repository.
+        employee_repo: The in-memory employee repository.
+        session: The fake session coordinating Candidate/Interview commit/rollback.
         audit_sink: The :class:`SpyAuditSink` capturing audit entries.
         grant_repo: The fake OAuth grant repository.
         oauth_service: The fake grant checker / token refresher.
@@ -1234,6 +1190,8 @@ class CalendarServiceHarness:
     calendar: FakeCalendarPort
     candidate_repo: FakeCandidateRepository
     interview_repo: FakeInterviewRepository
+    calendar_conflict_repo: FakeCalendarConflictRepository
+    employee_repo: FakeEmployeeRepository
     session: FakeCalendarSession
     audit_sink: SpyAuditSink
     grant_repo: FakeOAuthGrantRepository
@@ -1281,6 +1239,7 @@ def build_calendar_harness(
     candidates: Sequence[Candidate],
     employees: Sequence[Employee] = (),
     interviews: Sequence[Interview] = (),
+    calendar_conflicts: Sequence[CalendarConflict] = (),
     calendar: FakeCalendarPort | None = None,
     audit_sink: SpyAuditSink | None = None,
     grant: OAuthGrant | None | _Default = _DEFAULT,
@@ -1309,6 +1268,8 @@ def build_calendar_harness(
             is how a Candidate is given an already-scheduled calendar event, now
             that the event reference lives on ``Interview`` rather than
             ``Candidate``. Build them with :func:`make_interview`.
+        calendar_conflicts: CalendarConflicts seeded into the calendar conflict
+            repository (committed state).
         calendar: A pre-configured :class:`FakeCalendarPort`; a default one is
             created when omitted.
         audit_sink: A pre-configured :class:`SpyAuditSink`; a default one is
@@ -1332,9 +1293,11 @@ def build_calendar_harness(
     calendar = calendar or FakeCalendarPort()
     audit_sink = audit_sink or SpyAuditSink()
 
-    session = FakeCalendarSession(employees=employees, interviews=interviews)
+    session = FakeCalendarSession(interviews=interviews)
     candidate_repo = FakeCandidateRepository(session, candidates)
     interview_repo = FakeInterviewRepository(session)
+    calendar_conflict_repo = FakeCalendarConflictRepository(calendar_conflicts)
+    employee_repo = FakeEmployeeRepository(employees)
 
     if isinstance(grant, _Default):
         resolved_grant: OAuthGrant | None = make_oauth_grant(
@@ -1367,6 +1330,8 @@ def build_calendar_harness(
     service = InterviewSchedulerService(
         candidate_repo=candidate_repo,  # type: ignore[arg-type]
         interview_repo=interview_repo,  # type: ignore[arg-type]
+        calendar_conflict_repo=calendar_conflict_repo,  # type: ignore[arg-type]
+        employee_repo=employee_repo,  # type: ignore[arg-type]
         session=session,  # type: ignore[arg-type]
         user_id=acting_user_id,
         calendar_port=calendar,
@@ -1386,6 +1351,8 @@ def build_calendar_harness(
         calendar=calendar,
         candidate_repo=candidate_repo,
         interview_repo=interview_repo,
+        calendar_conflict_repo=calendar_conflict_repo,
+        employee_repo=employee_repo,
         session=session,
         audit_sink=audit_sink,
         grant_repo=grant_repo,

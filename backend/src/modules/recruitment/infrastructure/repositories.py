@@ -14,6 +14,7 @@ from sqlalchemy.orm import Load, load_only
 from sqlmodel import select
 
 from src.modules.recruitment.domain.entities import (
+    CalendarConflict,
     Candidate,
     CorrectionRecord,
     CVDocument,
@@ -27,6 +28,7 @@ from src.modules.recruitment.domain.entities import (
     RecruitmentInboxItem,
 )
 from src.modules.recruitment.domain.enums import (
+    CalendarConflictStatus,
     CandidateStatus,
     JobOpeningStatus,
     ProcessingStatus,
@@ -1122,6 +1124,25 @@ class InterviewRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
+    async def find_by_candidate_and_event_id(
+        self, candidate_id: UUID, event_id: str
+    ) -> Interview | None:
+        """Find an Interview by candidate ID and Calendar event ID.
+
+        Args:
+            candidate_id: The UUID of the candidate.
+            event_id: The Google Calendar event ID.
+
+        Returns:
+            The Interview entity if found, None otherwise.
+        """
+        statement = select(Interview).where(
+            Interview.candidate_id == candidate_id,
+            Interview.calendar_event_id == event_id,
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
+
     async def get_participants(self, interview_id: UUID) -> list[InterviewParticipant]:
         """Get all participants for an interview.
 
@@ -1163,3 +1184,95 @@ class InterviewRepository:
         if interview is not None:
             await self.session.delete(interview)
             await self.session.flush()
+
+
+class CalendarConflictRepository:
+    """Handles CalendarConflict entity persistence using async SQLAlchemy sessions.
+
+    ``add()``/``flush()`` belong here, not in the application layer -- see
+    "Luật `add()`/`flush()`" in ``WORKSPACE_PROTOCOL.md``. The application
+    layer only calls ``commit()``/``rollback()`` on the entities this
+    repository returns.
+
+    Attributes:
+        session: The async database session for executing queries.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize the repository with an async database session.
+
+        Args:
+            session: An SQLAlchemy AsyncSession instance for database operations.
+        """
+        self.session = session
+
+    async def create(self, conflict: CalendarConflict) -> CalendarConflict:
+        """Persist a new CalendarConflict entity to the database.
+
+        Args:
+            conflict: The CalendarConflict entity to create.
+
+        Returns:
+            The persisted CalendarConflict entity.
+        """
+        self.session.add(conflict)
+        await self.session.flush()
+        return conflict
+
+    async def get_by_id(self, id: UUID) -> CalendarConflict | None:
+        """Retrieve a calendar conflict by its unique identifier.
+
+        Args:
+            id: The UUID primary key of the CalendarConflict.
+
+        Returns:
+            The CalendarConflict entity if found, None otherwise.
+        """
+        statement = select(CalendarConflict).where(CalendarConflict.id == id)
+        result = await self.session.execute(statement)
+        return result.scalars().first()
+
+    async def list_conflicts(
+        self,
+        status: str | None = None,
+        candidate_id: UUID | None = None,
+    ) -> list[CalendarConflict]:
+        """Retrieve calendar conflicts, optionally filtered by status or candidate.
+
+        Args:
+            status: Optional status filter. Defaults to "unresolved" when omitted.
+            candidate_id: Optional candidate UUID to filter by.
+
+        Returns:
+            A list of CalendarConflict entities ordered newest first.
+        """
+        statement = select(CalendarConflict).order_by(desc(CalendarConflict.created_at))
+
+        if status is not None:
+            statement = statement.where(CalendarConflict.status == status)
+        else:
+            statement = statement.where(
+                CalendarConflict.status == CalendarConflictStatus.UNRESOLVED
+            )
+
+        if candidate_id is not None:
+            statement = statement.where(CalendarConflict.candidate_id == candidate_id)
+
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def update(self, conflict: CalendarConflict) -> CalendarConflict:
+        """Update an existing CalendarConflict entity.
+
+        Updates the updated_at timestamp automatically.
+
+        Args:
+            conflict: The CalendarConflict entity with updated fields.
+
+        Returns:
+            The updated CalendarConflict entity.
+        """
+        conflict.updated_at = datetime.now(UTC)
+        self.session.add(conflict)
+        await self.session.flush()
+        return conflict

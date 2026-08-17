@@ -22,9 +22,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from src.modules.employee.domain.entities import Employee
+from src.modules.employee.infrastructure.employee_repository import EmployeeRepository
 from src.modules.recruitment.application.candidate_validators import validate_transition
 from src.modules.recruitment.domain.entities import (
     CalendarConflict,
@@ -52,6 +52,7 @@ from src.modules.recruitment.domain.value_objects import (
 )
 from src.modules.recruitment.infrastructure.audit_repository import log_audit
 from src.modules.recruitment.infrastructure.repositories import (
+    CalendarConflictRepository,
     CandidateRepository,
     InterviewRepository,
 )
@@ -163,6 +164,8 @@ class InterviewSchedulerService:
     Args:
         candidate_repo: Repository for candidate persistence.
         interview_repo: Repository for interview persistence.
+        calendar_conflict_repo: Repository for calendar conflict persistence.
+        employee_repo: Repository for employee lookup (interviewer resolution).
         calendar_port: Calendar adapter (protocol) for event operations.
         org_settings_repo: Organization settings repository (timezone).
         connection_repo: Organization Google Connection repository for
@@ -176,6 +179,8 @@ class InterviewSchedulerService:
         self,
         candidate_repo: CandidateRepository,
         interview_repo: InterviewRepository,
+        calendar_conflict_repo: CalendarConflictRepository,
+        employee_repo: EmployeeRepository,
         calendar_port: CalendarPort | None = None,
         org_settings_repo: OrganizationSettingsRepository | None = None,
         connection_repo: OrganizationGoogleConnectionRepository | None = None,
@@ -185,6 +190,8 @@ class InterviewSchedulerService:
     ) -> None:
         self._candidate_repo = candidate_repo
         self._interview_repo = interview_repo
+        self._calendar_conflict_repo = calendar_conflict_repo
+        self._employee_repo = employee_repo
         self._calendar_port = calendar_port
         self._org_settings_repo = org_settings_repo
         self._connection_repo = connection_repo
@@ -1115,18 +1122,7 @@ class InterviewSchedulerService:
         Returns:
             List of CalendarConflict entities matching the filters.
         """
-        stmt = select(CalendarConflict).order_by(CalendarConflict.created_at.desc())
-
-        if status is not None:
-            stmt = stmt.where(CalendarConflict.status == status)
-        else:
-            stmt = stmt.where(CalendarConflict.status == CalendarConflictStatus.UNRESOLVED)
-
-        if candidate_id is not None:
-            stmt = stmt.where(CalendarConflict.candidate_id == candidate_id)
-
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        return await self._calendar_conflict_repo.list_conflicts(status, candidate_id)
 
     async def resolve_calendar_conflict(
         self,
@@ -1162,9 +1158,7 @@ class InterviewSchedulerService:
                 "'keep_google' or 'overwrite_vroom'"
             )
 
-        stmt = select(CalendarConflict).where(CalendarConflict.id == conflict_id)
-        result = await self._session.execute(stmt)
-        conflict = result.scalars().first()
+        conflict = await self._calendar_conflict_repo.get_by_id(conflict_id)
 
         if conflict is None:
             raise CalendarConflictNotFoundError(f"Calendar conflict not found: {conflict_id}")
@@ -1232,7 +1226,7 @@ class InterviewSchedulerService:
             conflict.status = CalendarConflictStatus.RESOLVED_KEEP_GOOGLE
             conflict.resolved_by = acting_user_id
             conflict.resolved_at = datetime.now(UTC)
-            self._session.add(conflict)
+            await self._calendar_conflict_repo.update(conflict)
             if self._session is not None:
                 await self._session.commit()
 
@@ -1292,7 +1286,7 @@ class InterviewSchedulerService:
             conflict.status = CalendarConflictStatus.RESOLVED_OVERWRITE_VROOM
             conflict.resolved_by = acting_user_id
             conflict.resolved_at = datetime.now(UTC)
-            self._session.add(conflict)
+            await self._calendar_conflict_repo.update(conflict)
             if self._session is not None:
                 await self._session.commit()
 
@@ -1683,8 +1677,8 @@ class InterviewSchedulerService:
             raise InterviewerMissingEmailError(blank_email[0])
         return resolved
 
-    async def _get_employee(self, employee_id: UUID) -> Any | None:
-        """Fetch an Employee by ID from the session.
+    async def _get_employee(self, employee_id: UUID) -> Employee | None:
+        """Fetch an Employee by ID through the employee module's repository.
 
         Args:
             employee_id: UUID of the Employee.
@@ -1692,9 +1686,7 @@ class InterviewSchedulerService:
         Returns:
             The Employee entity or None.
         """
-        stmt = select(Employee).where(Employee.id == employee_id)
-        result = await self._session.execute(stmt)
-        return result.scalars().first()
+        return await self._employee_repo.get_by_id(employee_id)
 
     # ─── Private: Timezone helpers ────────────────────────────────────
 
@@ -1897,12 +1889,7 @@ class InterviewSchedulerService:
         Returns:
             The Interview entity or None.
         """
-        stmt = select(Interview).where(
-            Interview.candidate_id == candidate_id,
-            Interview.calendar_event_id == event_id,
-        )
-        result = await self._session.execute(stmt)
-        return result.scalars().first()
+        return await self._interview_repo.find_by_candidate_and_event_id(candidate_id, event_id)
 
     async def _get_scheduled_interview(self, candidate_id: UUID) -> Interview | None:
         """Get a scheduled interview for a candidate.
@@ -2092,7 +2079,7 @@ class InterviewSchedulerService:
             conflict_details=conflict_details,
             status=CalendarConflictStatus.UNRESOLVED,
         )
-        self._session.add(conflict)
+        await self._calendar_conflict_repo.create(conflict)
         if self._session is not None:
             await self._session.commit()
 
