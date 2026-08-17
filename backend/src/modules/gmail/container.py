@@ -362,6 +362,32 @@ def _build_ai_classifier(
     )
 
 
+async def raise_if_classification_not_configured(
+    session: AsyncSession, settings: GmailSettings
+) -> None:
+    """Raise the same ``RuntimeError`` ``build_classification_service`` would hit.
+
+    Lets a caller fail fast -- before enqueuing minutes of background work --
+    using the exact configured-ness check ``_build_ai_classifier`` applies, so
+    the pre-flight check and the real build can never drift apart.
+
+    Args:
+        session: An async database session used to read the Organization AI
+            Configuration.
+        settings: Gmail module configuration, forwarded to
+            ``_build_ai_classifier`` for parity with the real build call.
+
+    Raises:
+        RuntimeError: If the Organization AI Configuration is not set up.
+    """
+    from src.modules.identity.infrastructure.organization_ai_config_repository import (
+        OrganizationAIConfigRepository,
+    )
+
+    org_config = await OrganizationAIConfigRepository(session).get()
+    _build_ai_classifier(settings, org_config)
+
+
 async def build_classification_service(session: AsyncSession) -> ClassificationService:
     """Build classification with idempotent Job Application ingestion and Recruitment Inbox.
 
