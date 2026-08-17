@@ -14,8 +14,6 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from src.modules.gmail.domain.entities import EmailMessage as EmailMessageEntity
     from src.modules.gmail.infrastructure.audit_logger import AuditLogger
     from src.modules.gmail.infrastructure.config import GmailSettings
@@ -24,6 +22,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.gmail.api.schemas import (
     ErrorResponse,
@@ -66,7 +65,7 @@ from src.modules.gmail.container import (
 )
 from src.modules.gmail.infrastructure.email_repository import EmailRepository
 from src.modules.gmail.infrastructure.gmail_adapter import GmailAdapter
-from src.modules.identity.container import get_current_user
+from src.modules.identity.container import get_current_user, get_db_session
 from src.modules.identity.domain.entities import User, UserRole
 
 logger = logging.getLogger(__name__)
@@ -88,6 +87,7 @@ HRUserDep = Annotated[User, Depends(require_hr)]
 
 EmailSyncServiceDep = Annotated[EmailSyncService, Depends(get_email_sync_service)]
 EmailRepositoryDep = Annotated[EmailRepository, Depends(get_email_repository)]
+DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 SendServiceDep = Annotated[SendService, Depends(get_send_service)]
 
 
@@ -333,6 +333,7 @@ async def cancel_import(
 async def list_messages(
     current_user: HRUserDep,
     email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     limit: int = Query(default=50, ge=1, le=100, description="Max messages to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     category: str | None = Query(default=None, description="Filter by category"),
@@ -346,6 +347,7 @@ async def list_messages(
     Args:
         current_user: The authenticated user.
         email_repo: The email repository.
+        session: The database session, for the stale cv_processing reset below.
         limit: Maximum number of messages to return (1-100, default 50).
         offset: Number of messages to skip for pagination.
         category: Optional category filter (e.g. "job_application", "cv").
@@ -373,9 +375,9 @@ async def list_messages(
         .values(processing_status="classified")
         .execution_options(synchronize_session="fetch")
     )
-    result = await email_repo.session.execute(stale_cv_stmt)
+    result = await session.execute(stale_cv_stmt)
     if result.rowcount:
-        await email_repo.session.commit()
+        await session.commit()
         logger.info(
             "Reset %d stuck cv_processing emails to classified for user %s",
             result.rowcount,
@@ -419,6 +421,7 @@ async def get_message_body(
     message_id: str,
     current_user: HRUserDep,
     email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     gmail_adapter: GmailAdapterDep,
 ) -> MessageBodyResponse:
     """Fetch the full email body content for a message.
@@ -429,7 +432,8 @@ async def get_message_body(
     Args:
         message_id: The Gmail message ID.
         current_user: The authenticated user.
-        email_repo: The email repository for session access.
+        email_repo: The email repository.
+        session: The database session, for the access-token fallback lookup.
         gmail_adapter: The Gmail API adapter.
 
     Returns:
@@ -458,7 +462,7 @@ async def get_message_body(
             )
 
     # Fallback: fetch from Gmail API
-    access_token = await _get_user_access_token(email_repo.session)
+    access_token = await _get_user_access_token(session)
     body = await gmail_adapter.get_message_body(access_token, message_id)
     return MessageBodyResponse(
         plain_text=body.plain_text,
@@ -544,7 +548,7 @@ async def fetch_attachments(
     message_id: str,
     current_user: HRUserDep,
     attachment_service: AttachmentServiceDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     gmail_adapter: GmailAdapterDep,
 ) -> dict[str, Any]:
     """Fetch and validate attachments for an email message.
@@ -557,14 +561,14 @@ async def fetch_attachments(
         message_id: The Gmail message ID containing attachments.
         current_user: The authenticated user.
         attachment_service: The attachment service.
-        email_repo: The email repository for session access.
+        session: The database session, for the access-token lookup.
         gmail_adapter: The Gmail API adapter.
 
     Returns:
         Dictionary with fetched_count, skipped_count, and attachment metadata.
     """
     # Get access token from organization connection (raises if not connected)
-    access_token = await _get_user_access_token(email_repo.session)
+    access_token = await _get_user_access_token(session)
 
     # Fetch the full message to get attachment parts
     msg_data = await gmail_adapter.get_full_message(access_token, message_id)
@@ -609,7 +613,7 @@ async def process_attachments(
     message_id: str,
     current_user: HRUserDep,
     attachment_service: AttachmentServiceDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     gmail_adapter: GmailAdapterDep,
 ) -> dict[str, Any]:
     """Fetch email attachments and trigger CV processing pipeline.
@@ -623,7 +627,7 @@ async def process_attachments(
         message_id: The Gmail message ID containing attachments.
         current_user: The authenticated user.
         attachment_service: The attachment service.
-        email_repo: The email repository.
+        session: The database session.
 
     Returns:
         Dictionary with processing results.
@@ -635,11 +639,11 @@ async def process_attachments(
     # Probe the organization connection up front (raises if not connected) so a
     # disconnected account fails before the status transition below. The helper
     # fetches its own token when it actually calls Gmail.
-    await _get_user_access_token(email_repo.session)
+    await _get_user_access_token(session)
 
     # Find email record
     stmt = select(EmailMessageEntity).where(EmailMessageEntity.gmail_message_id == message_id)
-    result = await email_repo.session.execute(stmt)
+    result = await session.execute(stmt)
     email = result.scalar_one_or_none()
 
     if email is None:
@@ -663,8 +667,8 @@ async def process_attachments(
     # A second concurrent request will see processing_status != "classified"
     # and get 400 before starting the expensive pipeline.
     email.processing_status = "cv_processing"
-    email_repo.session.add(email)
-    await email_repo.session.commit()
+    session.add(email)
+    await session.commit()
 
     # Run CV processing via shared helper
     from src.modules.gmail.infrastructure.audit_logger import AuditLogger
@@ -676,10 +680,10 @@ async def process_attachments(
     try:
         cv_documents = await _fetch_and_process_cv_for_email(
             current_user=current_user,
-            email_repo=email_repo,
+            session=session,
             gmail_adapter=gmail_adapter,
             settings=settings,
-            audit_logger=AuditLogger(email_repo.session, settings),
+            audit_logger=AuditLogger(session, settings),
             email=email,
             classify_logger=classify_logger,
         )
@@ -687,8 +691,8 @@ async def process_attachments(
         logger.error("CV processing failed for email %s: %s", message_id, exc)
         # Revert to needs_review so HR can retry via reclassify
         email.processing_status = "needs_review"
-        email_repo.session.add(email)
-        await email_repo.session.commit()
+        session.add(email)
+        await session.commit()
         raise HTTPException(
             status_code=500,
             detail=f"CV processing failed: {exc}",
@@ -697,8 +701,8 @@ async def process_attachments(
     if not cv_documents:
         # Revert: no valid attachments to process
         email.processing_status = "classified"
-        email_repo.session.add(email)
-        await email_repo.session.commit()
+        session.add(email)
+        await session.commit()
         return {"processed_count": 0, "message": "No attachments found"}
 
     # Set final status based on CV processing results.
@@ -708,8 +712,8 @@ async def process_attachments(
         email.processing_status = "needs_review"
     else:
         email.processing_status = "classified"
-    email_repo.session.add(email)
-    await email_repo.session.commit()
+    session.add(email)
+    await session.commit()
 
     return {
         "processed_count": len(cv_documents),
@@ -740,7 +744,7 @@ async def process_attachments(
 )
 async def classify_emails(
     current_user: HRUserDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     gmail_adapter: GmailAdapterDep,
     limit: int = Query(default=5, ge=1, le=20, description="Max emails to classify per request"),
 ) -> dict[str, Any] | JSONResponse:
@@ -753,7 +757,7 @@ async def classify_emails(
 
     Args:
         current_user: The authenticated user.
-        email_repo: The email repository.
+        session: The database session.
 
     Returns:
         Dictionary with classified_count and total_unclassified,
@@ -769,7 +773,7 @@ async def classify_emails(
 
         # Fetch unclassified emails and the total remaining count
         unclassified_emails, total_remaining = await _get_unclassified_emails_and_count(
-            current_user, email_repo, limit
+            current_user, session, limit
         )
 
         if not unclassified_emails:
@@ -793,14 +797,14 @@ async def classify_emails(
         classified_count = await _evaluate_rules(
             current_user_id=current_user.id,
             unclassified_emails=unclassified_emails,
-            email_repo=email_repo,
+            session=session,
         )
 
         cv_processed_count = await _update_database_and_process_cvs(
             current_user=current_user,
             gmail_adapter=gmail_adapter,
             settings=settings,
-            email_repo=email_repo,
+            session=session,
             unclassified_emails=unclassified_emails,
             classify_logger=classify_logger,
         )
@@ -854,7 +858,7 @@ async def classify_emails(
 async def _fetch_and_process_cv_for_email(
     *,
     current_user: User,
-    email_repo: EmailRepository,
+    session: AsyncSession,
     gmail_adapter: GmailAdapter,
     settings: GmailSettings,
     audit_logger: AuditLogger,
@@ -873,7 +877,7 @@ async def _fetch_and_process_cv_for_email(
     from src.modules.recruitment.application.cv_processor import AttachmentInput
     from src.modules.recruitment.container import get_cv_processor_service
 
-    access_token = await _get_user_access_token(email_repo.session)
+    access_token = await _get_user_access_token(session)
     msg_data = await gmail_adapter.get_full_message(access_token, email.gmail_message_id)
     attachments_meta = _extract_attachment_metadata(msg_data.get("payload", {}))
 
@@ -909,7 +913,7 @@ async def _fetch_and_process_cv_for_email(
         for att in fetch_result.fetched
     ]
 
-    cv_processor = await get_cv_processor_service(session=email_repo.session)
+    cv_processor = await get_cv_processor_service(session=session)
     cv_documents = await cv_processor.process_cv_from_email(
         email_message_id=email.id,
         attachments=attachment_inputs,
@@ -925,7 +929,7 @@ async def _fetch_and_process_cv_for_email(
 
 
 async def _get_unclassified_emails_and_count(
-    current_user: User, email_repo: EmailRepository, limit: int
+    current_user: User, session: AsyncSession, limit: int
 ) -> tuple[list[EmailMessageEntity], int]:
     """Fetch unclassified emails and the total remaining count."""
     from datetime import UTC, datetime
@@ -946,7 +950,7 @@ async def _get_unclassified_emails_and_count(
         .where(pending_filter)
         .limit(limit)
     )
-    result = await email_repo.session.execute(statement)
+    result = await session.execute(statement)
     unclassified_emails = list(result.scalars().all())
 
     count_stmt = (
@@ -955,7 +959,7 @@ async def _get_unclassified_emails_and_count(
         .where(EmailMessageEntity.user_id == current_user.id)
         .where(pending_filter)
     )
-    total_remaining_result = await email_repo.session.execute(count_stmt)
+    total_remaining_result = await session.execute(count_stmt)
     total_remaining = total_remaining_result.scalar() or 0
 
     return unclassified_emails, total_remaining
@@ -1044,21 +1048,21 @@ def _walk_parts_for_attachments(
 async def _evaluate_rules(
     current_user_id: UUID,
     unclassified_emails: list[Any],
-    email_repo: EmailRepository,
+    session: AsyncSession,
 ) -> int:
     """Evaluate classification rules for a batch of emails.
 
     Args:
         current_user_id: The UUID of the user.
         unclassified_emails: List of unclassified EmailMessage entities.
-        email_repo: The email repository.
+        session: The database session.
 
     Returns:
         The number of emails successfully classified.
     """
     from src.modules.gmail.container import build_classification_service
 
-    classification_service = await build_classification_service(email_repo.session)
+    classification_service = await build_classification_service(session)
 
     return await classification_service.classify_batch(
         user_id=current_user_id,
@@ -1070,7 +1074,7 @@ async def _update_database_and_process_cvs(
     current_user: User,
     gmail_adapter: GmailAdapter,
     settings: Any,
-    email_repo: EmailRepository,
+    session: AsyncSession,
     unclassified_emails: list[Any],
     classify_logger: logging.Logger,
 ) -> int:
@@ -1080,7 +1084,7 @@ async def _update_database_and_process_cvs(
         current_user: The authenticated user.
         gmail_adapter: The Gmail API adapter.
         settings: The Gmail settings.
-        email_repo: The email repository.
+        session: The database session.
         unclassified_emails: The original list of unclassified emails.
         classify_logger: The classification logger.
 
@@ -1089,9 +1093,9 @@ async def _update_database_and_process_cvs(
     """
     from src.modules.gmail.infrastructure.audit_logger import AuditLogger
 
-    audit_logger = AuditLogger(email_repo.session, settings)
+    audit_logger = AuditLogger(session, settings)
 
-    await email_repo.session.commit()
+    await session.commit()
 
     # Auto-process CV attachments for classified recruitment emails only.
     # Skip emails that ended up as needs_review (low confidence) —
@@ -1115,7 +1119,7 @@ async def _update_database_and_process_cvs(
                 # Run CV processing via shared helper
                 cv_documents = await _fetch_and_process_cv_for_email(
                     current_user=current_user,
-                    email_repo=email_repo,
+                    session=session,
                     gmail_adapter=gmail_adapter,
                     settings=settings,
                     audit_logger=audit_logger,
@@ -1135,7 +1139,7 @@ async def _update_database_and_process_cvs(
                     exc,
                 )
 
-        await email_repo.session.commit()
+        await session.commit()
 
     return cv_processed_count
 
@@ -1155,7 +1159,7 @@ async def _update_database_and_process_cvs(
 )
 async def list_emails_needing_review(
     current_user: HRUserDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
     limit: int = Query(default=50, ge=1, le=100, description="Max emails to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
 ) -> MessageListResponse:
@@ -1167,7 +1171,7 @@ async def list_emails_needing_review(
 
     Args:
         current_user: The authenticated user.
-        email_repo: The email repository.
+        session: The database session.
         limit: Maximum number of emails to return.
         offset: Number of emails to skip for pagination.
 
@@ -1187,7 +1191,7 @@ async def list_emails_needing_review(
         .limit(limit)
         .offset(offset)
     )
-    result = await email_repo.session.execute(statement)
+    result = await session.execute(statement)
     messages = list(result.scalars().all())
 
     items = [
@@ -1219,7 +1223,7 @@ async def list_emails_needing_review(
         .where(EmailMessageEntity.user_id == current_user.id)
         .where(EmailMessageEntity.processing_status == "needs_review")
     )
-    total_result = await email_repo.session.execute(count_stmt)
+    total_result = await session.execute(count_stmt)
     total = total_result.scalar() or 0
 
     return MessageListResponse(messages=items, total=total)
@@ -1237,7 +1241,7 @@ async def list_emails_needing_review(
 async def reclassify_email(
     message_id: str,
     current_user: HRUserDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
 ) -> MessageListItem:
     """Reclassify a needs_review email and mark as reviewed.
 
@@ -1248,7 +1252,7 @@ async def reclassify_email(
     Args:
         message_id: The UUID of the email to reclassify.
         current_user: The authenticated user.
-        email_repo: The email repository.
+        session: The database session.
 
     Returns:
         MessageListItem with updated classification info.
@@ -1264,7 +1268,7 @@ async def reclassify_email(
         EmailMessageEntity.id == message_id
     )
     # type: ignore[arg-type]
-    result = await email_repo.session.execute(statement)
+    result = await session.execute(statement)
     email = result.scalar_one_or_none()
 
     if email is None:
@@ -1282,12 +1286,12 @@ async def reclassify_email(
 
     from src.modules.gmail.container import build_classification_service
 
-    classification_service = await build_classification_service(email_repo.session)
+    classification_service = await build_classification_service(session)
     await classification_service.classify_single_email(
         user_id=current_user.id,
         email=email,
     )
-    await email_repo.session.commit()
+    await session.commit()
 
     return MessageListItem(
         id=str(email.id),
@@ -1313,7 +1317,7 @@ async def classify_email_manually(
     message_id: UUID,
     category: str,
     current_user: CurrentUserDep,
-    email_repo: EmailRepositoryDep,
+    session: DbSessionDep,
 ) -> dict[str, str]:
     """Let HR classify a provider-pending email without AI."""
     from sqlalchemy import select
@@ -1325,7 +1329,7 @@ async def classify_email_manually(
         EmailCategory(category)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Invalid email category") from exc
-    result = await email_repo.session.execute(
+    result = await session.execute(
         select(EmailMessageEntity).where(  # type: ignore[arg-type]
             EmailMessageEntity.id == message_id
         )
@@ -1343,8 +1347,8 @@ async def classify_email_manually(
     email.next_retry_at = None
     email.retry_count = 0
     email.is_permanently_failed = False
-    email_repo.session.add(email)
-    await email_repo.session.commit()
+    session.add(email)
+    await session.commit()
     return {"id": str(email.id), "category": category, "processing_status": email.processing_status}
 
 
