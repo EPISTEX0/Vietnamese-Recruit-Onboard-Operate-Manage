@@ -64,7 +64,7 @@ export default function KnowledgeBasePage() {
 
   // Filters
   const [filterCategory, setFilterCategory] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<DocumentStatus | 'all'>('all');
 
   // Action modals
   const [editingDoc, setEditingDoc] = useState<DocumentListItem | null>(null);
@@ -95,7 +95,7 @@ export default function KnowledgeBasePage() {
     { value: 'employee', label: t('employeeTab') },
   ];
 
-  const STATUS_OPTIONS: { value: string; label: string }[] = [
+  const STATUS_OPTIONS: { value: DocumentStatus | 'all'; label: string }[] = [
     { value: 'all', label: t('allStatuses') },
     { value: 'ready', label: t('statusReady') },
     { value: 'pending', label: t('statusPending') },
@@ -219,7 +219,7 @@ export default function KnowledgeBasePage() {
         </div>
         <Select
           value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+          onChange={(e) => { setFilterStatus(e.target.value as DocumentStatus | 'all'); setPage(1); }}
           className="text-sm"
         >
           {STATUS_OPTIONS.map((o) => (
