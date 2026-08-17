@@ -1,0 +1,41 @@
+// DO NOT EDIT — sinh từ AuditActionType (backend/src/modules/identity/domain/entities.py).
+// Sinh lại: cd backend && uv run python scripts/gen_audit_action_types.py
+
+export const AUDIT_ACTION_TYPES = [
+  'whitelist_add',
+  'whitelist_remove',
+  'oauth_update',
+  'role_change',
+  'org_domain_update',
+  'attendance_network_update',
+  'attendance_network_add',
+  'attendance_network_remove',
+  'assistant_tool_config',
+  'assistant_chat',
+  'attendance_correction',
+  'request_approve',
+  'request_reject',
+  'payslip_create',
+  'payslip_update',
+  'payslip_publish',
+  'payslip_delete',
+  'payslip_unpublish',
+  'org_google_connect',
+  'org_google_reconnect',
+  'org_google_switch_account',
+  'org_google_disconnect',
+  'org_ai_config_update',
+  'org_ai_config_rotate',
+  'org_ai_config_revoke',
+  'org_ai_config_source',
+  'org_ai_consent',
+  'org_ai_toggle_automation',
+  'org_ai_classification_rollout',
+  'org_ai_toggle_assistant',
+  'outbound_email_created',
+  'outbound_email_sent',
+  'outbound_email_failed',
+  'outbound_email_retry',
+] as const;
+
+export type AuditActionType = (typeof AUDIT_ACTION_TYPES)[number];
