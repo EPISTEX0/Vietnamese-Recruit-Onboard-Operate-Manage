@@ -34,15 +34,13 @@ driver is independent of when the flush happens.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
 import secrets
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 import pytest
@@ -69,7 +67,7 @@ from src.modules.identity.domain.entities import (
 )
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 from src.modules.recruitment.infrastructure.calendar_adapter import CalendarAdapter
-from tests.conftest import _run_alembic_upgrade_head
+from tests.conftest import _create_probe_database
 
 pytestmark = pytest.mark.integration
 
@@ -111,23 +109,9 @@ class _WriteRecorder:
 
 
 @pytest.fixture(scope="module")
-def probe_db_url(postgres_async_url: str) -> Iterator[str]:
+def probe_db_url(postgres_async_url: str) -> str:
     """A database this module alone writes to."""
-    parts = urlsplit(postgres_async_url)
-    db_name = "auth_read_only_probe"
-    admin_url = urlunsplit(parts._replace(path="/postgres"))
-    private_url = urlunsplit(parts._replace(path=f"/{db_name}"))
-
-    async def _recreate() -> None:
-        engine = create_async_engine(admin_url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
-        async with engine.connect() as connection:
-            await connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
-            await connection.execute(text(f'CREATE DATABASE "{db_name}"'))
-        await engine.dispose()
-
-    asyncio.run(_recreate())
-    _run_alembic_upgrade_head(private_url)
-    yield private_url
+    return _create_probe_database(postgres_async_url, "auth_read_only_probe")
 
 
 @pytest_asyncio.fixture

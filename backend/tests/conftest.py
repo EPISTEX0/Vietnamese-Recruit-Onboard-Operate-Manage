@@ -4,11 +4,16 @@ Test tiers are derived from file names so individual test modules do not need
 repetitive decorators.  A test can still add a more specific marker locally.
 """
 
+import asyncio
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from tests.env_isolation import isolate_environment
 from tests.minio_support import start_kb_object_storage
@@ -89,6 +94,33 @@ def _run_alembic_upgrade_head(async_url: str) -> None:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = previous
+
+
+def _create_probe_database(postgres_async_url: str, db_name: str) -> str:
+    """Create and migrate a private database, return its asyncpg URL.
+
+    Factored out of four integration test modules that each rebuilt this same
+    admin-connection plumbing byte-for-byte, differing only in ``db_name``.
+    The seed/assert bodies that use the database are deliberately not part of
+    this factory: three of those modules are independent evidence for the
+    transaction-boundary class of bug (#320, #327, #332), and merging their
+    assertions too would let one future change quietly weaken several of them
+    at once.
+    """
+    parts = urlsplit(postgres_async_url)
+    admin_url = urlunsplit(parts._replace(path="/postgres"))
+    private_url = urlunsplit(parts._replace(path=f"/{db_name}"))
+
+    async def _recreate() -> None:
+        engine = create_async_engine(admin_url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
+        async with engine.connect() as connection:
+            await connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
+            await connection.execute(text(f'CREATE DATABASE "{db_name}"'))
+        await engine.dispose()
+
+    asyncio.run(_recreate())
+    _run_alembic_upgrade_head(private_url)
+    return private_url
 
 
 @pytest.fixture(scope="session")
