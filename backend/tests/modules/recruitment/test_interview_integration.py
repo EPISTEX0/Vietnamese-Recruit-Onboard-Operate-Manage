@@ -67,6 +67,7 @@ from sqlmodel import select
 # when the ORM flushes a Candidate insert in this test.
 import src.modules.gmail.domain.entities  # noqa: F401
 from src.modules.employee.domain.entities import Employee
+from src.modules.employee.infrastructure.employee_repository import EmployeeRepository
 from src.modules.identity.domain.entities import (
     OAuthGrant,
     OrganizationGoogleConnection,
@@ -97,6 +98,7 @@ from src.modules.recruitment.infrastructure.org_settings_repository import (
     OrganizationSettingsRepository,
 )
 from src.modules.recruitment.infrastructure.repositories import (
+    CalendarConflictRepository,
     CandidateRepository,
     CVDocumentRepository,
     InterviewRepository,
@@ -362,6 +364,8 @@ def _build_candidate_service(
     settings = RecruitmentSettings()
     candidate_repo = CandidateRepository(session)
     interview_repo = InterviewRepository(session)
+    calendar_conflict_repo = CalendarConflictRepository(session)
+    employee_repo = EmployeeRepository(session)
     org_settings_repo = OrganizationSettingsRepository(session, settings)
     connection_repo = OrganizationGoogleConnectionRepository(session)
     calendar_adapter = CalendarAdapter(settings=settings, http_client=http_client)
@@ -369,6 +373,8 @@ def _build_candidate_service(
     return CandidateService(
         candidate_repo=candidate_repo,
         interview_repo=interview_repo,
+        calendar_conflict_repo=calendar_conflict_repo,
+        employee_repo=employee_repo,
         calendar_port=calendar_adapter,
         org_settings_repo=org_settings_repo,
         connection_repo=connection_repo,
