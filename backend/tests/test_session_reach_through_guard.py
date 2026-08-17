@@ -66,15 +66,7 @@ _TARGET_ATTRS = frozenset({"session", "_session"})
 # (path relative to backend/, line number) -> why this one is not fixed here.
 # Every entry must carry a reason; #359's brief requires it written next to
 # the allowlist itself, not just in the ticket.
-_ALLOWED: dict[tuple[str, int], str] = {
-    (
-        "src/modules/gmail/application/email_sync_service.py",
-        lineno,
-    ): "Split into #361: needs the session threaded through the constructor "
-    "instead, which changes two call sites (gmail/container.py, gmail/worker.py) "
-    "-- a bigger, separate change from the in-place fixes in #359."
-    for lineno in (181, 252, 539, 545)
-}
+_ALLOWED: dict[tuple[str, int], str] = {}
 
 
 @dataclass(frozen=True)
