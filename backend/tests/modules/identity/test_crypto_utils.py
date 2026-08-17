@@ -6,7 +6,9 @@ import os
 import pytest
 from cryptography.exceptions import InvalidTag
 
+from src.modules.identity.container import get_crypto_utils
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
+from tests.container_cache_support import reset_cached_app_containers
 
 
 def _generate_valid_key_b64() -> str:
@@ -157,3 +159,25 @@ class TestVersionedEnvelope:
         raw = base64.b64encode(nonce + legacy_ciphertext).decode("ascii")
         reader = CryptoUtils(current_key, previous_encryption_key_b64=previous_key)
         assert reader.decrypt(raw) == "old"
+
+
+class TestGetCryptoUtilsContainer:
+    """``get_crypto_utils()`` must build for real off the suite's pinned env.
+
+    Every other test that reaches this factory monkeypatches around it,
+    because ``tests/env_isolation.py`` used to pin a key that decoded to 28
+    bytes and the real call raised ``ValueError`` (#333). This is the one test
+    that calls the ``@lru_cache``d factory bare -- no patch, no stub -- so a
+    regression to a short pinned key is caught here instead of resurfacing as
+    a wall of unrelated ``ValueError`` failures the next time someone adds a
+    test that reaches ``CryptoUtils`` through the container.
+    """
+
+    def test_builds_a_working_singleton_from_pinned_env(self) -> None:
+        reset_cached_app_containers()
+        try:
+            crypto = get_crypto_utils()
+            encrypted = crypto.encrypt("round-trip-through-the-real-container")
+            assert crypto.decrypt(encrypted) == "round-trip-through-the-real-container"
+        finally:
+            reset_cached_app_containers()

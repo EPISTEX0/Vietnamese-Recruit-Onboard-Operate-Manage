@@ -17,13 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
-os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
-
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any

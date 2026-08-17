@@ -42,7 +42,6 @@ graph is assembled, so they run in the default suite rather than behind the
 
 from __future__ import annotations
 
-import base64
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -63,14 +62,11 @@ from src.modules.identity.container import get_db_session, get_password_reset_se
 from src.modules.identity.infrastructure.connection_state_repository import (
     OrganizationGoogleConnectionRepository,
 )
-from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 
 # Never dialed. Both non-integration tests assert on object wiring only, and
 # SQLAlchemy does not open a connection until a statement runs, so a session
 # built from this engine is a genuine ``AsyncSession`` without a live server.
 _UNDIALED_URL = "postgresql+asyncpg://unused:unused@127.0.0.1:1/unused"
-
-_TEST_KEY_B64 = base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
 
 # The collaborators #327 corrupts, paired with the type each one must have.
 _SEND_SERVICE_COLLABORATORS = (
@@ -78,22 +74,6 @@ _SEND_SERVICE_COLLABORATORS = (
     ("_connection_repo", OrganizationGoogleConnectionRepository),
     ("_audit_logger", AuditLogger),
 )
-
-
-@pytest.fixture(autouse=True)
-def usable_crypto_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Supply a 32-byte key so building the graph gets as far as the assertions.
-
-    ``tests/env_isolation.py`` seeds ``AUTH_OAUTH_TOKEN_ENCRYPTION_KEY`` with a
-    value that decodes to 28 bytes, so the real ``get_crypto_utils`` raises
-    ``ValueError`` before ``SendService`` is ever constructed --
-    ``test_auth_router_commit_integration.py`` patches around the same wart.
-    Crypto is not the seam under test here; it is only in the path because
-    ``SendService`` takes it as a constructor argument.
-    """
-    monkeypatch.setattr(
-        "src.modules.gmail.container.get_crypto_utils", lambda: CryptoUtils(_TEST_KEY_B64)
-    )
 
 
 @asynccontextmanager

@@ -25,37 +25,30 @@ statement about *which* id the handler picked rather than a tautology.
 
 from __future__ import annotations
 
-import os
+from collections.abc import AsyncIterator
+from uuid import UUID, uuid4
 
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_ID", "test-client-id")
-os.environ.setdefault("AUTH_GOOGLE_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-hs256")
-os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
-
-from collections.abc import AsyncIterator  # noqa: E402
-from uuid import UUID, uuid4  # noqa: E402
-
-import pytest  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy.ext.asyncio import (  # noqa: E402
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import NullPool  # noqa: E402
-from sqlmodel import select  # noqa: E402
+from sqlalchemy.pool import NullPool
+from sqlmodel import select
 
-from src.modules.assistant.api.employee_router import employee_assistant_router  # noqa: E402
-from src.modules.assistant.infrastructure.quality_models import (  # noqa: E402
+from src.modules.assistant.api.employee_router import employee_assistant_router
+from src.modules.assistant.infrastructure.quality_models import (
     AssistantChatSession,
     AssistantFeedbackEvent,
     AssistantType,
     FeedbackType,
 )
-from src.modules.employee.domain.entities import Employee  # noqa: E402
-from src.modules.identity.container import get_current_user, get_db_session  # noqa: E402
-from src.modules.identity.domain.entities import User, UserRole  # noqa: E402
+from src.modules.employee.domain.entities import Employee
+from src.modules.identity.container import get_current_user, get_db_session
+from src.modules.identity.domain.entities import User, UserRole
 
 pytestmark = pytest.mark.integration
 

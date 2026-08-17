@@ -84,14 +84,18 @@ SETTINGS_MODULE_GLOB = "modules/*/infrastructure/config.py"
 
 # The only settings values the suite guarantees. These four are ``AuthSettings``
 # required fields, which ``onboarding``'s config builds at import time, so the
-# suite cannot collect without them. Values match the ones the test modules
-# already pass to ``os.environ.setdefault`` so nothing downstream shifts; they
-# are obviously fake so a real credential can never be mistaken for one.
+# suite cannot collect without them. They are obviously fake so a real
+# credential can never be mistaken for one.
+#
+# ``AUTH_OAUTH_TOKEN_ENCRYPTION_KEY`` decodes to 32 bytes, the length
+# ``CryptoUtils`` requires (#333). It is the same key several ``get_crypto_utils``
+# call sites build by hand as ``_TEST_KEY_B64`` to pre-encrypt fixture data, so
+# ciphertext they write decrypts through the real, unpatched singleton too.
 PINNED_SETTINGS_ENV = {
     "AUTH_GOOGLE_CLIENT_ID": "test-client-id",
     "AUTH_GOOGLE_CLIENT_SECRET": "test-client-secret",
     "AUTH_JWT_SECRET_KEY": "test-secret-key-32-chars-min-for-hs256",
-    "AUTH_OAUTH_TOKEN_ENCRYPTION_KEY": "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==",
+    "AUTH_OAUTH_TOKEN_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 }
 
 
