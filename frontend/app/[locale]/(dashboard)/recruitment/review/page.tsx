@@ -21,6 +21,7 @@ const PROC_STATUS_META: Record<ProcessingStatus, { label: string; tone: 'amber' 
   dismissed: { label: 'Đã bỏ', tone: 'slate' },
   upload_failed: { label: 'Upload lỗi', tone: 'rose' },
   permanently_failed: { label: 'Lỗi vĩnh viễn', tone: 'rose' },
+  ai_unavailable: { label: 'AI tạm ngừng', tone: 'amber' },
 };
 
 export default function ReviewPage() {

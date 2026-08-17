@@ -32,7 +32,7 @@ from src.modules.recruitment.domain.entities import (
     Interview,
     InterviewParticipant,
 )
-from src.modules.recruitment.domain.enums import CandidateStatus
+from src.modules.recruitment.domain.enums import CalendarConflictStatus, CandidateStatus
 from src.modules.recruitment.domain.exceptions import (
     CalendarConflictNotFoundError,
     CalendarEventConflictError,
@@ -1120,7 +1120,7 @@ class InterviewSchedulerService:
         if status is not None:
             stmt = stmt.where(CalendarConflict.status == status)
         else:
-            stmt = stmt.where(CalendarConflict.status == "unresolved")
+            stmt = stmt.where(CalendarConflict.status == CalendarConflictStatus.UNRESOLVED)
 
         if candidate_id is not None:
             stmt = stmt.where(CalendarConflict.candidate_id == candidate_id)
@@ -1169,7 +1169,7 @@ class InterviewSchedulerService:
         if conflict is None:
             raise CalendarConflictNotFoundError(f"Calendar conflict not found: {conflict_id}")
 
-        if conflict.status != "unresolved":
+        if conflict.status != CalendarConflictStatus.UNRESOLVED:
             raise ValueError(
                 f"Conflict {conflict_id} is already resolved (status: {conflict.status})"
             )
@@ -1229,7 +1229,7 @@ class InterviewSchedulerService:
 
                 self._session.add(interview)
 
-            conflict.status = "resolved_keep_google"
+            conflict.status = CalendarConflictStatus.RESOLVED_KEEP_GOOGLE
             conflict.resolved_by = acting_user_id
             conflict.resolved_at = datetime.now(UTC)
             self._session.add(conflict)
@@ -1289,7 +1289,7 @@ class InterviewSchedulerService:
                     interview.calendar_updated = result_event.updated
                 self._session.add(interview)
 
-            conflict.status = "resolved_overwrite_vroom"
+            conflict.status = CalendarConflictStatus.RESOLVED_OVERWRITE_VROOM
             conflict.resolved_by = acting_user_id
             conflict.resolved_at = datetime.now(UTC)
             self._session.add(conflict)
@@ -1321,7 +1321,7 @@ class InterviewSchedulerService:
             entity_type="calendar_conflict",
             entity_id=conflict.id,
             user_id=acting_user_id,
-            previous_value={"status": "unresolved"},
+            previous_value={"status": CalendarConflictStatus.UNRESOLVED},
             new_value=resolution_summary,
             change_summary=change_text,
             success=True,
@@ -2090,7 +2090,7 @@ class InterviewSchedulerService:
             local_snapshot=local_snapshot,
             remote_snapshot=remote_snapshot,
             conflict_details=conflict_details,
-            status="unresolved",
+            status=CalendarConflictStatus.UNRESOLVED,
         )
         self._session.add(conflict)
         if self._session is not None:

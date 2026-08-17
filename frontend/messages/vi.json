@@ -50,8 +50,9 @@
     "jobOpen": "Đang tuyển",
     "jobClosed": "Đã đóng",
     "jobCancelled": "Đã hủy",
-    "conflictPending": "Chờ xử lý",
-    "conflictResolved": "Đã giải quyết",
+    "conflictUnresolved": "Chưa xử lý",
+    "conflictResolvedKeepGoogle": "Đã giữ Google",
+    "conflictResolvedOverwriteVroom": "Đã ghi đè Vroom",
     "statusDraft": "Bản nháp",
     "statusPublished": "Đã xuất bản"
   },

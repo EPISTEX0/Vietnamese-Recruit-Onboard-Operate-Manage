@@ -144,6 +144,19 @@ class InboxStatus(StrEnum):
     RESOLVED = "resolved"
 
 
+class CalendarConflictStatus(StrEnum):
+    """Resolution state of a Google Calendar write conflict.
+
+    - unresolved: Captured, awaiting an HR decision.
+    - resolved_keep_google: HR kept the remote Calendar version.
+    - resolved_overwrite_vroom: HR overwrote Calendar with the Vroom-side version.
+    """
+
+    UNRESOLVED = "unresolved"
+    RESOLVED_KEEP_GOOGLE = "resolved_keep_google"
+    RESOLVED_OVERWRITE_VROOM = "resolved_overwrite_vroom"
+
+
 class CorrectionEvaluationStatus(StrEnum):
     """Status of a correction record in the evaluation flow.
 

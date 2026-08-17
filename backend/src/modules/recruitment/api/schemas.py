@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from src.modules.recruitment.domain.enums import (
     ApplicationSource,
+    CalendarConflictStatus,
     CandidateStatus,
     JobOpeningStatus,
     LinkProposalStatus,
@@ -627,7 +628,7 @@ class CalendarConflictResponse(BaseModel):
     local_snapshot: dict[str, Any] = Field(default_factory=dict)
     remote_snapshot: dict[str, Any] = Field(default_factory=dict)
     conflict_details: dict[str, Any] = Field(default_factory=dict)
-    status: str
+    status: CalendarConflictStatus
     resolved_by: UUID | None = None
     resolved_at: datetime | None = None
     created_at: datetime
