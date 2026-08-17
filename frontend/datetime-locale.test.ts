@@ -71,7 +71,34 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { createFormatter } from 'use-intl';
+import { describe, expect, it, vi } from 'vitest';
+
+/**
+ * `next-intl/server` has to be stubbed to import `i18n/request.ts` at all.
+ *
+ * The package ships two builds behind an export condition, and Vitest has no
+ * `react-server` condition, so it resolves to the client one — whose
+ * `getRequestConfig` is a stub that throws `"not supported in Client
+ * Components"` on call. That is the resolution being wrong, not the module.
+ *
+ * The replacement is not an approximation. The real server implementation
+ * (`server/react-server/getRequestConfig.js` under `next-intl/dist/esm`) is
+ * the identity function in full:
+ *
+ *     function getRequestConfig(createRequestConfig) {
+ *       return createRequestConfig;
+ *     }
+ *
+ * It exists to carry a type signature, not behaviour, so returning the callback
+ * unchanged is what production does. `i18n/request.ts`'s own logic — the locale
+ * validation and the returned config — is the real module throughout.
+ */
+vi.mock('next-intl/server', () => ({
+  getRequestConfig: <T,>(createRequestConfig: T): T => createRequestConfig,
+}));
+
+import getRequestConfig, { formats } from '@/i18n/request';
 
 const THIS_FILE = fileURLToPath(import.meta.url);
 const PACKAGE_ROOT = dirname(THIS_FILE);
@@ -251,5 +278,162 @@ describe('datetime locale literals', () => {
         ).toEqual(['formatVNDButNotReally']);
       });
     });
+  });
+});
+
+/**
+ * The second half of #313's invariant, and the half the scans above cannot see.
+ *
+ * Replacing `toLocaleString('vi-VN')` with `format.dateTime(d, 'full')` moved
+ * the failure mode rather than removing it. The scans above are pure source
+ * greps: they prove no file *names* a locale. They say nothing about whether
+ * the named preset `'full'` actually resolves at runtime — and if it does not,
+ * `use-intl` does not throw. It reports `MISSING_FORMAT` to `onError` (a
+ * `console.error` by default) and returns the fallback, which for `dateTime`
+ * is `String(value)`:
+ *
+ *     dateTime: (value, formatOrName, options) =>
+ *       resolve(..., () => String(value))
+ *
+ * `String(new Date())` is `'Mon Aug 17 2026 09:49:27 GMT+0700 (Indochina Time)'`
+ * — raw, English, and locale-blind, i.e. a worse version of the exact bug #313
+ * was filed to fix, delivered silently to production with only a console line.
+ *
+ * That failure needs exactly two things to go wrong, neither of which any
+ * other test in this suite touches:
+ *
+ * 1. **`i18n/request.ts` stops returning `formats`.** Measured, not assumed:
+ *    deleting the `formats,` line from the config leaves all 222 tests green
+ *    and `tsc --noEmit` clean. The six component tests that render datetimes
+ *    pass `formats={formats}` to `NextIntlClientProvider` themselves, so they
+ *    keep working while the app path breaks — they test the provider, never
+ *    the config that feeds it in production.
+ * 2. **A call site names a preset that was never defined** (typo, rename, or a
+ *    preset deleted while a caller still asks for it). Nothing typechecks the
+ *    second argument of `format.dateTime` against `formats.dateTime`'s keys.
+ *
+ * On the production path itself: `app/layout.tsx` and `app/[locale]/layout.tsx`
+ * both render `NextIntlClientProvider` *without* a `formats` prop, which is
+ * correct and not a third failure mode. Neither file declares `'use client'`,
+ * so React resolves `next-intl` through its `react-server` export condition
+ * (`next-intl/package.json`) to `index.react-server.js`, which re-exports
+ * `NextIntlClientProvider` as `NextIntlClientProviderServer`. That component
+ * fills the gap from the request config:
+ *
+ *     formats: formats === undefined ? await getFormats() : formats
+ *
+ * and `getFormats()` is `(await getConfig()).formats` — the very object
+ * asserted below. So the config is the single source for every server-rendered
+ * datetime in the app, which is what makes assertion 1 load-bearing.
+ */
+describe('datetime format presets resolve', () => {
+  /**
+   * Every preset name passed as `format.dateTime(value, 'name')` in the tree.
+   *
+   * Extracted by walking parentheses rather than by one regex: the first
+   * argument is almost always `new Date(...)`, whose own `)` ends any
+   * `\([^)]*\)` pattern early, and several call sites put two `format.dateTime`
+   * calls plus unrelated quoted strings on a single line. A non-greedy regex
+   * across such a line happily pairs one call's opening with another's
+   * argument, which would invent preset names that no call site asks for.
+   */
+  function findPresetNames(text: string): string[] {
+    const names: string[] = [];
+    const CALL = 'format.dateTime(';
+
+    for (let start = text.indexOf(CALL); start !== -1; start = text.indexOf(CALL, start + 1)) {
+      const argsStart = start + CALL.length;
+      let depth = 1;
+      let quote: string | null = null;
+      let i = argsStart;
+      const args: string[] = [];
+      let current = '';
+
+      for (; i < text.length && depth > 0; i++) {
+        const ch = text[i];
+        if (quote) {
+          if (ch === '\\') { current += ch + (text[i + 1] ?? ''); i++; continue; }
+          if (ch === quote) quote = null;
+          current += ch;
+          continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') { quote = ch; current += ch; continue; }
+        if (ch === '(' || ch === '[' || ch === '{') depth++;
+        else if (ch === ')' || ch === ']' || ch === '}') {
+          depth--;
+          if (depth === 0) break;
+        }
+        if (ch === ',' && depth === 1) { args.push(current.trim()); current = ''; continue; }
+        current += ch;
+      }
+      args.push(current.trim());
+
+      const second = args[1];
+      if (second) {
+        const literal = /^(['"])(\w+)\1$/.exec(second);
+        if (literal) names.push(literal[2]);
+      }
+    }
+    return names;
+  }
+
+  const files = [...sourceFiles(PACKAGE_ROOT)].filter((file) => file !== THIS_FILE);
+
+  it('defines every preset the app asks for, with none asked for that is undefined', () => {
+    const defined = new Set(Object.keys(formats.dateTime));
+
+    const used = new Map<string, string[]>();
+    for (const file of files) {
+      for (const name of findPresetNames(readFileSync(file, 'utf8'))) {
+        const where = used.get(name) ?? [];
+        where.push(relative(PACKAGE_ROOT, file));
+        used.set(name, where);
+      }
+    }
+
+    // Proves the extractor found the call sites at all, so an empty `undefined`
+    // list below means "checked them" rather than "matched nothing".
+    expect([...used.keys()].sort()).toEqual(['full', 'short', 'shortWithYear', 'time']);
+
+    const undefinedPresets = [...used.entries()]
+      .filter(([name]) => !defined.has(name))
+      .map(([name, where]) => `${name} — used in ${[...new Set(where)].join(', ')}`);
+    expect(undefinedPresets).toEqual([]);
+  });
+
+  it('ships those presets in the request config, not just in the module', async () => {
+    // The mutation this kills: dropping `formats,` from the returned object.
+    // Importing the `formats` const alone would not catch it — the const would
+    // still exist and still be well-formed while no request ever received it.
+    const config = await getRequestConfig({
+      requestLocale: Promise.resolve('en'),
+      locale: 'en',
+    } as never);
+
+    expect(config.formats).toBe(formats);
+  });
+
+  it('degrades to an unlocalized `String(date)` when a preset is missing', () => {
+    // The stake, executed rather than described: this is what the two
+    // assertions above are protecting against, and it is why a missing preset
+    // cannot be left to a console warning nobody reads in production.
+    const when = new Date(Date.UTC(2026, 7, 9, 3, 4, 5));
+    const withPresets = createFormatter({
+      locale: 'en',
+      formats,
+      timeZone: 'UTC',
+      onError: () => {},
+    });
+    const withoutPresets = createFormatter({
+      locale: 'en',
+      timeZone: 'UTC',
+      onError: () => {},
+    });
+
+    expect(withPresets.dateTime(when, 'full')).toBe('8/9/2026, 3:04:05 AM');
+    expect(withoutPresets.dateTime(when, 'full')).toBe(String(when));
+    // ...and `String(when)` is neither localized nor even stable across the two
+    // locales this app ships, which is the whole of #313 in one expression.
+    expect(withoutPresets.dateTime(when, 'full')).toMatch(/^\w{3} \w{3} \d{2} 2026/);
   });
 });

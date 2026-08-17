@@ -669,35 +669,38 @@ export function useFormatDate(): (iso: string | null | undefined) => string {
 }
 
 /**
+ * Whether to render these helpers' built-in strings in Vietnamese.
+ *
+ * The `locale` parameters below are required, with no default. They used to
+ * default to `'vi-VN'`, and this comment used to assert that every call site
+ * fed them `useLocale()` regardless — which was false, and expensively so:
+ * 0 of 42 `formatDateTime`/`formatDate` call sites and 1 of 3
+ * `formatAuditDetails` call sites ever passed a locale. Every other one took
+ * the default, invisibly to any search for `'vi-VN'`, because the literal
+ * existed only here at the declaration. That is how #313 reached 43 call
+ * sites while this very paragraph read as evidence the defaults were harmless.
+ *
+ * The equality bug the paragraph went on to describe was real. `useLocale()`
+ * yields next-intl's routing locale — `'vi'` or `'en'` (`i18n/routing.ts`) —
+ * so an equality test against `'vi-VN'` missed on the Vietnamese UI and
+ * quietly served the English branch: runtime detail read "Just now", latency
+ * read "Fast", and audit field labels came out in English on a
+ * Vietnamese-default product. Matching the language subtag accepts both
+ * spellings.
+ *
+ * See `docs/adr/0016-datetime-locale-via-useformatter.md`.
+ */
+const isVietnamese = (locale: string): boolean => locale.split('-')[0] === 'vi';
+
+/**
  * Format runtime detail string for HR users.
  * - null/undefined → empty string
  * - "last beat:" prefix → relative time in Vietnamese
  * - heartbeat-related → "Không hoạt động"
  * - fallback: return detail as-is
- */
-/**
- * Whether to render these helpers' built-in strings in Vietnamese.
  *
- * > **Correction (#313).** The paragraph below originally claimed "every call
- * > site feeds them `useLocale()`". False: with no default, 0/42 `formatDateTime`
- * > / `formatDate` call sites and 1/3 `formatAuditDetails` call sites passed a
- * > locale at all — they relied on the `= 'vi-VN'` default silently below,
- * > invisible to a string search for `'vi-VN'`. That default is why the bug
- * > this paragraph describes lived as long as it did: it read as evidence the
- * > defaults were harmless. See `docs/adr/0016-datetime-locale-via-useformatter.md`
- * > for the fix.
- *
- * The `locale` parameters below default to `'vi-VN'`, but every call site feeds
- * them `useLocale()`, which yields next-intl's routing locale — `'vi'` or
- * `'en'` (`i18n/routing.ts`). An equality test against `'vi-VN'` therefore
- * missed on the Vietnamese UI and quietly served the English branch: runtime
- * detail read "Just now", latency read "Fast", and audit field labels came out
- * in English on a Vietnamese-default product. Matching the language subtag
- * accepts both spellings.
+ * `locale` is required, not defaulted — see the note on `isVietnamese` (#313).
  */
-const isVietnamese = (locale: string): boolean => locale.split('-')[0] === 'vi';
-
-/** `locale` is required, not defaulted — see the correction above #313. */
 export function formatRuntimeDetail(detail: string | null, locale: string): string {
       if (detail == null) return '';
       if (detail.startsWith('last beat:')) {
