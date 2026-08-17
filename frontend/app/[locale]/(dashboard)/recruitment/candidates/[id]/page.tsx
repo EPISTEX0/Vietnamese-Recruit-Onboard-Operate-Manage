@@ -46,10 +46,14 @@ export default function CandidateDetailPage() {
     staleTime: 30 * 1000,
   });
 
+      // Matches interviews/page.tsx:34 (#340): that page gates Interview creation on
+      // "đã chọn calendar chưa" and invalidates this same key on selection, so a stale
+      // 5-minute answer here could tell a candidate's Interview flow the connection is
+      // missing right after it was just made on the other page.
       const { data: calendars } = useQuery<CalendarListResponse>({
         queryKey: ['google-calendars'],
         queryFn: () => getCalendars(),
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000,
       });
       const selectedCalendarId = calendars?.selected_calendar_id ?? null;
 
