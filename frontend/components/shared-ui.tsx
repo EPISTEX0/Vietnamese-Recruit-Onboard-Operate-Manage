@@ -293,19 +293,32 @@ export const CONFLICT_STATUS_META: Record<
   resolved: { label: 'Đã giải quyết', tone: 'emerald', labelKey: 'conflictResolved' },
 };
 
-// Audit action labels — Vietnamese values kept for backward compat;
-// new code should use t('audit.{action}') from the 'audit' namespace.
-export const AUDIT_ACTION_LABELS: Record<string, string> = {
-  role_change: 'Thay đổi quyền',
+// Nhãn cho các giá trị action_type lịch sử KHÔNG còn trong AuditActionType
+// (backend/src/modules/identity/domain/entities.py) — code hiện tại không
+// bao giờ ghi những giá trị này (xem #331), nhưng cột audit_logs.action_type
+// là varchar(50), không phải enum PG, nên một dòng lịch sử vẫn có thể mang
+// một trong số chúng. Xoá label ở đây làm dòng cũ tụt xuống hiển thị chuỗi
+// thô — đó là làm hỏng, không phải dọn dẹp — nên danh sách này được giữ
+// tường minh và đóng: audit-action-types.test.ts khẳng định nó đúng bằng
+// AUDIT_ACTION_LABELS keys \ AUDIT_ACTION_TYPES, không hơn không kém.
+export const LEGACY_AUDIT_ACTION_LABELS: Record<string, string> = {
+  login: 'Đăng nhập',
   user_create: 'Tạo tài khoản',
   user_update: 'Cập nhật tài khoản',
   user_delete: 'Xóa tài khoản',
   permission_grant: 'Cấp quyền',
   permission_revoke: 'Thu hồi quyền',
-  login: 'Đăng nhập',
   settings_update: 'Cập nhật cài đặt',
   employee_create: 'Tạo nhân viên',
   employee_update: 'Cập nhật nhân viên',
+  org_google_calendar_select: 'Chọn lịch Google',
+  ai_policy_preset_update: 'Cập nhật chính sách AI',
+};
+
+// Audit action labels — Vietnamese values kept for backward compat;
+// new code should use t('audit.{action}') from the 'audit' namespace.
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  role_change: 'Thay đổi quyền',
   whitelist_add: 'Thêm whitelist',
   whitelist_remove: 'Xóa whitelist',
   oauth_update: 'Cập nhật OAuth',
@@ -316,7 +329,6 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   org_google_reconnect: 'Kết nối lại Google',
   org_google_switch_account: 'Chuyển tài khoản Google',
   org_google_disconnect: 'Ngắt kết nối Google',
-  org_google_calendar_select: 'Chọn lịch Google',
   org_ai_config_update: 'Cập nhật cấu hình AI',
   org_ai_config_rotate: 'Xoay API key AI',
   org_ai_config_revoke: 'Thu hồi cấu hình AI',
@@ -334,35 +346,22 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   request_reject: 'Từ chối yêu cầu',
   attendance_network_update: 'Cập nhật IP chấm công',
   attendance_network_add: 'Thêm IP chấm công',
-      ai_policy_preset_update: 'Cập nhật chính sách AI',
   attendance_network_remove: 'Xóa IP chấm công',
   attendance_correction: 'Sửa chấm công',
   outbound_email_created: 'Tạo email gửi đi',
   outbound_email_sent: 'Đã gửi email',
   outbound_email_failed: 'Gửi email thất bại',
   outbound_email_retry: 'Thử lại gửi email',
+  ...LEGACY_AUDIT_ACTION_LABELS,
 };
 
+// Dropdown lọc — phải khớp đúng AuditActionType (không hơn, không kém).
+// Một tuỳ chọn lọc trỏ tới giá trị code không bao giờ ghi thì luôn ra kết
+// quả rỗng, và với admin đó đọc y hệt "không ai làm việc đó" (#331).
 export const AUDIT_ACTION_GROUPS: { label: string; items: { value: string; label: string }[] }[] = [
   {
     label: '👤 Quyền & Tài khoản',
-    items: [
-      { value: 'login', label: 'Đăng nhập' },
-      { value: 'role_change', label: 'Thay đổi quyền' },
-      { value: 'user_create', label: 'Tạo tài khoản' },
-      { value: 'user_update', label: 'Cập nhật tài khoản' },
-      { value: 'user_delete', label: 'Xóa tài khoản' },
-      { value: 'permission_grant', label: 'Cấp quyền' },
-      { value: 'permission_revoke', label: 'Thu hồi quyền' },
-      { value: 'settings_update', label: 'Cập nhật cài đặt' },
-    ],
-  },
-  {
-    label: '👥 Nhân sự',
-    items: [
-      { value: 'employee_create', label: 'Tạo nhân viên' },
-      { value: 'employee_update', label: 'Cập nhật nhân viên' },
-    ],
+    items: [{ value: 'role_change', label: 'Thay đổi quyền' }],
   },
   {
     label: '🤖 AI & Hệ thống',
@@ -395,7 +394,6 @@ export const AUDIT_ACTION_GROUPS: { label: string; items: { value: string; label
       { value: 'org_google_reconnect', label: 'Kết nối lại Google' },
       { value: 'org_google_switch_account', label: 'Chuyển tài khoản Google' },
       { value: 'org_google_disconnect', label: 'Ngắt kết nối Google' },
-      { value: 'org_google_calendar_select', label: 'Chọn lịch Google' },
     ],
   },
   {

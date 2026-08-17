@@ -2,6 +2,9 @@ import { API_BASE_URL } from "./client";
 import { ApiError } from "./types";
 import { isValidationErrorDetail, formatValidationErrors } from "./validation-errors";
 import type { StaffRole, UserRole } from "@/lib/auth/roles";
+import type { AuditActionType } from "@/lib/audit-action-types.generated";
+
+export type { AuditActionType };
 
 /**
  * System-admin API client — typed functions for `/api/system-admin/*` only.
@@ -103,23 +106,6 @@ export interface AdminUser {
   created_at: string;
   last_login: string;
 }
-
-export type AuditActionType =
-  | 'whitelist_add'
-  | 'whitelist_remove'
-  | 'oauth_update'
-  | 'role_change'
-  | 'org_domain_update'
-  | 'assistant_tool_config'
-  | 'org_google_connect'
-  | 'org_google_reconnect'
-  | 'org_google_switch_account'
-  | 'org_google_disconnect'
-  | 'org_ai_config_update'
-  | 'org_ai_config_rotate'
-  | 'org_ai_config_revoke'
-  | 'org_ai_config_source'
-  | 'org_ai_classification_rollout';
 
 export interface DomainListResponse {
   allowed_domains: string[];
