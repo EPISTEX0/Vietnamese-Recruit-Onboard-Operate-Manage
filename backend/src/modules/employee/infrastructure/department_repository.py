@@ -53,6 +53,21 @@ class DepartmentRepository:
         result = await self.session.execute(statement)
         return result.scalars().first()
 
+    async def get_by_ids(self, department_ids: list[UUID]) -> dict[UUID, Department]:
+        """Retrieve multiple departments by their IDs in one query.
+
+        Args:
+            department_ids: List of department UUIDs to fetch.
+
+        Returns:
+            Dict mapping department ID to Department entity.
+        """
+        if not department_ids:
+            return {}
+        statement = select(Department).where(Department.id.in_(department_ids))  # type: ignore[attr-defined]
+        result = await self.session.execute(statement)
+        return {d.id: d for d in result.scalars().all()}
+
     async def get_by_name(self, name: str) -> Department | None:
         """Retrieve a department by name (case-insensitive).
 

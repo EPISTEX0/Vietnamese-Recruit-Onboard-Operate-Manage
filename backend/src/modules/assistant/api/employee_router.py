@@ -57,6 +57,8 @@ from src.modules.employee.application.document_service import DocumentService
 from src.modules.employee.application.employee_service import EmployeeService
 from src.modules.employee.container import get_document_service, get_employee_service
 from src.modules.employee.domain.entities import Employee
+from src.modules.employee.infrastructure.department_repository import DepartmentRepository
+from src.modules.employee.infrastructure.position_repository import PositionRepository
 from src.modules.employee_request.application.leave_service import LeaveService
 from src.modules.employee_request.application.overtime_service import OvertimeService
 from src.modules.employee_request.container import get_leave_service, get_overtime_service
@@ -111,11 +113,12 @@ async def get_employee_assistant_service(
 ) -> EmployeeAssistantService:
     """Provide an EmployeeAssistantService scoped to the current employee."""
     context_builder = ContextBuilder(
-        session=session,
         employee_service=employee_service,
         leave_service=leave_service,
         payslip_service=payslip_service,
         overtime_service=overtime_service,
+        department_repo=DepartmentRepository(session),
+        position_repo=PositionRepository(session),
     )
     return EmployeeAssistantService(
         llm_client=llm_client,

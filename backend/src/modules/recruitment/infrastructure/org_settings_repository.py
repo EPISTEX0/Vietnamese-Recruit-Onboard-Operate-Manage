@@ -88,6 +88,20 @@ class OrganizationSettingsRepository:
         await self.session.flush()
         return settings_row
 
+    async def get_name(self) -> str:
+        """Return the Organization's display name, or "" when unset.
+
+        Reads the single settings row without seeding a default -- unlike
+        ``get_timezone``, an unnamed Organization is a normal state, not one
+        needing a fallback value.
+
+        Returns:
+            The Organization's name, or "" if no row exists yet or the row's
+            name was never set.
+        """
+        settings_row = await self._get_row()
+        return settings_row.name if settings_row else ""
+
     async def get_timezone(self) -> str:
         """Return the Organization's configured IANA timezone.
 

@@ -984,14 +984,13 @@ class OnboardingService:
 
         tasks = await self.task_repo.list_by_process(process_id)
 
-        user_ids = {t.completed_by_user_id for t in tasks if t.completed_by_user_id}
+        user_ids = list({t.completed_by_user_id for t in tasks if t.completed_by_user_id})
         users_map = {}
         if user_ids:
-            from sqlmodel import select
+            from src.modules.identity.infrastructure.user_repository import UserRepository
 
-            statement = select(User).where(User.id.in_(user_ids))  # type: ignore[attr-defined]
-            result = await self.session.execute(statement)
-            for user in result.scalars().all():
+            users = await UserRepository(self.session).get_by_ids(user_ids)
+            for user in users.values():
                 users_map[user.id] = user.name
 
         task_details = [

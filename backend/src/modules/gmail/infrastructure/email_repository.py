@@ -201,6 +201,58 @@ class EmailRepository:
         await self.session.flush()
         return message
 
+    async def list_recently_created(self, user_id: UUID, limit: int) -> list[EmailMessage]:
+        """List a user's most recently imported email messages.
+
+        Ordered by ``created_at`` (import time), not ``received_at`` --
+        distinct from :meth:`list_by_user`, which serves the inbox view.
+
+        Args:
+            user_id: The UUID of the user whose messages to list.
+            limit: Maximum number of messages to return.
+
+        Returns:
+            A list of EmailMessage entities, most recently imported first.
+        """
+        statement = (
+            select(EmailMessage)
+            .where(EmailMessage.user_id == user_id)
+            .order_by(EmailMessage.created_at.desc())  # type: ignore[attr-defined]
+            .limit(limit)
+        )
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def update_processing_status(
+        self,
+        email_message_id: UUID,
+        *,
+        processing_status: str,
+        category: str | None,
+    ) -> EmailMessage | None:
+        """Update an email message's processing status and category.
+
+        Args:
+            email_message_id: The internal UUID of the message to update.
+            processing_status: The new processing status value.
+            category: The new category value (or None to clear it).
+
+        Returns:
+            The updated EmailMessage entity if found, None otherwise.
+        """
+        statement = select(EmailMessage).where(EmailMessage.id == email_message_id)
+        result = await self.session.execute(statement)
+        message = result.scalars().first()
+
+        if message is None:
+            return None
+
+        message.processing_status = processing_status
+        message.category = category
+        self.session.add(message)
+        await self.session.flush()
+        return message
+
     async def list_by_user(
         self, user_id: UUID, limit: int = 50, offset: int = 0, category: str | None = None
     ) -> list[EmailMessage]:

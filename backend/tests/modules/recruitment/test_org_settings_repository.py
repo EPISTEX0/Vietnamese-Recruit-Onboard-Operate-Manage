@@ -277,3 +277,48 @@ class TestTimezoneValidation:
         repo = OrganizationSettingsRepository(_mock_empty_session(), settings=settings)
 
         assert repo.default_timezone == "Europe/Paris"
+
+
+class TestGetName:
+    """``get_name`` reads the Organization name without seeding a row (#370)."""
+
+    async def test_returns_empty_string_when_no_row_exists(self) -> None:
+        """Unlike get_timezone, an absent row is not seeded -- just reported as ''."""
+        session = _mock_empty_session()
+        repo = OrganizationSettingsRepository(session)
+
+        name = await repo.get_name()
+
+        assert name == ""
+        session.add.assert_not_called()
+        session.flush.assert_not_awaited()
+
+    async def test_returns_the_stored_name(self) -> None:
+        """A row with a name returns it verbatim."""
+        row = OrganizationSettings(name="Acme Corp", timezone="Asia/Ho_Chi_Minh")
+        scalars = MagicMock()
+        scalars.first.return_value = row
+        execute_result = MagicMock()
+        execute_result.scalars.return_value = scalars
+        session = AsyncMock()
+        session.execute.return_value = execute_result
+        repo = OrganizationSettingsRepository(session)
+
+        name = await repo.get_name()
+
+        assert name == "Acme Corp"
+
+    async def test_returns_empty_string_when_row_has_no_name(self) -> None:
+        """A row whose name was never set (the entity default) reports '' too."""
+        row = OrganizationSettings(timezone="Asia/Ho_Chi_Minh")
+        scalars = MagicMock()
+        scalars.first.return_value = row
+        execute_result = MagicMock()
+        execute_result.scalars.return_value = scalars
+        session = AsyncMock()
+        session.execute.return_value = execute_result
+        repo = OrganizationSettingsRepository(session)
+
+        name = await repo.get_name()
+
+        assert name == ""

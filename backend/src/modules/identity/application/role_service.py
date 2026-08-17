@@ -11,12 +11,11 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from src.modules.identity.domain.entities import User, UserRole
 from src.modules.identity.domain.exceptions import AuthError
+from src.modules.identity.infrastructure.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class RoleService:
             super_admin_email: The email of the super admin (from AUTH_SUPER_ADMIN_EMAIL
                 env var), or None if not configured.
         """
-        self._session = session
+        self._user_repo = UserRepository(session)
         self._super_admin_email = super_admin_email.lower() if super_admin_email else None
 
     async def change_role(
@@ -142,9 +141,7 @@ class RoleService:
         if previous_role == UserRole.SYSTEM_ADMIN and await self._count_system_admins() <= 1:
             raise LastAdminError()
 
-        user.role = new_role
-        self._session.add(user)
-        await self._session.flush()
+        user = await self._user_repo.update_role(user, new_role)
         logger.info(
             "User %s role changed %s -> %s by %s",
             user.email,
@@ -171,28 +168,20 @@ class RoleService:
 
     async def _get_user_by_id(self, user_id: UUID) -> User | None:
         """Load a user by primary key, or None when absent."""
-        statement = select(User).where(User.id == user_id)
-        result = await self._session.execute(statement)
-        return result.scalars().first()
+        return await self._user_repo.get_by_id(user_id)
 
     async def ensure_super_admin(self, email: str) -> None:
         """Ensure the super admin email has the SYSTEM_ADMIN role."""
-        statement = select(User).where(func.lower(User.email) == email.lower())
-        result = await self._session.execute(statement)
-        user = result.scalars().first()
+        user = await self._user_repo.get_by_email(email)
 
         if user is None:
             logger.info("Super admin user '%s' not found in database.", email)
             return
 
         if user.role != UserRole.SYSTEM_ADMIN:
-            user.role = UserRole.SYSTEM_ADMIN
-            self._session.add(user)
-            await self._session.flush()
+            await self._user_repo.update_role(user, UserRole.SYSTEM_ADMIN)
             logger.info("Super admin role assigned to existing user '%s'.", email)
 
     async def _count_system_admins(self) -> int:
         """Count the number of users with the SYSTEM_ADMIN role."""
-        statement = select(func.count()).select_from(User).where(User.role == UserRole.SYSTEM_ADMIN)
-        result = await self._session.execute(statement)
-        return result.scalar_one()
+        return await self._user_repo.count_system_admins()

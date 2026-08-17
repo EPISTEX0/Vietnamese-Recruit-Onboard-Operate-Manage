@@ -886,19 +886,10 @@ class HistoricalImportService:
         Returns:
             Count of emails classified as Job Applications.
         """
-        from sqlmodel import desc, select
-
         from src.modules.gmail.container import build_classification_service
-        from src.modules.gmail.domain.entities import EmailMessage
+        from src.modules.gmail.infrastructure.email_repository import EmailRepository
 
-        stmt = (
-            select(EmailMessage)
-            .where(EmailMessage.user_id == user_id)
-            .order_by(desc(EmailMessage.created_at))
-            .limit(limit)
-        )
-        result = await self._session.execute(stmt)
-        imported_emails = list(result.scalars().all())
+        imported_emails = await EmailRepository(self._session).list_recently_created(user_id, limit)
 
         if not imported_emails:
             return 0

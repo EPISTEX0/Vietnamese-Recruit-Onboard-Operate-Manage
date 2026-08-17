@@ -378,21 +378,21 @@ class ToolRegistry:
             return {"job_openings": [], "total": 0, "status": status_filter}
 
         # Resolve position -> department names
-        from sqlmodel import select as sqlmodel_select
+        from src.modules.employee.infrastructure.department_repository import (
+            DepartmentRepository,
+        )
+        from src.modules.employee.infrastructure.position_repository import (
+            PositionRepository,
+        )
 
-        from src.modules.employee.domain.entities import Department, Position
+        position_ids = list({jo.position_id for jo in job_openings})
+        positions = await PositionRepository(self._session).get_by_ids(position_ids)
 
-        position_ids = {jo.position_id for jo in job_openings}
-        pos_stmt = sqlmodel_select(Position).where(Position.id.in_(position_ids))
-        pos_result = await self._session.execute(pos_stmt)
-        positions: dict[uuid.UUID, Position] = {p.id: p for p in pos_result.scalars().all()}
-
-        dept_ids = {p.department_id for p in positions.values() if p.department_id}
+        dept_ids = list({p.department_id for p in positions.values() if p.department_id})
         dept_map: dict[uuid.UUID, str] = {}
         if dept_ids:
-            dept_stmt = sqlmodel_select(Department).where(Department.id.in_(dept_ids))
-            dept_result = await self._session.execute(dept_stmt)
-            dept_map = {d.id: d.name for d in dept_result.scalars().all()}
+            departments = await DepartmentRepository(self._session).get_by_ids(dept_ids)
+            dept_map = {d.id: d.name for d in departments.values()}
 
         # Batch get accepted candidate counts
         jo_ids = [jo.id for jo in job_openings]
@@ -424,12 +424,20 @@ class ToolRegistry:
 
         import uuid as _uuid
 
-        from sqlmodel import func
-        from sqlmodel import select as sqlmodel_select
-
-        from src.modules.employee.domain.entities import Department, Employee, Position
+        from src.modules.employee.infrastructure.department_repository import (
+            DepartmentRepository,
+        )
+        from src.modules.employee.infrastructure.employee_repository import (
+            EmployeeRepository,
+        )
+        from src.modules.employee.infrastructure.position_repository import (
+            PositionRepository,
+        )
 
         department_id_str = args.get("department_id")
+        dept_repo = DepartmentRepository(self._session)
+        pos_repo = PositionRepository(self._session)
+        emp_repo = EmployeeRepository(self._session)
 
         if department_id_str:
             try:
@@ -437,16 +445,12 @@ class ToolRegistry:
             except ValueError as e:
                 return {"error": f"Invalid department_id: {str(e)}"}
 
-            dept_stmt = sqlmodel_select(Department).where(Department.id == dept_id)
-            dept_result = await self._session.execute(dept_stmt)
-            dept = dept_result.scalars().first()
+            dept = await dept_repo.get_by_id(dept_id)
             if dept is None:
                 return {"error": f"Department not found: {department_id_str}"}
             departments = [dept]
         else:
-            dept_stmt = sqlmodel_select(Department).order_by(Department.name)
-            dept_result = await self._session.execute(dept_stmt)
-            departments = list(dept_result.scalars().all())
+            departments = await dept_repo.list_all()
 
         if not departments:
             return {"departments": [], "total": 0}
@@ -455,26 +459,12 @@ class ToolRegistry:
         result_items = []
         for dept in departments:
             # Get positions in this department
-            pos_stmt = (
-                sqlmodel_select(Position)
-                .where(Position.department_id == dept.id)
-                .order_by(Position.name)
-            )
-            pos_result = await self._session.execute(pos_stmt)
-            positions = list(pos_result.scalars().all())
+            positions = await pos_repo.list_by_department(dept.id)
 
             # Count employees per position
             position_info = []
             for pos in positions:
-                count_stmt = (
-                    sqlmodel_select(func.count())
-                    .select_from(Employee)
-                    .where(
-                        Employee.position_id == pos.id,
-                    )
-                )
-                count_result = await self._session.execute(count_stmt)
-                emp_count = count_result.scalar_one() or 0
+                emp_count = await emp_repo.count_by_position(pos.id)
                 position_info.append(
                     {
                         "position_title": pos.name,
@@ -483,18 +473,12 @@ class ToolRegistry:
                 )
 
             # Get manager info: employees in this department
-            mgr_stmt = sqlmodel_select(Employee).where(
-                Employee.department_id == dept.id,
-            )
-            mgr_result = await self._session.execute(mgr_stmt)
-            dept_employees = list(mgr_result.scalars().all())
+            dept_employees = await emp_repo.list_by_department(dept.id)
 
-            manager_ids = {e.manager_id for e in dept_employees if e.manager_id}
+            manager_ids = list({e.manager_id for e in dept_employees if e.manager_id})
             managers = []
             if manager_ids:
-                mgr_lookup_stmt = sqlmodel_select(Employee).where(Employee.id.in_(manager_ids))
-                mgr_lookup_result = await self._session.execute(mgr_lookup_stmt)
-                mgr_map = {e.id: e for e in mgr_lookup_result.scalars().all()}
+                mgr_map = await emp_repo.get_by_ids(manager_ids)
                 for mgr_id in manager_ids:
                     mgr = mgr_map.get(mgr_id)
                     if mgr:

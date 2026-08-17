@@ -126,6 +126,34 @@ class EmployeeRepository:
         result = await self.session.execute(statement)
         return {emp.id: emp for emp in result.scalars().all()}
 
+    async def list_by_department(self, department_id: UUID) -> builtins.list[Employee]:
+        """Retrieve every employee assigned to a department, active or not.
+
+        Args:
+            department_id: The UUID of the department to filter by.
+
+        Returns:
+            A list of Employee entities in the department.
+        """
+        statement = select(Employee).where(Employee.department_id == department_id)
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def count_by_position(self, position_id: UUID) -> int:
+        """Count employees holding a given position, active or not.
+
+        Args:
+            position_id: The UUID of the position to count.
+
+        Returns:
+            The number of employees holding the position.
+        """
+        statement = (
+            select(func.count()).select_from(Employee).where(Employee.position_id == position_id)
+        )
+        result = await self.session.execute(statement)
+        return result.scalar_one() or 0
+
     async def get_by_email(self, email: str) -> Employee | None:
         """Retrieve an employee by email address (case-insensitive).
 
