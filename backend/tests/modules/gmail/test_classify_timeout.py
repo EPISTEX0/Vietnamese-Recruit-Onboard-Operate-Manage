@@ -90,14 +90,10 @@ def _make_mock_session(emails, total_remaining):
     return session
 
 
-def _make_app(mock_user, mock_email_repo):
+def _make_app(mock_user, mock_session):
     """Build the gmail-router app with auth and infrastructure dependencies stubbed."""
-    from src.modules.gmail.container import (
-        get_connection_service,
-        get_email_repository,
-        get_gmail_adapter,
-    )
-    from src.modules.identity.container import get_current_user
+    from src.modules.gmail.container import get_connection_service, get_gmail_adapter
+    from src.modules.identity.container import get_current_user, get_db_session
 
     mock_connection_service = AsyncMock()
     mock_connection_service.get_status = AsyncMock(return_value=MagicMock(status="connected"))
@@ -107,7 +103,7 @@ def _make_app(mock_user, mock_email_repo):
 
     app = _create_test_app()
     app.dependency_overrides[get_current_user] = lambda: mock_user
-    app.dependency_overrides[get_email_repository] = lambda: mock_email_repo
+    app.dependency_overrides[get_db_session] = lambda: mock_session
     app.dependency_overrides[get_connection_service] = _mock_get_connection_service
     app.dependency_overrides[get_gmail_adapter] = lambda: MagicMock()
     return app
@@ -157,8 +153,7 @@ class TestClassifyEndpointTimeout:
         mock_user = _make_mock_user()
         mock_emails = [_make_mock_email() for _ in range(3)]
 
-        mock_email_repo = MagicMock()
-        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=3)
+        mock_session = _make_mock_session(mock_emails, total_remaining=3)
 
         # Create settings with a very short timeout (1 second)
         test_settings = GmailSettings(
@@ -173,7 +168,7 @@ class TestClassifyEndpointTimeout:
             await asyncio.Future()
             return 3
 
-        app = _make_app(mock_user, mock_email_repo)
+        app = _make_app(mock_user, mock_session)
 
         with _classification_stubbed(test_settings, slow_classify_batch):
             response = await _post_classify(app)
@@ -188,8 +183,7 @@ class TestClassifyEndpointTimeout:
         mock_user = _make_mock_user()
         mock_emails = [_make_mock_email() for _ in range(2)]
 
-        mock_email_repo = MagicMock()
-        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=2)
+        mock_session = _make_mock_session(mock_emails, total_remaining=2)
 
         test_settings = GmailSettings(
             classification_request_timeout_seconds=1,
@@ -201,7 +195,7 @@ class TestClassifyEndpointTimeout:
             await asyncio.Future()
             return 2
 
-        app = _make_app(mock_user, mock_email_repo)
+        app = _make_app(mock_user, mock_session)
 
         with _classification_stubbed(test_settings, slow_classify_batch):
             response = await _post_classify(app)
@@ -221,8 +215,7 @@ class TestClassifyEndpointTimeout:
         for email in mock_emails:
             email.category = "recruitment"
 
-        mock_email_repo = MagicMock()
-        mock_email_repo.session = _make_mock_session(mock_emails, total_remaining=2)
+        mock_session = _make_mock_session(mock_emails, total_remaining=2)
 
         # Use a generous timeout so classification succeeds
         test_settings = GmailSettings(
@@ -235,7 +228,7 @@ class TestClassifyEndpointTimeout:
             await asyncio.sleep(0.1)  # Fast — well within 10s timeout
             return 2
 
-        app = _make_app(mock_user, mock_email_repo)
+        app = _make_app(mock_user, mock_session)
 
         with _classification_stubbed(test_settings, fast_classify_batch):
             response = await _post_classify(app)

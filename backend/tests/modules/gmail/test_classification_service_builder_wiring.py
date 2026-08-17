@@ -212,12 +212,11 @@ async def test_router_classify_emails_creates_a_recruitment_inbox_item(
     marked, but the inbox item that lets HR see it never appears.
     """
     email = await _seed_email(session, seeded.user.id, "router")
-    email_repo = EmailRepository(session)
 
     classified_count = await _evaluate_rules(
         current_user_id=seeded.user.id,
         unclassified_emails=[email],
-        email_repo=email_repo,
+        session=session,
     )
 
     assert classified_count == 1
