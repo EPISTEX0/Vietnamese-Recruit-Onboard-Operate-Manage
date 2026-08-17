@@ -18,13 +18,17 @@ silently later.
 
 The property this file enforces: **no ``except`` clause in
 ``context_builder.py`` that catches broadly (``Exception``, ``BaseException``,
-or bare ``except:``) may have a body with no logging call in it.** "Logging
-call" is any method call of the form ``<name>.<method>(...)`` where
-``<name>`` is a bare identifier containing ``log`` (``logger.exception(...)``,
-``log.warning(...)``) -- not narrowed to ``logger.exception`` specifically, so
-a handler that logs at ``debug`` still counts as logged. The brief's own
-opening census flagged that narrower matching as one of its blind spots; this
-guard does not repeat it.
+or bare ``except:``) may have a body with no logging call at a level visible
+by default in it.** "Logging call" is any method call of the form
+``<name>.<method>(...)`` where ``<name>`` is a bare identifier containing
+``log`` and ``<method>`` is one of ``warning``/``warn``/``error``/
+``exception``/``critical``/``log`` (``logger.exception(...)``,
+``log.warning(...)``) -- not narrowed to ``logger.exception`` specifically.
+``debug`` and ``info`` are deliberately excluded: both are typically disabled
+by the root logger's default level in production, so a handler that only
+calls ``logger.debug(...)`` before swallowing is exactly the failure mode
+#375 exists to close -- the DB outage happens and nothing visible is ever
+emitted. A handler must log at ``warning`` or above to satisfy this guard.
 
 The receiver must be a bare name, not an attribute chain or a call result --
 ``self._logger.warning(...)`` and ``logging.getLogger(__name__).error(...)``
@@ -70,9 +74,9 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 TARGET_PATH = BACKEND_ROOT / "src/modules/assistant/application/context_builder.py"
 
 _BROAD_EXCEPTION_NAMES = frozenset({"Exception", "BaseException"})
-_LOG_METHODS = frozenset(
-    {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
-)
+# debug/info excluded on purpose: both are off by default in production, so a
+# handler that only logs at one of those levels is still effectively silent.
+_LOG_METHODS = frozenset({"warning", "warn", "error", "exception", "critical", "log"})
 
 
 @dataclass(frozen=True)
@@ -212,6 +216,21 @@ class ContextBuilder:
             return ""
 """
 
+_DEBUG_ONLY_MODULE = """
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class ContextBuilder:
+    async def _get_thing(self):
+        try:
+            return await self._repo.get_thing()
+        except Exception:
+            logger.debug("meh")
+            return ""
+"""
+
 
 def test_the_census_reports_a_known_positive() -> None:
     """A broad except handler with no log call in its body must be caught.
@@ -236,3 +255,16 @@ def test_the_census_stays_quiet_when_the_handler_logs() -> None:
     """
     findings = _scan(_synthetic(_LOGGED_MODULE))
     assert not findings, findings
+
+
+def test_the_census_reports_a_debug_only_handler_as_silent() -> None:
+    """A handler that only logs at debug must still be caught.
+
+    debug is off by default in production, so logger.debug(...) ahead of a
+    swallow is no more visible than no log call at all -- if _LOG_METHODS
+    were ever widened back to include it, this is what would go red.
+    """
+    findings = _scan(_synthetic(_DEBUG_ONLY_MODULE))
+
+    assert len(findings) == 1, findings
+    assert findings[0].lineno == 11, findings
