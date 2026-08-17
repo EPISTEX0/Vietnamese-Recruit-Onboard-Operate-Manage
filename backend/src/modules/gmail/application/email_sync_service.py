@@ -554,7 +554,13 @@ class EmailSyncService:
                 user_id,
             )
         except Exception as exc:
-            # Classification failure should never break the sync pipeline
+            # Classification failure should never break the sync pipeline.
+            # Unlike the historical import job (#352), an incremental sync
+            # cycle has no per-run status a user watches after the fact --
+            # it is cron-driven and re-runs every poll interval, so a
+            # persistent misconfiguration keeps landing in this log rather
+            # than presenting once as a false "all clear" the way a single
+            # completed import job would. exc_info below is that surface.
             logger.error(
                 "Email classification failed for user %s: %s",
                 user_id,

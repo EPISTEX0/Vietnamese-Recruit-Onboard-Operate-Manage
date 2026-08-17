@@ -140,6 +140,20 @@ def import_service(
     )
 
 
+@pytest.fixture(autouse=True)
+def classification_configured(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Make the AI-config pre-flight guard pass by default.
+
+    Only ``TestStartImportClassificationGuard`` cares about Organization AI
+    Configuration; every other test in this module exercises unrelated
+    behavior and would otherwise trip the guard through nothing more than the
+    ``session`` fixture's default mock attribute chain.
+    """
+    mock = AsyncMock(return_value=None)
+    monkeypatch.setattr("src.modules.gmail.container.raise_if_classification_not_configured", mock)
+    return mock
+
+
 def _make_message_metadata(
     msg_id: str = "msg_001",
     thread_id: str = "thread_001",
@@ -338,6 +352,69 @@ class TestStartImport:
 
         with pytest.raises(GmailImportException, match="No valid Google connection"):
             await import_service.start_import(7, user_id)
+
+
+class TestStartImportClassificationGuard:
+    """Tests for the AI-config pre-flight guard added in start_import (#352).
+
+    ``raise_if_classification_not_configured`` itself is proven against real
+    Postgres in ``test_classification_preflight_guard.py``; these tests are
+    only about start_import's wiring to it.
+    """
+
+    async def test_blocked_when_classification_not_configured(
+        self,
+        import_service: HistoricalImportService,
+        mock_redis: AsyncMock,
+        classification_configured: AsyncMock,
+        user_id: UUID,
+    ) -> None:
+        """A RuntimeError from the guard surfaces as a 4xx before any job is created."""
+        mock_redis.hgetall.return_value = {}  # No existing job.
+        classification_configured.side_effect = RuntimeError(
+            "AI classification is not configured. "
+            "Set up your AI provider in Admin → AI Settings first."
+        )
+
+        from src.modules.gmail.domain.exceptions import GmailImportException
+
+        with pytest.raises(GmailImportException, match="AI classification is not configured"):
+            await import_service.start_import(7, user_id)
+
+        mock_redis.hset.assert_not_called()
+
+    async def test_guard_skipped_when_classification_disabled(
+        self,
+        import_service: HistoricalImportService,
+        mock_redis: AsyncMock,
+        classification_configured: AsyncMock,
+        user_id: UUID,
+    ) -> None:
+        """No AI config to block on if classification would never run anyway."""
+        mock_redis.hgetall.return_value = {}
+        import_service._settings.classification_enabled = False  # noqa: SLF001
+        # If the guard ran despite being disabled, this would fail the job.
+        classification_configured.side_effect = RuntimeError("should not be called")
+
+        job_id = await import_service.start_import(7, user_id)
+
+        assert isinstance(job_id, str)
+        classification_configured.assert_not_called()
+
+    async def test_guard_called_with_session_and_settings_when_enabled(
+        self,
+        import_service: HistoricalImportService,
+        session: AsyncMock,
+        mock_redis: AsyncMock,
+        classification_configured: AsyncMock,
+        user_id: UUID,
+    ) -> None:
+        """The guard runs, and against the session/settings the job actually uses."""
+        mock_redis.hgetall.return_value = {}
+
+        await import_service.start_import(7, user_id)
+
+        classification_configured.assert_awaited_once_with(session, import_service._settings)  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +675,68 @@ class TestProcessImportJob:
 
         # Should have upserted both messages
         assert email_repo.batch_upsert.call_count == 2
+
+    async def test_classification_step_failure_surfaces_as_errors(
+        self,
+        import_service: HistoricalImportService,
+        mock_redis: AsyncMock,
+        gmail_adapter: AsyncMock,
+        email_repo: AsyncMock,
+        user_id: UUID,
+    ) -> None:
+        """A whole-classification-step failure must not report completed/errors: 0 (#352).
+
+        Unlike a single email failing classification -- which classify_batch
+        already catches internally and never raises for -- this is the step
+        itself dying (e.g. Organization AI Config removed mid-job). Before the
+        fix this was swallowed silently: status stayed 'completed' and errors
+        stayed 0, indistinguishable from an import with zero recruitment
+        emails.
+
+        Proof by mutation: revert the except branch to only ``logger.error(...)``
+        (dropping the ``total_errors += total_processed`` and the
+        ``error_message`` write) and this goes red.
+        """
+        mock_redis.hgetall.side_effect = [
+            {
+                "job_id": "job-123",
+                "status": "running",
+                "days": "7",
+                "user_id": str(user_id),
+                "started_at": "1234567890",
+            },
+            {},
+        ]
+        gmail_adapter.list_message_ids.return_value = ([{"id": "msg_001"}], None)
+        email_repo.get_by_gmail_ids.return_value = []
+        gmail_adapter.get_single_message_metadata.return_value = _make_message_metadata(
+            msg_id="msg_001"
+        )
+
+        import_service._settings.classification_enabled = True  # noqa: SLF001
+        import_service._classify_recent_emails = AsyncMock(  # noqa: SLF001
+            side_effect=RuntimeError(
+                "AI classification is not configured. "
+                "Set up your AI provider in Admin → AI Settings first."
+            )
+        )
+
+        result = await import_service.process_import_job()
+
+        assert result["status"] == "completed"
+        assert result["processed"] == 1
+        assert result["errors"] == 1
+        assert result["job_applications"] == 0
+
+        from src.modules.gmail.application.import_service import _REDIS_PROGRESS_KEY
+
+        mock_redis.hset.assert_any_call(_REDIS_PROGRESS_KEY, "error_message", ANY)
+        error_message_call = next(
+            c
+            for c in mock_redis.hset.mock_calls
+            if c.args[:2] == (_REDIS_PROGRESS_KEY, "error_message")
+        )
+        assert "Classification failed" in error_message_call.args[2]
 
     async def test_cancellation_during_processing(
         self,

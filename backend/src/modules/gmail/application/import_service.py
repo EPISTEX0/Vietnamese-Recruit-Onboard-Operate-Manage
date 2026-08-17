@@ -88,10 +88,16 @@ class ImportStatus:
         total_count: Total messages found for the window.
         processed_count: Messages processed so far / final.
         job_application_count: Messages classified as Job Applications that entered Backbone Flow.
-        errors: Count of errors encountered.
+        errors: Count of errors encountered -- per-message fetch/persist
+            failures, plus, if the classification step itself fails outright
+            (rather than one email's classification failing), every processed
+            message counted at once, since none of them got classified.
         started_at: ISO timestamp when the job started.
         completed_at: ISO timestamp when the job finished or None.
-        error_message: Final error message if status == 'failed'.
+        error_message: Human-readable detail of what went wrong. Set when
+            status == 'failed', and also when status == 'completed' but the
+            classification step failed for the whole batch -- errors > 0
+            with job_application_count == 0 is the signal that happened.
     """
 
     job_id: str | None = None
@@ -269,6 +275,17 @@ class HistoricalImportService:
                     f"An import job ({job_id}) is already running. "
                     "Cancel it or wait for it to complete before starting a new one."
                 )
+
+        # Fail fast if classification would run but has nothing to run with:
+        # letting a multi-thousand-email import fetch and persist everything
+        # only to silently drop classification at the end wastes the run.
+        if self._settings.classification_enabled:
+            from src.modules.gmail.container import raise_if_classification_not_configured
+
+            try:
+                await raise_if_classification_not_configured(self._session, self._settings)
+            except RuntimeError as exc:
+                raise GmailImportException(str(exc)) from exc
 
         # Validate connection.
         access_token = await self._resolve_access_token(user_id)
@@ -552,7 +569,12 @@ class HistoricalImportService:
                     },
                 )
 
-            # Classify newly imported emails.
+            # Classify newly imported emails. This is distinct from a single
+            # email's classification failing, which classify_batch already
+            # catches per-email and never raises for -- a whole-batch
+            # exception here means the classification step itself could not
+            # run (e.g. AI config removed mid-job), which the guard in
+            # start_import cannot catch because it only runs once, up front.
             if total_processed > 0 and self._settings.classification_enabled:
                 try:
                     total_job_applications = await self._classify_recent_emails(
@@ -562,6 +584,18 @@ class HistoricalImportService:
                     logger.error(
                         "Classification after historical import failed: %s",
                         exc,
+                        exc_info=True,
+                    )
+                    # Surface through the counters/message the UI already
+                    # renders (historical-import.tsx) instead of a silent
+                    # "completed, errors: 0, job_applications: 0".
+                    total_errors += total_processed
+                    await self._hset_field_str(
+                        _REDIS_PROGRESS_KEY,
+                        "error_message",
+                        (f"Classification failed for all {total_processed} imported emails: {exc}")[
+                            :500
+                        ],
                     )
 
             await self._hset_field_str(
