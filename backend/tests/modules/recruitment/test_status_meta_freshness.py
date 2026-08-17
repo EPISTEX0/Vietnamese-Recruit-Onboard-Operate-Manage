@@ -29,18 +29,15 @@ một guard chỉ đọc union sẽ không thấy.
 2. `ProcessingStatus`/`PROC_STATUS_META` — union↔backend: thiếu `ai_unavailable`.
    10/11 trước khi sửa.
 
-## `DOCUMENT_STATUS_META` — không có enum backend
+## `DOCUMENT_STATUS_META` — nguồn sự thật là `KnowledgeBaseDocumentStatus` (#362)
 
-`KnowledgeBaseDocument.status` (và `EmployeeKnowledgeBaseDocument.status`,
-`knowledge_base/domain/entities.py`) là `str` trần, hợp đồng nằm trong
+`KnowledgeBaseDocument.status` (và `EmployeeKnowledgeBaseDocument.status`)
+từng là `str` trần với hợp đồng chỉ nằm trong
 `sa_column_kwargs={"comment": "pending | processing | ready | error"}` — cùng
-bệnh "hợp đồng trong comment" mà #356 vừa đóng cho `CalendarConflict.status`
-bằng cách thêm `CalendarConflictStatus`. Thêm một enum tương tự cho
-`knowledge_base` là việc thật nhưng ngoài phạm vi #356 (module khác, ticket
-không yêu cầu) — ghi nhận ở đây làm giới hạn có chép, không lẳng lặng bỏ map
-này ra khỏi census. Guard đọc thẳng chuỗi trong comment thay vì import enum;
-nếu ai sửa comment mà quên sửa migration/giá trị ghi thật, guard này không
-biết — nó chỉ biết đối chiếu hai bên của cùng một broken contract.
+bệnh "hợp đồng trong comment" mà #356 đã đóng cho `CalendarConflict.status`.
+#362 đóng nó cho `knowledge_base` bằng `KnowledgeBaseDocumentStatus`
+(`knowledge_base/domain/enums.py`); map này giờ đọc thẳng enum đó, cùng cách
+với năm map còn lại, thay vì regex-scrape một comment cột.
 
 ## Chống xanh-rỗng
 
@@ -55,6 +52,7 @@ import re
 from functools import cache
 from pathlib import Path
 
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 from src.modules.recruitment.domain.enums import (
     CalendarConflictStatus,
     CandidateStatus,
@@ -71,9 +69,6 @@ DASHBOARD_ROOT = FRONTEND_ROOT / "app" / "[locale]" / "(dashboard)"
 SHARED_UI = FRONTEND_ROOT / "components" / "shared-ui.tsx"
 REVIEW_PAGE = DASHBOARD_ROOT / "recruitment" / "review" / "page.tsx"
 KNOWLEDGE_BASE_PAGE = DASHBOARD_ROOT / "knowledge-base" / "page.tsx"
-KB_ENTITIES = (
-    REPO_ROOT / "backend" / "src" / "modules" / "knowledge_base" / "domain" / "entities.py"
-)
 
 # ---------------------------------------------------------------------------
 # Extractors — frontend side
@@ -142,46 +137,6 @@ class TestDiscoverySeesSomething:
 
 
 # ---------------------------------------------------------------------------
-# Extractors — backend side
-# ---------------------------------------------------------------------------
-
-
-def _extract_kb_document_status_values() -> list[str]:
-    """Giá trị hợp lệ của `KnowledgeBaseDocument.status`, đọc từ comment.
-
-    Không có enum backend cho field này (xem docstring module). Cả hai bảng
-    KB (HR + Employee) khai cùng một comment; assert bằng nhau ngay tại đây
-    để một bảng đổi mà bảng kia quên đổi cũng làm test này đỏ, không chỉ
-    guard so sánh với frontend.
-    """
-    text = KB_ENTITIES.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r'status:\s*str\s*=\s*Field\(\s*default="pending",\s*max_length=20,\s*'
-        r'sa_column_kwargs=\{"comment":\s*"([^"]+)"\},?\s*\)'
-    )
-    matches = pattern.findall(text)
-    assert len(matches) == 2, (
-        f"Kỳ vọng đúng 2 field status (KnowledgeBaseDocument + "
-        f"EmployeeKnowledgeBaseDocument) khai comment 'pending | processing | "
-        f"ready | error' trong {KB_ENTITIES} — tìm thấy {len(matches)}. Field đổi "
-        "hình dạng (comment/formatting) thì sửa regex này, đừng để nó im lặng "
-        "trích 0."
-    )
-    assert matches[0] == matches[1], (
-        "KnowledgeBaseDocument.status và EmployeeKnowledgeBaseDocument.status "
-        f"khai hai comment khác nhau: {matches[0]!r} vs {matches[1]!r}."
-    )
-    values = [v.strip() for v in matches[0].split("|")]
-    assert values, "Comment rỗng — extractor có thể đã hỏng."
-    return values
-
-
-class TestBackendExtractorSeesSomething:
-    def test_known_positive_kb_document_status(self) -> None:
-        assert "pending" in _extract_kb_document_status_values()
-
-
-# ---------------------------------------------------------------------------
 # Bảng đối chiếu: map frontend ↔ nguồn sự thật backend
 # ---------------------------------------------------------------------------
 
@@ -199,8 +154,8 @@ MAPS: list[tuple[str, Path, str, set[str]]] = [
     (
         "DOCUMENT_STATUS_META",
         KNOWLEDGE_BASE_PAGE,
-        "KnowledgeBaseDocument.status (comment)",
-        set(_extract_kb_document_status_values()),
+        "KnowledgeBaseDocumentStatus",
+        {m.value for m in KnowledgeBaseDocumentStatus},
     ),
 ]
 

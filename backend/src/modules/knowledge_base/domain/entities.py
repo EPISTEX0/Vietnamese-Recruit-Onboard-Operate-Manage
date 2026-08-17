@@ -9,6 +9,8 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Column, DateTime, Index, Text
 from sqlmodel import Field, SQLModel
 
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
 # The six ``ix_kb_*`` / ``ix_emp_kb_*`` indexes below are all declared through
 # ``__table_args__`` rather than ``Field(index=True)``. Their names predate the
 # tables' current names — 078/079 created them as ``ix_kb_chunks_*`` while the
@@ -44,6 +46,15 @@ from sqlmodel import Field, SQLModel
 # ``TEXT`` but is a different type name, so autogenerate proposes an ALTER for
 # every such column. The migrations wrote ``sa.Text()`` and the database has
 # ``TEXT`` -- the model is the imprecise side. docs/schema-drift-audit.md 5.5.
+#
+# The ``status`` field on both document entities below stays annotated ``str``
+# rather than ``KnowledgeBaseDocumentStatus`` even though its default is now a
+# member of that enum: SQLAlchemy renders an ``Enum``-annotated attribute as a
+# native Postgres ENUM type, not ``VARCHAR``, which would trigger an unwanted
+# schema-drift migration (verified: annotating the field as the enum changes
+# the inferred column type from ``AutoString(length=20)`` to
+# ``Enum('PENDING', 'READY', ...)``). The enum is a Python-side contract only,
+# matching ``CalendarConflictStatus`` (#356).
 
 
 class KnowledgeBaseDocument(SQLModel, table=True):
@@ -67,8 +78,9 @@ class KnowledgeBaseDocument(SQLModel, table=True):
     storage_path: str = Field(max_length=1000)
     file_size: int = Field(sa_type=BigInteger)
     mime_type: str = Field(max_length=200)
+    # Values: KnowledgeBaseDocumentStatus. Stays ``str``-typed -- see file header comment above.
     status: str = Field(
-        default="pending",
+        default=KnowledgeBaseDocumentStatus.PENDING,
         max_length=20,
         sa_column_kwargs={"comment": "pending | processing | ready | error"},
     )
@@ -157,8 +169,9 @@ class EmployeeKnowledgeBaseDocument(SQLModel, table=True):
     storage_path: str = Field(max_length=1000)
     file_size: int = Field(sa_type=BigInteger)
     mime_type: str = Field(max_length=200)
+    # Values: KnowledgeBaseDocumentStatus. Stays ``str``-typed -- see file header comment above.
     status: str = Field(
-        default="pending",
+        default=KnowledgeBaseDocumentStatus.PENDING,
         max_length=20,
         sa_column_kwargs={"comment": "pending | processing | ready | error"},
     )

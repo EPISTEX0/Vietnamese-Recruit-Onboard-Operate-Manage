@@ -19,6 +19,7 @@ from src.modules.knowledge_base.domain.entities import (
     EmployeeKnowledgeBaseChunk,
     KnowledgeBaseChunk,
 )
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 from src.modules.knowledge_base.infrastructure.config import KnowledgeBaseSettings
 from src.modules.knowledge_base.infrastructure.repository import (
     KnowledgeBaseRepository,
@@ -349,7 +350,7 @@ class IngestionService:
             # Step 1: Mark as processing
             await self._repo.update_document_status(
                 document_id,
-                "processing",
+                KnowledgeBaseDocumentStatus.PROCESSING,
                 kb_type=kb_type,
             )
 
@@ -420,7 +421,7 @@ class IngestionService:
             # Step 7: Mark as ready
             await self._repo.update_document_status(
                 document_id,
-                "ready",
+                KnowledgeBaseDocumentStatus.READY,
                 kb_type=kb_type,
                 chunk_count=len(chunks),
             )
@@ -442,7 +443,7 @@ class IngestionService:
             )
             await self._repo.update_document_status(
                 document_id,
-                "error",
+                KnowledgeBaseDocumentStatus.ERROR,
                 kb_type=kb_type,
                 error_message=error_msg[:4000],  # Truncate to avoid overflow
             )

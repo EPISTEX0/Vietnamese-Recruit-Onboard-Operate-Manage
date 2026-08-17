@@ -82,6 +82,7 @@ from src.modules.knowledge_base.domain.entities import (
     KnowledgeBaseChunk,
     KnowledgeBaseDocument,
 )
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 from src.modules.knowledge_base.infrastructure.repository import KnowledgeBaseRepository
 
 pytestmark = pytest.mark.asyncio
@@ -290,8 +291,8 @@ async def test_search_still_ranks_filters_and_limits_after_the_reshape(
     under a non-``ready`` document stays out).
     """
     document_id, other_document_id = uuid4(), uuid4()
-    await _insert_document(session, document_id, status="ready")
-    await _insert_document(session, other_document_id, status="error")
+    await _insert_document(session, document_id, status=KnowledgeBaseDocumentStatus.READY)
+    await _insert_document(session, other_document_id, status=KnowledgeBaseDocumentStatus.ERROR)
 
     # e0 is the query. Similarity to it is just the first coordinate of a unit
     # vector, so each row's expected score is written directly into its vector.
@@ -358,8 +359,8 @@ async def test_chunks_under_a_non_ready_document_cannot_hide_the_real_matches(
     Verified to force the seam: with the fallback removed, this returns nothing.
     """
     ready_id, failed_id = uuid4(), uuid4()
-    await _insert_document(session, ready_id, status="ready")
-    await _insert_document(session, failed_id, status="error")
+    await _insert_document(session, ready_id, status=KnowledgeBaseDocumentStatus.READY)
+    await _insert_document(session, failed_id, status=KnowledgeBaseDocumentStatus.ERROR)
 
     query = _unit_vector(1.0)
     session.add_all(

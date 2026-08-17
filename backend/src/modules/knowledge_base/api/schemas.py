@@ -10,13 +10,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+
 
 class DocumentUploadResponse(BaseModel):
     """Response after a successful document upload."""
 
     document_id: UUID
     display_name: str
-    status: str = Field(description="pending | processing | ready | error")
+    status: KnowledgeBaseDocumentStatus
     category: str
     file_name: str
     file_size: int
@@ -32,7 +34,7 @@ class DocumentListItem(BaseModel):
     id: UUID
     display_name: str
     category: str
-    status: str
+    status: KnowledgeBaseDocumentStatus
     file_name: str
     file_size: int
     mime_type: str
@@ -60,7 +62,7 @@ class DocumentDetailResponse(BaseModel):
     id: UUID
     display_name: str
     category: str
-    status: str
+    status: KnowledgeBaseDocumentStatus
     file_name: str
     storage_path: str
     file_size: int
@@ -89,7 +91,7 @@ class DocumentUpdateResponse(BaseModel):
     id: UUID
     display_name: str
     category: str
-    status: str
+    status: KnowledgeBaseDocumentStatus
     description: str | None = None
     updated_at: datetime
 
@@ -101,7 +103,7 @@ class DocumentReplaceResponse(BaseModel):
 
     document_id: UUID
     display_name: str
-    status: str
+    status: KnowledgeBaseDocumentStatus
     category: str
     file_name: str
     file_size: int

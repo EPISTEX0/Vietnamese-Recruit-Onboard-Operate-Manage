@@ -30,6 +30,7 @@ from src.modules.knowledge_base.application.ingestion_service import (
     call_embedding_service,
     chunk_text,
 )
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 from src.modules.knowledge_base.infrastructure.config import KnowledgeBaseSettings
 from src.modules.knowledge_base.infrastructure.repository import (
     KnowledgeBaseRepository,
@@ -298,7 +299,10 @@ class TestLargeDocumentIngest:
             assert entity.embedding[0] == float(len(entity.content))
 
         repo.update_document_status.assert_any_await(
-            document_id, "ready", kb_type="hr", chunk_count=len(expected_chunks)
+            document_id,
+            KnowledgeBaseDocumentStatus.READY,
+            kb_type="hr",
+            chunk_count=len(expected_chunks),
         )
 
     @respx.mock
@@ -330,4 +334,4 @@ class TestLargeDocumentIngest:
 
         repo.insert_chunks.assert_not_awaited()
         status_call = repo.update_document_status.await_args
-        assert status_call.args[1] == "error"
+        assert status_call.args[1] == KnowledgeBaseDocumentStatus.ERROR

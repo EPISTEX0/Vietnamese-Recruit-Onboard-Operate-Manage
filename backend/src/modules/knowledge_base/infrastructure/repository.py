@@ -21,6 +21,7 @@ from src.modules.knowledge_base.domain.entities import (
     KnowledgeBaseChunk,
     KnowledgeBaseDocument,
 )
+from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
 
 # ---------------------------------------------------------------------------
 # Entity dispatch helpers
@@ -429,7 +430,7 @@ def _ranked_chunks_statement(
             .join(doc_entity, chunk_entity.document_id == doc_entity.id)
             .where(
                 chunk_entity.embedding.isnot(None),
-                doc_entity.status == "ready",
+                doc_entity.status == KnowledgeBaseDocumentStatus.READY,
             )
             .order_by(ordering)
             .limit(top_k)
