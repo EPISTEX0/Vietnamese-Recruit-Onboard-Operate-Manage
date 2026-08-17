@@ -142,7 +142,7 @@ export async function listDocuments(
   page: number = 1,
   pageSize: number = 20,
   category?: string,
-  status?: string,
+  status?: DocumentStatus | "all",
 ): Promise<DocumentListResponse> {
   const params = new URLSearchParams({
     kb_type: kbType,

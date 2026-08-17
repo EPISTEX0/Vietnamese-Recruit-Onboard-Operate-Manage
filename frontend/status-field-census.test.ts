@@ -20,23 +20,32 @@
  * AST walk here finds the same 13, confirming the two extractors agree once
  * the same tree is scanned; the number is not re-derived from the ticket.
  *
+ * #363's walk only visited `PropertySignature`, so it had its own blind spot:
+ * a function *parameter* typed `status?: string` — exactly
+ * `listDocuments(status?: string)` in `knowledge-base.ts:145` — was invisible
+ * to it. #367 closes that by widening the walk to `ts.isParameter` and
+ * `ts.isPropertyDeclaration` (class fields, the same shape, not yet observed
+ * but cheap to cover before it appears).
+ *
  * ## What counts as a violation
  *
- * A `PropertySignature` whose name ends in `status` (case-insensitive,
+ * A `PropertySignature`, function/method `Parameter`, or class
+ * `PropertyDeclaration` whose name ends in `status` (case-insensitive,
  * covering `processing_status`, `previous_inbox_status`, etc.) and whose
  * type annotation — stripped of any `| null` / `| undefined` — is the plain
  * `string` keyword. A union of string *literals* (`"a" | "b"`) is not a
  * violation: that is exactly the narrowed shape this guard exists to push
- * fields toward.
+ * declarations toward.
  *
  * ## Guarding against a xanh-rỗng extractor
  *
- * `describe('the extractor itself')` below plants a known violation (bare
- * `status: string`) and a known-clean shape (a narrowed literal union) in a
- * synthetic source and asserts the walk tells them apart. Without this, an
- * extractor whose node-kind check silently stopped matching would leave the
- * real-tree assertion green on an empty violation list — which reads
- * exactly like "problem solved" instead of "extractor broken".
+ * `describe('the extractor itself')` below plants, for every node kind the
+ * walk understands, a known violation (bare `status: string`) and a
+ * known-clean shape (a narrowed literal union) in a synthetic source and
+ * asserts the walk tells them apart. Without this, an extractor whose
+ * node-kind check silently stopped matching would leave the real-tree
+ * assertion green on an empty violation list — which reads exactly like
+ * "problem solved" instead of "extractor broken".
  *
  * ## `ALLOWLIST`
  *
@@ -63,7 +72,7 @@ const LIB_API_ROOT = join(PACKAGE_ROOT, 'lib', 'api');
 const STATUS_NAME = /status$/i;
 
 /** `key: path#TypeMember` used to register an allowlist entry against a violation. */
-type Violation = { file: string; line: number; key: string };
+type Violation = { file: string; line: number; kind: string; name: string; key: string };
 
 /** Is `t` the `null` or `undefined` member of a union — as `null` parses to `LiteralType(NullKeyword)`, not a bare keyword. */
 function isNullishMember(t: ts.TypeNode): boolean {
@@ -88,16 +97,40 @@ function isBareStringType(typeNode: ts.TypeNode | undefined): boolean {
   return false;
 }
 
-/** Every `status`-named `PropertySignature` typed as bare `string` in `sourceFile`. */
+/**
+ * The node kinds a `status`-named declaration can take. `PropertySignature`
+ * covers interface members (#363's original surface); `Parameter` covers
+ * function/method parameters like `listDocuments(status?: string)` (#367);
+ * `PropertyDeclaration` covers class fields, the shape closest to a
+ * parameter that #363 also missed but that had no live instance yet.
+ */
+function namedTypeOf(node: ts.Node): { kind: string; name: string; type: ts.TypeNode | undefined } | null {
+  if (ts.isPropertySignature(node) && node.name && ts.isIdentifier(node.name)) {
+    return { kind: 'propsig', name: node.name.text, type: node.type };
+  }
+  if (ts.isParameter(node) && node.name && ts.isIdentifier(node.name)) {
+    return { kind: 'param', name: node.name.text, type: node.type };
+  }
+  if (ts.isPropertyDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+    return { kind: 'propdecl', name: node.name.text, type: node.type };
+  }
+  return null;
+}
+
+/** Every `status`-named declaration typed as bare `string` in `sourceFile`. */
 function findViolations(sourceFile: ts.SourceFile, relPath: string): Violation[] {
   const violations: Violation[] = [];
   const visit = (node: ts.Node) => {
-    if (ts.isPropertySignature(node) && node.name && ts.isIdentifier(node.name)) {
-      const name = node.name.text;
-      if (STATUS_NAME.test(name) && isBareStringType(node.type)) {
-        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-        violations.push({ file: relPath, line, key: `${relPath}#${name}@${line}` });
-      }
+    const named = namedTypeOf(node);
+    if (named && STATUS_NAME.test(named.name) && isBareStringType(named.type)) {
+      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+      violations.push({
+        file: relPath,
+        line,
+        kind: named.kind,
+        name: named.name,
+        key: `${relPath}#${named.name}@${line}`,
+      });
     }
     ts.forEachChild(node, visit);
   };
@@ -191,6 +224,40 @@ describe('the extractor itself', () => {
     );
     expect(findViolations(source, 'fixture.ts')).toEqual([]);
   });
+
+  it('flags a bare `status: string` function parameter, the shape a PropertySignature-only walk misses (#367)', () => {
+    const source = ts.createSourceFile(
+      'fixture.ts',
+      'function listDocuments(status?: string) {}',
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const violations = findViolations(source, 'fixture.ts');
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe('param');
+  });
+
+  it('stays quiet on a parameter typed as a narrowed literal union', () => {
+    const source = ts.createSourceFile(
+      'fixture.ts',
+      'function listDocuments(status?: "a" | "b" | "all") {}',
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    expect(findViolations(source, 'fixture.ts')).toEqual([]);
+  });
+
+  it('flags a bare `status: string` class property declaration', () => {
+    const source = ts.createSourceFile(
+      'fixture.ts',
+      'class Foo { status: string; }',
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const violations = findViolations(source, 'fixture.ts');
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe('propdecl');
+  });
 });
 
 describe('lib/api/', () => {
@@ -198,7 +265,7 @@ describe('lib/api/', () => {
   const unexcused = violations.filter((v) => !(v.key in ALLOWLIST));
 
   it('has no status field declared as bare string outside ALLOWLIST', () => {
-    expect(unexcused.map((v) => `${v.file}:${v.line}`)).toEqual([]);
+    expect(unexcused.map((v) => `${v.file}:${v.line} (${v.kind} ${v.name})`)).toEqual([]);
   });
 
   it('keeps ALLOWLIST honest: every entry still names a real violation', () => {
