@@ -1,4 +1,4 @@
-"""Structural guard: every broad ``except`` in ``context_builder.py`` logs before it swallows.
+"""Structural guard: every broad ``except`` in the guarded modules logs before it swallows.
 
 ## The property, not a count
 
@@ -16,19 +16,19 @@ lookup failed) and only adds ``logger.exception(...)`` ahead of each
 ``return ""``. This file is the guard against the tenth handler being added
 silently later.
 
-The property this file enforces: **no ``except`` clause in
-``context_builder.py`` that catches broadly (``Exception``, ``BaseException``,
-or bare ``except:``) may have a body with no logging call at a level visible
-by default in it.** "Logging call" is any method call of the form
-``<name>.<method>(...)`` where ``<name>`` is a bare identifier containing
-``log`` and ``<method>`` is one of ``warning``/``warn``/``error``/
-``exception``/``critical``/``log`` (``logger.exception(...)``,
-``log.warning(...)``) -- not narrowed to ``logger.exception`` specifically.
-``debug`` and ``info`` are deliberately excluded: both are typically disabled
-by the root logger's default level in production, so a handler that only
-calls ``logger.debug(...)`` before swallowing is exactly the failure mode
-#375 exists to close -- the DB outage happens and nothing visible is ever
-emitted. A handler must log at ``warning`` or above to satisfy this guard.
+The property this file enforces: **no ``except`` clause in a guarded module
+that catches broadly (``Exception``, ``BaseException``, or bare ``except:``)
+may have a body with no logging call at a level visible by default in it.**
+"Logging call" is any method call of the form ``<name>.<method>(...)`` where
+``<name>`` is a bare identifier containing ``log`` and ``<method>`` is one of
+``warning``/``warn``/``error``/``exception``/``critical``/``log``
+(``logger.exception(...)``, ``log.warning(...)``) -- not narrowed to
+``logger.exception`` specifically. ``debug`` and ``info`` are deliberately
+excluded: both are typically disabled by the root logger's default level in
+production, so a handler that only calls ``logger.debug(...)`` before
+swallowing is exactly the failure mode #375 exists to close -- the DB outage
+happens and nothing visible is ever emitted. A handler must log at
+``warning`` or above to satisfy this guard.
 
 The receiver must be a bare name, not an attribute chain or a call result --
 ``self._logger.warning(...)`` and ``logging.getLogger(__name__).error(...)``
@@ -41,14 +41,35 @@ now also uses; matching only that shape, honestly, beats a chain-walking
 matcher that nothing here exercises and that risks false-accepting an
 unrelated call by coincidence of substring.
 
-## Only this one file
+What "logs" really means is narrower than "the handler body contains a log
+call": the underlying property is *something outside the handler learns the
+exception happened*. A handler that ``raise``s (bare ``raise`` or
+``raise ... from ...``) instead of swallowing satisfies that property too --
+the exception keeps propagating, so it is never silent even with no log call
+of its own. #377's census conflated "does the handler log" with the real
+property and over-counted (51 vs. the true 33) because a chunk of the
+``except Exception`` handlers it flagged were `raise`-and-propagate, not
+swallow. ``_handler_logs`` here does not check for a re-raise because no
+handler in either guarded module re-raises today (verified while widening
+scope for #381: all six broad handlers in ``tool_registry.py`` return after
+logging, same shape as ``context_builder.py``'s nine) -- so the gap is
+latent, not live. If a future file added to this guard's scope has a broad
+handler that re-raises, the detector must treat that as non-silent instead
+of either false-flagging it or papering over the gap with an allowlist entry.
+
+## Two files, not all of ``src/``
 
 #375's brief measured 60 silent broad-except handlers across ``src/`` and
-explicitly scoped the ticket to the nine in ``context_builder.py`` -- "một
-file, một hình thái". Widening this guard to all of ``src/`` would fail on
-the other 51 immediately and turn a one-file fix into an unreviewed
-mass-change; that is tracked as separate follow-up work, not silently
-absorbed here.
+explicitly scoped that ticket to the nine in ``context_builder.py`` -- "một
+file, một hình thái". #381 (five handlers in ``tool_registry.py`` that
+returned a false ``*_NOT_FOUND`` claim to the LLM for any exception, not just
+a genuine not-found) widened this guard's scope to that second file rather
+than adding a duplicate guard -- same property, same detector, one more
+target. The other ~46 silent broad-except handlers scattered across the rest
+of ``src/`` remain out of scope, tracked as separate follow-up work (#377's
+PR groups B/C/D), not silently absorbed here. Widening further would fail
+immediately on files nobody has reviewed yet and turn a scoped fix into an
+unreviewed mass-change.
 
 ## Guarding against a xanh-rỗng extractor (lesson from #359/#360/#370)
 
@@ -57,7 +78,7 @@ absorbed here.
 two synthetic modules that differ in exactly one way: one broad handler logs
 before returning, the other doesn't. Without the second, a visitor whose
 extractor matched everything (e.g. flagging every ``except`` regardless of
-whether it logs) would leave ``test_no_silent_broad_except_in_context_builder``
+whether it logs) would leave ``test_no_silent_broad_except_in_guarded_modules``
 green today by coincidence, then still be green the day someone deletes a
 ``logger.exception(...)`` call by accident -- the whole point of this guard.
 """
@@ -71,7 +92,9 @@ from pathlib import Path
 
 # backend/
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
-TARGET_PATH = BACKEND_ROOT / "src/modules/assistant/application/context_builder.py"
+CONTEXT_BUILDER_PATH = BACKEND_ROOT / "src/modules/assistant/application/context_builder.py"
+TOOL_REGISTRY_PATH = BACKEND_ROOT / "src/modules/assistant/application/tool_registry.py"
+TARGET_PATHS = (CONTEXT_BUILDER_PATH, TOOL_REGISTRY_PATH)
 
 _BROAD_EXCEPTION_NAMES = frozenset({"Exception", "BaseException"})
 # debug/info excluded on purpose: both are off by default in production, so a
@@ -157,33 +180,40 @@ def _scan(trees: dict[Path, ast.Module]) -> list[Finding]:
 
 
 @lru_cache(maxsize=1)
-def _target_tree() -> ast.Module:
-    return ast.parse(TARGET_PATH.read_text(encoding="utf-8"), filename=str(TARGET_PATH))
+def _target_trees() -> dict[Path, ast.Module]:
+    return {
+        path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for path in TARGET_PATHS
+    }
 
 
 def _synthetic(source: str) -> dict[Path, ast.Module]:
-    return {TARGET_PATH: ast.parse(source)}
+    return {CONTEXT_BUILDER_PATH: ast.parse(source)}
 
 
-def test_the_scan_reaches_the_target_module() -> None:
+def test_the_scan_reaches_the_target_modules() -> None:
     """A wrong path or a broken extractor would make the guard below vacuously true."""
-    handlers = _broad_handlers(_target_tree())
-    # Measured 9 broad except handlers in context_builder.py at the time of
-    # writing (#375); 7 leaves headroom for ordinary growth while still
-    # catching a path pointed at the wrong file or an extractor gone blind.
-    assert len(handlers) > 7, f"only {len(handlers)} broad except handlers found in {TARGET_PATH}"
+    trees = _target_trees()
+    # Measured at the time of writing: 9 broad except handlers in
+    # context_builder.py (#375), 6 in tool_registry.py (#381). Floors leave
+    # headroom for ordinary growth while still catching a path pointed at the
+    # wrong file or an extractor gone blind.
+    floors = {CONTEXT_BUILDER_PATH: 7, TOOL_REGISTRY_PATH: 4}
+    for path, floor in floors.items():
+        handlers = _broad_handlers(trees[path])
+        assert len(handlers) > floor, f"only {len(handlers)} broad except handlers found in {path}"
 
 
-def test_no_silent_broad_except_in_context_builder() -> None:
-    """No broad except handler in context_builder.py swallows without logging.
+def test_no_silent_broad_except_in_guarded_modules() -> None:
+    """No broad except handler in a guarded module swallows without logging.
 
-    Sanity floor: this must be 0, not the 9 measured before #375's fix --
-    that number was the state *before* the fix, not a target to hold.
+    Sanity floor: this must be 0, not the 9 (context_builder.py, #375) or 5
+    (tool_registry.py, #381) measured before each fix -- those numbers were
+    the state *before* the fix, not a target to hold.
     """
-    findings = _scan({TARGET_PATH: _target_tree()})
-    assert not findings, (
-        "Silent broad except (no log call) found in context_builder.py:\n"
-        + "\n".join(str(f) for f in findings)
+    findings = _scan(_target_trees())
+    assert not findings, "Silent broad except (no log call) found:\n" + "\n".join(
+        str(f) for f in findings
     )
 
 

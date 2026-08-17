@@ -749,9 +749,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "vi": "Không tìm thấy ứng viên",
         "en": "Candidate not found",
     },
+    "CANDIDATE_LOOKUP_ERROR": {
+        "vi": "Đã xảy ra lỗi khi tra cứu thông tin ứng viên. Vui lòng thử lại sau.",
+        "en": "An error occurred while looking up candidate information. Please try again later.",
+    },
     "ONBOARDING_PROCESS_NOT_FOUND": {
         "vi": "Không tìm thấy quy trình onboarding",
         "en": "Onboarding process not found",
+    },
+    "ONBOARDING_PROCESS_LOOKUP_ERROR": {
+        "vi": "Đã xảy ra lỗi khi tra cứu quy trình onboarding. Vui lòng thử lại sau.",
+        "en": "An error occurred while looking up the onboarding process. Please try again later.",
     },
     "ONBOARDING_IN_PROGRESS": {
         "vi": "Onboarding đang diễn ra: {count} nhân viên.",
