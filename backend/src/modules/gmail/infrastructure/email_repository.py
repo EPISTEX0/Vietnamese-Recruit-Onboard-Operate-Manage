@@ -61,40 +61,45 @@ class EmailRepository:
 
         for message in messages:
             try:
-                stmt = pg_insert(EmailMessage).values(
-                    id=message.id,
-                    user_id=message.user_id,
-                    gmail_message_id=message.gmail_message_id,
-                    gmail_thread_id=message.gmail_thread_id,
-                    subject=message.subject,
-                    sender_email=message.sender_email,
-                    sender_name=message.sender_name,
-                    recipient_emails=message.recipient_emails,
-                    cc_emails=message.cc_emails,
-                    received_at=message.received_at,
-                    snippet=message.snippet,
-                    label_ids=message.label_ids,
-                    has_attachments=message.has_attachments,
-                    raw_payload_enc=message.raw_payload_enc,
-                    processing_status=message.processing_status,
-                    category=message.category,
-                    retry_count=message.retry_count,
-                    is_permanently_failed=message.is_permanently_failed,
-                    created_at=message.created_at,
-                    updated_at=message.updated_at,
-                )
+                async with self.session.begin_nested():
+                    stmt = pg_insert(EmailMessage).values(
+                        id=message.id,
+                        user_id=message.user_id,
+                        gmail_message_id=message.gmail_message_id,
+                        gmail_thread_id=message.gmail_thread_id,
+                        subject=message.subject,
+                        sender_email=message.sender_email,
+                        sender_name=message.sender_name,
+                        recipient_emails=message.recipient_emails,
+                        cc_emails=message.cc_emails,
+                        received_at=message.received_at,
+                        snippet=message.snippet,
+                        label_ids=message.label_ids,
+                        has_attachments=message.has_attachments,
+                        raw_payload_enc=message.raw_payload_enc,
+                        processing_status=message.processing_status,
+                        category=message.category,
+                        retry_count=message.retry_count,
+                        is_permanently_failed=message.is_permanently_failed,
+                        created_at=message.created_at,
+                        updated_at=message.updated_at,
+                    )
 
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["gmail_message_id"],
-                    set_={
-                        "label_ids": stmt.excluded.label_ids,
-                        "updated_at": datetime.now(UTC),
-                    },
-                )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["gmail_message_id"],
+                        set_={
+                            "label_ids": stmt.excluded.label_ids,
+                            "updated_at": datetime.now(UTC),
+                        },
+                    )
 
-                await self.session.execute(stmt)
+                    await self.session.execute(stmt)
                 success_count += 1
             except Exception:
+                # PostgreSQL aborts the whole transaction on a failed statement;
+                # without the SAVEPOINT above, this except would only postpone
+                # the failure to the unconditional flush() below, surfacing as
+                # an unrelated PendingRollbackError once the caller commits.
                 logger.error(
                     "Failed to upsert email message gmail_message_id=%s",
                     message.gmail_message_id,

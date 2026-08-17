@@ -57,6 +57,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.identity.api import router as router_module
 from src.modules.identity.api.router import (
+    _FORGOT_PASSWORD_GENERIC_MESSAGE,
     SelectCalendarRequest,
     authorize_google_connection,
     callback_google_connection,
@@ -493,6 +494,46 @@ async def test_forgot_password_commits_when_the_email_could_not_be_sent() -> Non
         "the invalidation of the user's previous tokens is left on the teardown"
     )
     assert calls[-1] == call.commit(), f"forgot_password does work after committing: {calls}"
+
+
+async def test_forgot_password_answers_generic_200_when_commit_fails() -> None:
+    """A broken session must not turn into a 500 (ADR 0010, #334).
+
+    ``create_reset_token`` can return ``True`` while leaving the session
+    unusable underneath it -- e.g. a swallowed audit or sent-message write
+    aborted the transaction on PostgreSQL. This is the layer-2 half of #334:
+    even then, the handler must still answer with the generic message rather
+    than let the commit's exception propagate into a 500 that also breaks the
+    anti-enumeration contract.
+
+    Proof by mutation: revert the handler's ``try/except`` around
+    ``session.commit()`` back to a bare call and this goes red -- the
+    exception this test injects propagates out of the handler instead of
+    being turned into the generic response.
+    """
+    timeline = _timeline()
+    timeline.session.commit.side_effect = RuntimeError("connection died")
+    reset_service = AsyncMock()
+    reset_service.create_reset_token = AsyncMock(return_value=True)
+    settings = SimpleNamespace(
+        rate_limit_forgot_password_ip_max=3,
+        rate_limit_forgot_password_ip_window_seconds=900,
+        rate_limit_forgot_password_email_max=2,
+        rate_limit_forgot_password_email_window_seconds=900,
+    )
+
+    response = await forgot_password(
+        _request(),
+        ForgotPasswordRequest(email="hr@example.com"),
+        reset_service,
+        _rate_limiter(),
+        settings,
+        session=timeline.session,
+    )
+
+    assert response.message == _FORGOT_PASSWORD_GENERIC_MESSAGE
+    timeline.session.commit.assert_awaited_once()
+    timeline.session.rollback.assert_awaited_once()
 
 
 # The read-only half of the partition is guarded by

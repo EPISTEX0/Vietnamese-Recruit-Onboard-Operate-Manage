@@ -518,7 +518,18 @@ async def forgot_password(
     # went out; the send-failure path returns early with the token rows already
     # flushed. Committing here covers both, so the invalidation of the user's
     # previous tokens is durable either way.
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        # ADR 0010: this endpoint must always answer with the generic message,
+        # even when the session died underneath it. A swallowed audit or
+        # sent-message write can leave the transaction unusable; letting that
+        # surface as a 500 here would both break the anti-enumeration contract
+        # and, worse, tell a caller the difference between "no such account"
+        # and "the backend broke".
+        logger.error("forgot_password: commit failed, answering generic 200 anyway", exc_info=True)
+        await session.rollback()
+        sent = False
     if not sent:
         # No account matched, or email delivery failed — the caller must
         # not be able to tell which (anti-enumeration). The send failure
