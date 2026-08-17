@@ -1,5 +1,5 @@
 'use client';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,7 @@ import { ErrorBanner, Loading, EmptyState, StatusPill, CONFLICT_STATUS_META, for
 export default function InterviewsPage() {
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
+  const locale = useLocale();
   const router = useRouter();
   const qc = useQueryClient();
   const [actionError, setActionError] = useState<unknown>(null);
@@ -142,7 +143,7 @@ export default function InterviewsPage() {
                     <div className="flex gap-1.5 mt-1">
                       {(() => { const meta = CONFLICT_STATUS_META[c.status] ?? { label: c.status, tone: "rose" as const, labelKey: c.status }; return <StatusPill label={tc(meta.labelKey)} tone={meta.tone} />; })()}
                       {c.conflict_details && typeof c.conflict_details === 'object' && (
-                        <span className="text-[10px] text-slate-400">{formatAuditDetails(c.conflict_details).slice(0, 80)}</span>
+                        <span className="text-[10px] text-slate-400">{formatAuditDetails(c.conflict_details, locale).slice(0, 80)}</span>
                       )}
                     </div>
                   </div>

@@ -10,7 +10,7 @@ import {
 import type { AttendanceRecord, HistoryResponse } from '@/lib/api/attendance';
 import { toast } from 'sonner';
 import {
-  PageHeader, Card, SectionTitle, ButtonPrimary, ButtonGhost, ButtonDanger, ErrorAlert, EmptyState, Badge, LoadingRows, formatDateTime,
+  PageHeader, Card, SectionTitle, ButtonPrimary, ButtonGhost, ButtonDanger, ErrorAlert, EmptyState, Badge, LoadingRows, useFormatDateTime,
 } from '@/components/shared-ui';
 
 /** Format relative time using i18n. */
@@ -29,6 +29,7 @@ function relativeTime(iso: string | null, t: any): string | null {
 export default function EmployeeAttendancePage() {
   const t = useTranslations('employee');
   const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
   const qc = useQueryClient();
 
   const { data: today, isLoading, error } = useQuery<AttendanceRecord | null>({

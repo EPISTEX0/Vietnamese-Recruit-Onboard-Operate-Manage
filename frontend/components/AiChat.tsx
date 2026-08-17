@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useFormatter } from 'next-intl';
 import {
   Sparkles, Send, Bot, User, Check, AlertCircle, RefreshCw,
   ChevronDown, ChevronUp, Loader2, ThumbsUp, ThumbsDown, X, FileEdit,
@@ -45,8 +46,8 @@ export interface AiChatProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function nowTime(): string {
-  return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+function nowTime(format: ReturnType<typeof useFormatter>): string {
+  return format.dateTime(new Date(), 'time');
 }
 
 function toUserError(err: unknown): string {
@@ -341,6 +342,7 @@ export default function AiChat({
   assistantType, api, title, description, suggestions,
   onOpenRequestDialog, defaultOpen = true, className,
 }: AiChatProps) {
+  const format = useFormatter();
   const welcome: ChatMessage = {
     role: 'assistant',
     content: assistantType === 'hr'
@@ -722,7 +724,7 @@ export default function AiChat({
                       <div className="max-w-[85%] space-y-1">
                         <div className={`text-[9px] text-slate-400 flex items-center gap-1 ${m.role === 'user' ? 'justify-end' : ''}`}>
                           <Clock className="w-2.5 h-2.5" />
-                          {nowTime()}
+                          {nowTime(format)}
                         </div>
                         {(() => {
                           const citation = m.role === 'assistant' && m.content ? extractCitation(m.content) : null;

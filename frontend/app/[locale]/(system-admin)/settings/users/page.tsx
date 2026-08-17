@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import { Users, Loader2, Plus, Check, X, AlertCircle } from 'lucide-react';
 import * as admin from '@/lib/api/admin';
 import type { AdminUser } from '@/lib/api/admin';
@@ -19,6 +19,7 @@ export default function UsersRolesPage() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
   const tr = useTranslations('roles');
+  const format = useFormatter();
   const { user: currentUser } = useSession();
   // Same key *and* `staleTime` as the roster read on `/settings`. `staleTime` is
   // per observer, not per key, so without the second half this one inherits the
@@ -72,7 +73,7 @@ export default function UsersRolesPage() {
                     {u.name}
                     {isSelf(u.id) && <span className="ml-1.5 text-[10px] font-medium bg-indigo-600 text-white px-1.5 py-0.5 rounded">{t('you')}</span>}
                   </p>
-                  <p className="text-[11px] text-slate-400">{u.email} · {t('created')} {new Date(u.created_at).toLocaleDateString('vi-VN')}</p>
+                  <p className="text-[11px] text-slate-400">{u.email} · {t('created')} {format.dateTime(new Date(u.created_at))}</p>
                 </div>
                 <select
                   value={u.role}

@@ -14,7 +14,7 @@ import React from 'react';
 import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
 import type { ApiError } from '@/lib/api/types';
 import { getErrorMessage } from '@/lib/api/error-codes';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 
 // ---------------------------------------------------------------------------
 // Error banner — renders BE error_code via registry when available
@@ -638,19 +638,34 @@ export function formatVND(value: string | number | null | undefined, locale = 'v
   }).format(n);
 }
 
-/** Format an ISO date/time into a Vietnamese localized string. */
-export function formatDateTime(iso: string | null | undefined, locale = 'vi-VN'): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString(locale);
+/**
+ * Format an ISO date/time string for the locale the reader is actually
+ * viewing the app in.
+ *
+ * A hook, not a plain function: it reads the active locale from
+ * `useFormatter()` instead of taking one as a parameter, so there is no
+ * parameter left to default and forget (#313 — 26 call sites did exactly
+ * that with a `locale = 'vi-VN'` default no caller ever overrode).
+ */
+export function useFormatDateTime(): (iso: string | null | undefined) => string {
+  const format = useFormatter();
+  return (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return format.dateTime(d, 'full');
+  };
 }
 
-export function formatDate(iso: string | null | undefined, locale = 'vi-VN'): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(locale);
+/** Same as {@link useFormatDateTime}, date component only (no time-of-day). */
+export function useFormatDate(): (iso: string | null | undefined) => string {
+  const format = useFormatter();
+  return (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return format.dateTime(d);
+  };
 }
 
 /**
@@ -663,6 +678,15 @@ export function formatDate(iso: string | null | undefined, locale = 'vi-VN'): st
 /**
  * Whether to render these helpers' built-in strings in Vietnamese.
  *
+ * > **Correction (#313).** The paragraph below originally claimed "every call
+ * > site feeds them `useLocale()`". False: with no default, 0/42 `formatDateTime`
+ * > / `formatDate` call sites and 1/3 `formatAuditDetails` call sites passed a
+ * > locale at all — they relied on the `= 'vi-VN'` default silently below,
+ * > invisible to a string search for `'vi-VN'`. That default is why the bug
+ * > this paragraph describes lived as long as it did: it read as evidence the
+ * > defaults were harmless. See `docs/adr/0016-datetime-locale-via-useformatter.md`
+ * > for the fix.
+ *
  * The `locale` parameters below default to `'vi-VN'`, but every call site feeds
  * them `useLocale()`, which yields next-intl's routing locale — `'vi'` or
  * `'en'` (`i18n/routing.ts`). An equality test against `'vi-VN'` therefore
@@ -673,7 +697,8 @@ export function formatDate(iso: string | null | undefined, locale = 'vi-VN'): st
  */
 const isVietnamese = (locale: string): boolean => locale.split('-')[0] === 'vi';
 
-export function formatRuntimeDetail(detail: string | null, locale = 'vi-VN'): string {
+/** `locale` is required, not defaulted — see the correction above #313. */
+export function formatRuntimeDetail(detail: string | null, locale: string): string {
       if (detail == null) return '';
       if (detail.startsWith('last beat:')) {
         const raw = detail.slice('last beat:'.length).trim();
@@ -698,16 +723,16 @@ export function formatRuntimeDetail(detail: string | null, locale = 'vi-VN'): st
       return detail;
     }
 
-/** Format latency in ms → Vietnamese qualitative label. */
-export function formatLatency(latencyMs: number | null, locale = 'vi-VN'): string {
+/** Format latency in ms → Vietnamese qualitative label. `locale` is required — see #313. */
+export function formatLatency(latencyMs: number | null, locale: string): string {
       if (latencyMs == null) return '';
       if (latencyMs < 100) return isVietnamese(locale) ? 'Nhanh' : 'Fast';
       if (latencyMs < 500) return isVietnamese(locale) ? 'Bình thường' : 'Normal';
       return isVietnamese(locale) ? 'Chậm' : 'Slow';
     }
 
-    /** Format audit details as a Vietnamese-readable string (never raw JSON). */
-    export function formatAuditDetails(details: unknown, locale = 'vi-VN'): string {
+    /** Format audit details as a Vietnamese-readable string (never raw JSON). `locale` is required — see #313. */
+    export function formatAuditDetails(details: unknown, locale: string): string {
       if (!details) return '—';
       if (typeof details !== 'object' || details === null) return String(details);
 

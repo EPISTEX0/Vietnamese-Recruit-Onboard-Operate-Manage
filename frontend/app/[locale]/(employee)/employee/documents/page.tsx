@@ -9,7 +9,7 @@ import type { EmployeeDocument } from '@/lib/api/types';
 import { useSession } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost,
-  ErrorAlert, EmptyState, Modal, formatDate,
+  ErrorAlert, EmptyState, Modal, useFormatDate,
 } from '@/components/shared-ui';
 
 const DOC_TYPES = ['Hợp đồng', 'CMND/CCCD', 'Bằng cấp', 'Sổ bảo hiểm', 'Khác'];
@@ -17,6 +17,7 @@ const DOC_TYPES = ['Hợp đồng', 'CMND/CCCD', 'Bằng cấp', 'Sổ bảo hi�
 export default function EmployeeDocumentsPage() {
   const t = useTranslations('employee');
   const locale = useLocale();
+  const formatDate = useFormatDate();
   const { user } = useSession();
   const employeeId = user?.employee_id ?? null;
   const qc = useQueryClient();

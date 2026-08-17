@@ -28,7 +28,7 @@ import type {
 import {
   PageHeader, Card, SectionTitle, Loading, LoadingRows, EmptyState,
   Badge, ButtonPrimary, ButtonGhost, ButtonDanger, TextInput, Select,
-  Field, Modal, ErrorBanner, formatDateTime,
+  Field, Modal, ErrorBanner, useFormatDateTime,
 } from '@/components/shared-ui';
 import type { BadgeTone } from '@/components/shared-ui';
 
@@ -404,6 +404,7 @@ function DocumentRow({
   onDelete: (doc: DocumentListItem) => void;
   onDetail: (id: string) => void;
 }) {
+  const formatDateTime = useFormatDateTime();
   const [showErrorTooltip, setShowErrorTooltip] = useState(false);
 
   return (
@@ -821,6 +822,7 @@ function DetailModal({
   kbType: KbType;
   categoryLabels: Record<string, string>;
 }) {
+  const formatDateTime = useFormatDateTime();
   const { data: doc, isLoading, error } = useQuery<DocumentDetail>({
     queryKey: ['kb-document-detail', kbType, docId],
     queryFn: () => getDocumentDetail(docId!, kbType),

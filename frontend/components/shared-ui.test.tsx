@@ -1,21 +1,32 @@
+import type { ReactNode } from 'react';
 import { describe, it, expect } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 
 import { routing } from '@/i18n/routing';
+import { formats } from '@/i18n/request';
 import {
   formatRuntimeDetail,
   formatLatency,
   formatAuditDetails,
+  useFormatDateTime,
+  useFormatDate,
   BADGE_TONE_PARTS,
   badgeToneClass,
 } from '@/components/shared-ui';
 
 /**
  * The pure, render-free parts of `shared-ui.tsx`: three formatters that carry
- * their own built-in strings instead of going through next-intl messages, and
- * the semantic tone table `DESIGN.md` names as its source of truth.
+ * their own built-in strings instead of going through next-intl messages, two
+ * hooks that wrap `useFormatter()`, and the semantic tone table `DESIGN.md`
+ * names as its source of truth.
  *
- * These are plain functions — no render, no React tree. Testing them does not
- * open component testing (#302 AC: "Không viết component test").
+ * `.tsx`, not `.ts`: the three plain formatters need no render, no React tree
+ * — testing them does not open component testing (#302 AC: "Không viết
+ * component test"). But `useFormatDateTime`/`useFormatDate` are hooks (#313),
+ * so their tests use `renderHook` with a `NextIntlClientProvider` wrapper
+ * instead — the minimal harness `renderHook` needs, not a UI component under
+ * test — which is what pulls JSX into this file.
  *
  * Why they need a test at all: each one took a `locale` parameter and compared
  * it against the literal `'vi-VN'`. No locale by that name exists. `routing`
@@ -46,6 +57,52 @@ describe('the locales these formatters are actually called with', () => {
   });
 });
 
+/** Wrap a hook under test with the same locale + formats config the app runs. */
+function withLocale(locale: string) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <NextIntlClientProvider locale={locale} messages={{}} formats={formats}>
+        {children}
+      </NextIntlClientProvider>
+    );
+  };
+}
+
+describe('useFormatDateTime / useFormatDate', () => {
+  // Day 3, month 8: below 13, so `vi` (day/month) and `en` (month/day) cannot
+  // produce the same digit pair by accident — a date of the 13th onward would
+  // still format differently, but the difference would be easy to miss by eye.
+  const ISO = '2026-08-03T10:15:00Z';
+
+  it('renders day-before-month for the Vietnamese locale and month-before-day for English', () => {
+    const vi = renderHook(() => useFormatDateTime(), { wrapper: withLocale(VI) });
+    const en = renderHook(() => useFormatDateTime(), { wrapper: withLocale(EN) });
+
+    const viText = vi.result.current(ISO);
+    const enText = en.result.current(ISO);
+
+    expect(viText).not.toBe(enText);
+    expect(viText.indexOf('3')).toBeLessThan(viText.indexOf('8'));
+    expect(enText.indexOf('8')).toBeLessThan(enText.indexOf('3'));
+  });
+
+  it('useFormatDate renders the date component only, still locale-ordered', () => {
+    const vi = renderHook(() => useFormatDate(), { wrapper: withLocale(VI) });
+    const en = renderHook(() => useFormatDate(), { wrapper: withLocale(EN) });
+
+    expect(vi.result.current(ISO)).toBe('3/8/2026');
+    expect(en.result.current(ISO)).toBe('8/3/2026');
+  });
+
+  it('handles null/undefined/invalid input without touching the formatter', () => {
+    const { result } = renderHook(() => useFormatDateTime(), { wrapper: withLocale(VI) });
+
+    expect(result.current(null)).toBe('—');
+    expect(result.current(undefined)).toBe('—');
+    expect(result.current('not-a-date')).toBe('not-a-date');
+  });
+});
+
 describe('formatRuntimeDetail', () => {
   /** `Date.now()` is read inside the function, so build the input relative to it. */
   const beatSecondsAgo = (seconds: number) => `last beat: ${Date.now() / 1000 - seconds}`;
@@ -71,8 +128,8 @@ describe('formatRuntimeDetail', () => {
   });
 
   it('accepts a regional Vietnamese tag as Vietnamese too', () => {
-    // Nothing passes `vi-VN` today, but the parameter defaults to it, so it has
-    // to mean Vietnamese rather than fall out the English side.
+    // No call site passes `vi-VN` (they all pass `useLocale()`, which yields
+    // `'vi'`/`'en'`), but a caller that did must still mean Vietnamese.
     expect(formatRuntimeDetail('no heartbeat', 'vi-VN')).toBe('Không hoạt động');
   });
 
@@ -96,6 +153,8 @@ describe('formatLatency', () => {
   });
 
   it('accepts a regional Vietnamese tag as Vietnamese too', () => {
+    // No call site passes `vi-VN` (they all pass `useLocale()`), but a caller
+    // that did must still mean Vietnamese.
     expect(formatLatency(50, 'vi-VN')).toBe('Nhanh');
   });
 
@@ -136,10 +195,12 @@ describe('formatAuditDetails', () => {
     expect(formatAuditDetails({ action: 'update' }, 'vi-VN')).toBe('Hành động: Cập nhật');
   });
 
-  it('defaults to Vietnamese when no locale is passed', () => {
-    // `recruitment/interviews/page.tsx:145` calls it with one argument.
-    expect(formatAuditDetails({ action: 'update' })).toBe('Hành động: Cập nhật');
-  });
+  // No default: `locale` used to be optional and silently fall back to
+  // `'vi-VN'`, which is exactly how `recruitment/interviews/page.tsx:145`
+  // ended up rendering an English UI's audit summaries in Vietnamese without
+  // a single call site spelling out that locale (#313). `tsc` now refuses to
+  // compile a call that omits the argument, so there is no runtime case left
+  // to assert here — the guard moved to compile time.
 
   it('never renders raw JSON for an empty or absent payload', () => {
     expect(formatAuditDetails(null, VI)).toBe('—');

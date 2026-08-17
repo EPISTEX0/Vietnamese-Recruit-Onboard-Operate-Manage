@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckSquare, ChevronDown, ChevronRight, Circle, CheckCircle2, UserCheck, AlertTriangle } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import {
   getOnboardingCounts, listOnboardingProcesses, getOnboardingProcess,
   updateTaskStatus,
@@ -118,6 +118,7 @@ function ProcessRow({
   onToggleTask: (taskId: string, status: OnboardingTaskStatus) => void;
   pending: boolean;
 }) {
+  const format = useFormatter();
   const isComplete = proc.status === 'complete';
   const missing = proc.missing_setup_fields ?? [];
   const tasks = proc.tasks ?? [];
@@ -162,7 +163,7 @@ function ProcessRow({
                     {task.status === 'done' ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                   </button>
                   <span className={`text-sm ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.name}</span>
-                  {task.completed_by_name && <span className="text-[10px] font-mono text-slate-400 ml-auto">{task.completed_by_name} · {task.completed_at && new Date(task.completed_at).toLocaleString('vi-VN')}</span>}
+                  {task.completed_by_name && <span className="text-[10px] font-mono text-slate-400 ml-auto">{task.completed_by_name} · {task.completed_at && format.dateTime(new Date(task.completed_at), 'full')}</span>}
                 </li>
               ))}
             </ul>
@@ -178,7 +179,7 @@ function ProcessRow({
                   : t('activationHint')}
             </span>
           </div>
-          {proc.accepted_at && <p className="text-[10px] font-mono text-slate-400">{t('acceptedAt', { date: new Date(proc.accepted_at).toLocaleString('vi-VN') })}</p>}
+          {proc.accepted_at && <p className="text-[10px] font-mono text-slate-400">{t('acceptedAt', { date: format.dateTime(new Date(proc.accepted_at), 'full') })}</p>}
         </div>
       )}
     </div>

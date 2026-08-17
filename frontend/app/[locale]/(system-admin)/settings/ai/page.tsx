@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import {
   Bot, Loader2, Check, AlertCircle, Cpu, FlaskConical, Zap, ShieldAlert, Sparkles,
 } from 'lucide-react';
@@ -35,6 +35,7 @@ export default function AIConfigPage() {
 function AIConfigSections() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
+  const format = useFormatter();
   // 30 seconds, same as every other console observer on a shared key — see
   // `users/page.tsx` for why the number has to be repeated rather than
   // inherited, and `shared-query-staleness.test.tsx` for the guard (#310).
@@ -243,7 +244,7 @@ function AIConfigSections() {
                 <span className="text-slate-300">|</span>
                 <span>{t('status')}: <strong className={`font-medium ${cfg.configured ? 'text-emerald-600' : 'text-slate-500'}`}>{CONNECTION_STATUS.label}</strong></span>
                 <span className="text-slate-300">|</span>
-                <span>{t('updated')}: <strong className="text-slate-700 font-medium">{cfg.updated_at ? new Date(cfg.updated_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</strong></span>
+                <span>{t('updated')}: <strong className="text-slate-700 font-medium">{cfg.updated_at ? format.dateTime(new Date(cfg.updated_at), 'shortWithYear') : '—'}</strong></span>
               </div>
             </div>
                         {/* Right: Guide */}

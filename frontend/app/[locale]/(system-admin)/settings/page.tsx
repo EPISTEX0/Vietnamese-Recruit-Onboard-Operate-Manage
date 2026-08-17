@@ -25,7 +25,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useTranslations, useLocale } from 'next-intl';
+import { useTranslations, useLocale, useFormatter } from 'next-intl';
 import {
   LayoutDashboard, Bot, Activity, Users, FileText,
   CheckCircle2, Circle, HelpCircle, ChevronRight, RefreshCw,
@@ -58,6 +58,7 @@ export default function SystemOverviewPage() {
   const tr = useTranslations('roles');
   const ta = useTranslations('audit');
   const locale = useLocale();
+  const format = useFormatter();
 
   const oauthConfig = useQuery<OAuthConfig>({
     queryKey: ['oauth-config'], queryFn: admin.getOAuthConfig, staleTime: 30_000,
@@ -194,7 +195,7 @@ export default function SystemOverviewPage() {
                   <p className="text-[12px] text-slate-500">{formatAuditDetails(log.details, locale)}</p>
                 </div>
                 <span className="text-[11px] text-slate-400 shrink-0">
-                  {new Date(log.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                  {format.dateTime(new Date(log.created_at), 'short')}
                 </span>
               </div>
             ))}

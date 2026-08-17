@@ -12,7 +12,7 @@ import type {
 } from '@/lib/api/employee-requests';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select, ButtonPrimary, ButtonGhost,
-  Badge, ErrorAlert, EmptyState, Modal, formatDate, formatDateTime,
+  Badge, ErrorAlert, EmptyState, Modal, useFormatDate, useFormatDateTime,
 } from '@/components/shared-ui';
 
 function getLeaveTypes(t: (key: string) => string): { value: CreateLeaveData['leave_type']; label: string }[] {
@@ -62,6 +62,8 @@ function SuccessToast({ message, onDone }: { message: string; onDone: () => void
 export default function EmployeeRequestsPage() {
   const t = useTranslations('employee');
   const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
+  const formatDate = useFormatDate();
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<FormTab>('leave');

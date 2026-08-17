@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import { History, Loader2, Tag, Play, Ban, Clock, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import * as gmailApi from '@/lib/api/gmail';
 import { useToast } from './toast';
@@ -13,6 +13,7 @@ import { fmtDate, apiErrorText } from './helpers';
 // ---------------------------------------------------------------------------
 export default function HistoricalImportPanel() {
   const t = useTranslations('gmail');
+  const format = useFormatter();
   const { push } = useToast();
   const qc = useQueryClient();
   const [days, setDays] = useState(7);
@@ -207,7 +208,7 @@ export default function HistoricalImportPanel() {
             {status.data.started_at && (
               <span className="inline-flex items-center gap-1 text-slate-400 ml-auto">
                 <Clock className="w-3 h-3" />
-                {fmtDate(status.data.started_at)}
+                {fmtDate(status.data.started_at, format)}
               </span>
             )}
           </div>
@@ -236,7 +237,7 @@ export default function HistoricalImportPanel() {
             {status.data.completed_at && (
               <span className="inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                {t('completedAt', { time: fmtDate(status.data.completed_at) })}
+                {t('completedAt', { time: fmtDate(status.data.completed_at, format) })}
               </span>
             )}
           </div>

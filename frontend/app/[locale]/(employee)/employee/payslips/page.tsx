@@ -7,12 +7,13 @@ import { FileSpreadsheet, Eye } from 'lucide-react';
 import { fetchMyPayslips, fetchMyPayslip } from '@/lib/api/payslips';
 import type { Payslip, PayslipListResponse } from '@/lib/api/payslips';
 import {
-  PageHeader, Card, SectionTitle, ButtonPrimary, ErrorAlert, EmptyState, Badge, Modal, formatVND, formatDateTime,
+  PageHeader, Card, SectionTitle, ButtonPrimary, ErrorAlert, EmptyState, Badge, Modal, formatVND, useFormatDateTime,
 } from '@/components/shared-ui';
 
 export default function EmployeePayslipsPage() {
  const t = useTranslations('employee');
  const locale = useLocale();
+ const formatDateTime = useFormatDateTime();
 
   const [yearFilter, setYearFilter] = useState<string>('');
 

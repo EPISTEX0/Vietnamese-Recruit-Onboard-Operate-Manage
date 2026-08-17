@@ -1,5 +1,5 @@
 'use client';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -205,6 +205,7 @@ interface CardProps {
 function InboxCard(props: CardProps) {
   const t = useTranslations('recruitment');
   const tc = useTranslations('common');
+  const format = useFormatter();
   const { item, open, onToggle } = props;
   const meta = INBOX_STATUS_META[item.inbox_status] ?? { label: item.inbox_status, tone: 'slate' as const, labelKey: item.inbox_status };
   const [intentOpen, setIntentOpen] = useState(false);
@@ -279,7 +280,7 @@ function InboxCard(props: CardProps) {
               <ul className="mt-1 space-y-0.5">
                 {item.correction_history.map((h, i) => (
                   <li key={i} className="font-mono text-[11px] text-slate-500">
-                    {h.previous_intent ?? '—'} → <span className="text-emerald-600">{h.corrected_intent}</span> · {new Date(h.corrected_at).toLocaleString('vi-VN')}
+                    {h.previous_intent ?? '—'} → <span className="text-emerald-600">{h.corrected_intent}</span> · {format.dateTime(new Date(h.corrected_at), 'full')}
                   </li>
                 ))}
               </ul>

@@ -11,12 +11,13 @@ import type { Employee, Department, Position } from '@/lib/api/types';
 import { useSession } from '@/lib/auth/session';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
-  ButtonPrimary, ErrorAlert, Badge, formatDateTime,
+  ButtonPrimary, ErrorAlert, Badge, useFormatDateTime,
 } from '@/components/shared-ui';
 
 export default function EmployeeProfilePage() {
   const t = useTranslations('employee');
   const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
   const { user } = useSession();
   const employeeId = user?.employee_id ?? null;
   const qc = useQueryClient();

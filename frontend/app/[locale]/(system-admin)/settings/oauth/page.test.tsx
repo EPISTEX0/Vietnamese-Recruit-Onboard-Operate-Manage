@@ -30,6 +30,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import messages from '@/messages/vi.json';
+import { formats } from '@/i18n/request';
 
 import OAuthConfigPage from './page';
 
@@ -102,7 +103,7 @@ let queryClient: QueryClient;
 function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="vi" messages={messages}>
+      <NextIntlClientProvider locale="vi" messages={messages} formats={formats}>
         <OAuthConfigPage />
       </NextIntlClientProvider>
     </QueryClientProvider>,

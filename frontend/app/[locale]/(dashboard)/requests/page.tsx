@@ -14,12 +14,14 @@ import { listEmployees } from '@/lib/api/employees';
 import type { EmployeeListResponse } from '@/lib/api/types';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
-  Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatDate, formatDateTime,
+  Badge, ErrorAlert, EmptyState, LoadingRows, Modal, useFormatDate, useFormatDateTime,
 } from '@/components/shared-ui';
 
 export default function RequestsReviewPage() {
   const t = useTranslations('requests');
       const locale = useLocale();
+  const formatDate = useFormatDate();
+  const formatDateTime = useFormatDateTime();
   const qc = useQueryClient();
 
   const [requestType, setRequestType] = useState<'' | 'leave' | 'overtime'>('');

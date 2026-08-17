@@ -16,7 +16,7 @@ import { listEmployees } from '@/lib/api/employees';
 import type { EmployeeListResponse } from '@/lib/api/types';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
-  Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatVND, formatDateTime,
+  Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatVND, useFormatDateTime,
 } from '@/components/shared-ui';
 
 type StatusFilter = '' | 'draft' | 'published';
@@ -64,6 +64,7 @@ function joinMonth(year: string, month: string): string {
 
 export default function PayslipsPage() {
   const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
   const t = useTranslations('payroll');
   const qc = useQueryClient();
 

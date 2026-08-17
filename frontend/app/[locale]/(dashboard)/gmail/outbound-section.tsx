@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import { Send, Loader2, X } from 'lucide-react';
 import type { OutboundEmail } from '@/lib/api/gmail';
 import EmptyState from './empty-state';
@@ -19,6 +19,7 @@ export default function OutboundSection({
   items, loading, onSend, onDelete, sending,
 }: OutboundSectionProps) {
   const t = useTranslations('gmail');
+  const format = useFormatter();
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -50,7 +51,7 @@ export default function OutboundSection({
                 </div>
                 <p className="text-[11px] text-slate-500 truncate">{t('toPrefix', { emails: m.to.join(', ') })}</p>
                 {m.error_message && <p className="text-[11px] text-rose-500 truncate mt-0.5">{t('errorPrefix', { msg: m.error_message })}</p>}
-                <p className="text-[10px] text-slate-400 mt-0.5">{t('createdDate', { date: fmtDate(m.created_at) })}{m.sent_at ? ` · ${t('sentDate', { date: fmtDate(m.sent_at) })}` : ''}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{t('createdDate', { date: fmtDate(m.created_at, format) })}{m.sent_at ? ` · ${t('sentDate', { date: fmtDate(m.sent_at, format) })}` : ''}</p>
               </div>
               {m.status === 'pending' && (
                 <div className="flex items-center gap-1.5 shrink-0">

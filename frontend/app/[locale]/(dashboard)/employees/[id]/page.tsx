@@ -18,13 +18,15 @@ import type { EmployeeAccountStatusResponse, EmployeeAccountCreateResponse } fro
 import { isUserRole } from '@/lib/auth/roles';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
-  ButtonPrimary, ButtonGhost, ButtonDanger, Badge, ErrorAlert, Modal, formatDateTime, formatDate,
+  ButtonPrimary, ButtonGhost, ButtonDanger, Badge, ErrorAlert, Modal, useFormatDateTime, useFormatDate,
 } from '@/components/shared-ui';
 
 const DOC_TYPES_KEY = ['docContract', 'docIdCard', 'docDegree', 'docInsurance', 'docOther'] as const;
 
 export default function EmployeeDetailPage() {
   const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
+  const formatDate = useFormatDate();
   const t = useTranslations('employees');
   const tc = useTranslations('common');
   const tr = useTranslations('roles');

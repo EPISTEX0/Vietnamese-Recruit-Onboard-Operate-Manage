@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslations, useLocale } from 'next-intl';
+import { useTranslations, useLocale, useFormatter } from 'next-intl';
 import { FileText, Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import * as admin from '@/lib/api/admin';
 import type { AuditLog } from '@/lib/api/admin';
@@ -16,6 +16,7 @@ export default function AuditLogPage() {
   const qc = useQueryClient();
   const t = useTranslations('settings');
   const locale = useLocale();
+  const format = useFormatter();
   const ta = useTranslations('audit');
   const [page, setPage] = useState(1);
   const [actionType, setActionType] = useState('');
@@ -88,9 +89,9 @@ export default function AuditLogPage() {
           </div>
           {(startDate || endDate) && (
             <span className="text-[11px] text-slate-400">
-              {startDate && `${t('from')} ${new Date(startDate).toLocaleDateString('vi-VN')}`}
+              {startDate && `${t('from')} ${format.dateTime(new Date(startDate))}`}
               {startDate && endDate && ' → '}
-              {endDate && `${t('to')} ${new Date(endDate).toLocaleDateString('vi-VN')}`}
+              {endDate && `${t('to')} ${format.dateTime(new Date(endDate))}`}
             </span>
           )}
           <button onClick={() => qc.invalidateQueries({ queryKey: ['audit-logs'] })} className="h-9 px-3 text-[13px] font-medium rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1.5 ml-auto"><RefreshCw className="w-3.5 h-3.5" /> {t('refresh')}</button>
@@ -112,7 +113,7 @@ export default function AuditLogPage() {
                   </div>
                   <p className="text-[12px] text-slate-500">{formatAuditDetails(log.details, locale)}</p>
                 </div>
-                <span className="text-[11px] text-slate-400 shrink-0">{new Date(log.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
+                <span className="text-[11px] text-slate-400 shrink-0">{format.dateTime(new Date(log.created_at), 'short')}</span>
               </div>
             ))}
             <div className="flex items-center justify-between pt-3">
