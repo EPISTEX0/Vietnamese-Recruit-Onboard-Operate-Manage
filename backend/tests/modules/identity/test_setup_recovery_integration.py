@@ -55,9 +55,8 @@ os.environ.setdefault("AUTH_JWT_SECRET_KEY", "test-secret-key-32-chars-min-for-h
 os.environ.setdefault("AUTH_OAUTH_TOKEN_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
 
 import asyncio  # noqa: E402
-from collections.abc import AsyncIterator, Iterator  # noqa: E402
+from collections.abc import AsyncIterator  # noqa: E402
 from typing import Any  # noqa: E402
-from urllib.parse import urlsplit, urlunsplit  # noqa: E402
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -80,7 +79,7 @@ from src.modules.recruitment.domain.entities import OrganizationSettings  # noqa
 from src.modules.recruitment.infrastructure.org_settings_repository import (  # noqa: E402
     OrganizationSettingsRepository,
 )
-from tests.conftest import _run_alembic_upgrade_head  # noqa: E402
+from tests.conftest import _create_probe_database  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -99,28 +98,14 @@ SETUP_BODY = {
 
 
 @pytest.fixture(scope="module")
-def setup_db_url(postgres_async_url: str) -> Iterator[str]:
+def setup_db_url(postgres_async_url: str) -> str:
     """Create and migrate a database this module alone writes to.
 
     The session-scoped database is shared, and other integration modules commit
     users into it. ``count(*) FROM users == 0`` is the precondition of the whole
     file, so it needs tables nobody else touches.
     """
-    parts = urlsplit(postgres_async_url)
-    db_name = "setup_recovery_probe"
-    admin_url = urlunsplit(parts._replace(path="/postgres"))
-    private_url = urlunsplit(parts._replace(path=f"/{db_name}"))
-
-    async def _recreate() -> None:
-        engine = create_async_engine(admin_url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
-        async with engine.connect() as connection:
-            await connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
-            await connection.execute(text(f'CREATE DATABASE "{db_name}"'))
-        await engine.dispose()
-
-    asyncio.run(_recreate())
-    _run_alembic_upgrade_head(private_url)
-    yield private_url
+    return _create_probe_database(postgres_async_url, "setup_recovery_probe")
 
 
 @pytest_asyncio.fixture
