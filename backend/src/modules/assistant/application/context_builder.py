@@ -15,6 +15,7 @@ Architecture:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -47,6 +48,8 @@ _STATUS_LABELS: dict[str, str] = {
     "rejected": "đã từ chối",
     "archived": "đã lưu trữ",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
@@ -206,6 +209,7 @@ class ContextBuilder:
         try:
             return await self._org_settings_repo.get_name()
         except Exception:
+            logger.exception("Failed to load organization name for assistant context")
             return ""
 
     async def _get_pipeline_summary(self) -> str:
@@ -234,6 +238,7 @@ class ContextBuilder:
                     lines.append(f"  - {label}: {count}")
             return "\n".join(lines)
         except Exception:
+            logger.exception("Failed to build pipeline summary for assistant context")
             return ""
 
     async def _get_open_job_openings(self) -> str:
@@ -253,6 +258,7 @@ class ContextBuilder:
                 lines.append(f"  - {jo.title}")
             return "\n".join(lines)
         except Exception:
+            logger.exception("Failed to load open job openings for assistant context")
             return ""
 
     async def _get_onboarding_summary(self) -> str:
@@ -269,6 +275,7 @@ class ContextBuilder:
 
             return f"Onboarding đang diễn ra: {result.total} nhân viên."
         except Exception:
+            logger.exception("Failed to load onboarding summary for assistant context")
             return ""
 
     # ------------------------------------------------------------------
@@ -297,6 +304,7 @@ class ContextBuilder:
                 lines.append(f"Mã NV: {employee.employee_code}")
             return "\n".join(lines)
         except Exception:
+            logger.exception("Failed to load employee profile for assistant context")
             return ""
 
     async def _get_leave_balance(self, employee_id: UUID) -> str:
@@ -313,6 +321,7 @@ class ContextBuilder:
                 f"đang chờ duyệt {balance['pending_days']})"
             )
         except Exception:
+            logger.exception("Failed to load leave balance for assistant context")
             return ""
 
     async def _get_pending_requests(self, employee_id: UUID) -> str:
@@ -351,6 +360,7 @@ class ContextBuilder:
                 parts.append(f"  - Làm thêm giờ: {pending_overtime}")
             return "\n".join(parts)
         except Exception:
+            logger.exception("Failed to load pending requests for assistant context")
             return ""
 
     async def _get_payslip_summary(self, employee_id: UUID) -> str:
@@ -365,6 +375,7 @@ class ContextBuilder:
                 return ""
             return f"Phiếu lương: {count} phiếu có sẵn."
         except Exception:
+            logger.exception("Failed to load payslip summary for assistant context")
             return ""
 
     # ------------------------------------------------------------------
@@ -399,4 +410,5 @@ class ContextBuilder:
                 similarity_threshold=0.5,
             )
         except Exception:
+            logger.exception("Failed to retrieve knowledge base context for assistant")
             return ""
