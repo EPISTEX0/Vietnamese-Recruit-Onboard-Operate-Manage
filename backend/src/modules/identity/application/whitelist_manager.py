@@ -279,9 +279,7 @@ class WhitelistManager:
         return responses
 
     async def _get_admin_email(self, user_id: UUID) -> str:
-        """Look up admin email by user ID from the database session.
-
-        Uses the repository's session to query the User table directly.
+        """Look up admin email by user ID.
 
         Args:
             user_id: The UUID of the admin user.
@@ -289,14 +287,8 @@ class WhitelistManager:
         Returns:
             The admin's email address, or 'unknown' if not found.
         """
-        from sqlmodel import select
-
-        from src.modules.identity.domain.entities import User as UserModel
-
-        statement = select(UserModel).where(UserModel.id == user_id)
-        result = await self._repo.session.execute(statement)
-        user = result.scalars().first()
-        return user.email if user else "unknown"
+        email = await self._repo.get_user_email(user_id)
+        return email if email is not None else "unknown"
 
     @staticmethod
     def _detect_entry_type(value: str) -> WhitelistEntryType | None:

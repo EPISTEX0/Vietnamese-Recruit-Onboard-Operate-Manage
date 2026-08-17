@@ -120,6 +120,16 @@ class UserRepository:
         await self.session.flush()
         return user
 
+    async def record_login(self, user_id: UUID) -> User:
+        """Stamp ``last_login`` to now for a successful authentication."""
+        user = await self.get_by_id(user_id)
+        if user is None:
+            raise ValueError("User not found")
+        user.last_login = datetime.now(UTC)
+        self.session.add(user)
+        await self.session.flush()
+        return user
+
     async def sync_profile(
         self,
         user_id: UUID,

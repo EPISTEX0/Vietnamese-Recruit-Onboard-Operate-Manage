@@ -72,6 +72,23 @@ from src.modules.recruitment.infrastructure.repositories import (
 # ---------------------------------------------------------------------------
 
 
+def _build_participant_responses(
+    participants: list[InterviewParticipant],
+) -> list[InterviewParticipantResponse]:
+    """Map InterviewParticipant entities to their API response schema."""
+    return [
+        InterviewParticipantResponse(
+            id=p.id,
+            interview_id=p.interview_id,
+            type=p.type,
+            email=p.email,
+            name=p.name,
+            employee_id=p.employee_id,
+        )
+        for p in participants
+    ]
+
+
 def _get_minio_client() -> RecruitmentMinIOClient:
     """Provide the RecruitmentMinIOClient singleton.
 
@@ -293,17 +310,7 @@ async def get_candidate(
         parts_res = await session.execute(parts_stmt)
         parts_list = parts_res.scalars().all()
 
-        part_responses = [
-            InterviewParticipantResponse(
-                id=p.id,
-                interview_id=p.interview_id,
-                type=p.type,
-                email=p.email,
-                name=p.name,
-                employee_id=p.employee_id,
-            )
-            for p in parts_list
-        ]
+        part_responses = _build_participant_responses(list(parts_list))
 
         interview_responses.append(
             InterviewResponse(
@@ -557,24 +564,7 @@ async def create_interview(
     )
 
     # Fetch participants for the response
-    from sqlmodel import select
-
-    parts_stmt = select(InterviewParticipant).where(
-        InterviewParticipant.interview_id == interview.id
-    )
-    parts_res = await candidate_service._session.execute(parts_stmt)
-    parts_list = parts_res.scalars().all()
-    part_responses = [
-        InterviewParticipantResponse(
-            id=p.id,
-            interview_id=p.interview_id,
-            type=p.type,
-            email=p.email,
-            name=p.name,
-            employee_id=p.employee_id,
-        )
-        for p in parts_list
-    ]
+    participants = await candidate_service.get_participants(interview.id)
 
     return InterviewResponse(
         id=interview.id,
@@ -586,7 +576,7 @@ async def create_interview(
         timezone=interview.timezone,
         calendar_event_id=interview.calendar_event_id,
         needs_relink=interview.needs_relink,
-        participants=part_responses,
+        participants=_build_participant_responses(participants),
     )
 
 
@@ -626,22 +616,7 @@ async def complete_interview(
     interview = await candidate_service.complete_interview(interview_id)
 
     # Fetch participants
-    parts_stmt = select(InterviewParticipant).where(
-        InterviewParticipant.interview_id == interview.id
-    )
-    parts_res = await candidate_service._session.execute(parts_stmt)
-    parts_list = parts_res.scalars().all()
-    part_responses = [
-        InterviewParticipantResponse(
-            id=p.id,
-            interview_id=p.interview_id,
-            type=p.type,
-            email=p.email,
-            name=p.name,
-            employee_id=p.employee_id,
-        )
-        for p in parts_list
-    ]
+    participants = await candidate_service.get_participants(interview.id)
 
     return InterviewResponse(
         id=interview.id,
@@ -653,7 +628,7 @@ async def complete_interview(
         timezone=interview.timezone,
         calendar_event_id=interview.calendar_event_id,
         needs_relink=interview.needs_relink,
-        participants=part_responses,
+        participants=_build_participant_responses(participants),
     )
 
 
@@ -694,22 +669,7 @@ async def cancel_interview(
     interview = await candidate_service.cancel_interview(interview_id)
 
     # Fetch participants
-    parts_stmt = select(InterviewParticipant).where(
-        InterviewParticipant.interview_id == interview.id
-    )
-    parts_res = await candidate_service._session.execute(parts_stmt)
-    parts_list = parts_res.scalars().all()
-    part_responses = [
-        InterviewParticipantResponse(
-            id=p.id,
-            interview_id=p.interview_id,
-            type=p.type,
-            email=p.email,
-            name=p.name,
-            employee_id=p.employee_id,
-        )
-        for p in parts_list
-    ]
+    participants = await candidate_service.get_participants(interview.id)
 
     return InterviewResponse(
         id=interview.id,
@@ -721,7 +681,7 @@ async def cancel_interview(
         timezone=interview.timezone,
         calendar_event_id=interview.calendar_event_id,
         needs_relink=interview.needs_relink,
-        participants=part_responses,
+        participants=_build_participant_responses(participants),
     )
 
 
@@ -775,22 +735,7 @@ async def create_replacement_interview(
     )
 
     # Fetch participants
-    parts_stmt = select(InterviewParticipant).where(
-        InterviewParticipant.interview_id == interview.id
-    )
-    parts_res = await candidate_service._session.execute(parts_stmt)
-    parts_list = parts_res.scalars().all()
-    part_responses = [
-        InterviewParticipantResponse(
-            id=p.id,
-            interview_id=p.interview_id,
-            type=p.type,
-            email=p.email,
-            name=p.name,
-            employee_id=p.employee_id,
-        )
-        for p in parts_list
-    ]
+    participants = await candidate_service.get_participants(interview.id)
 
     return InterviewResponse(
         id=interview.id,
@@ -802,7 +747,7 @@ async def create_replacement_interview(
         timezone=interview.timezone,
         calendar_event_id=interview.calendar_event_id,
         needs_relink=interview.needs_relink,
-        participants=part_responses,
+        participants=_build_participant_responses(participants),
     )
 
 

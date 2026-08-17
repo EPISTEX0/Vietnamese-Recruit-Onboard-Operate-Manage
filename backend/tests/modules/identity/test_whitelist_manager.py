@@ -21,8 +21,8 @@ from src.modules.identity.domain.entities import (
 def mock_repo() -> MagicMock:
     """Create a mock WhitelistRepository."""
     repo = MagicMock()
-    repo.session = MagicMock()
     repo.get_all = AsyncMock(return_value=[])
+    repo.get_user_email = AsyncMock(return_value="unknown@example.com")
     repo.add = AsyncMock()
     repo.remove = AsyncMock()
     repo.exists = AsyncMock(return_value=False)
@@ -225,13 +225,7 @@ class TestWhitelistManagerListEntries:
         sample_db_entries: list[WhitelistEntry],
     ) -> None:
         mock_repo.get_all = AsyncMock(return_value=sample_db_entries)
-
-        # Mock the session execute for admin email lookup
-        mock_result = MagicMock()
-        mock_scalars = MagicMock()
-        mock_scalars.first.return_value = admin_user
-        mock_result.scalars.return_value = mock_scalars
-        mock_repo.session.execute = AsyncMock(return_value=mock_result)
+        mock_repo.get_user_email = AsyncMock(return_value=admin_user.email)
 
         manager = WhitelistManager(repo=mock_repo)
         entries = await manager.list_entries()
@@ -239,6 +233,8 @@ class TestWhitelistManagerListEntries:
         assert len(entries) == 2
         assert all(e.source == "database" for e in entries)
         assert all(e.is_readonly is False for e in entries)
+        assert all(e.added_by_email == admin_user.email for e in entries)
+        mock_repo.get_user_email.assert_awaited_with(sample_db_entries[0].added_by_user_id)
 
 
 class TestWhitelistManagerRefreshCache:

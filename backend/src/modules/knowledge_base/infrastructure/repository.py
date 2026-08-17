@@ -82,6 +82,15 @@ class KnowledgeBaseRepository:
         await self._session.flush()
         return doc
 
+    async def flush(self) -> None:
+        """Flush pending changes on entities already tracked by the session.
+
+        For callers that mutated a document previously loaded through this
+        repository (e.g. :meth:`get_document`) directly, rather than going
+        through one of the ``update_*`` methods.
+        """
+        await self._session.flush()
+
     async def get_document(
         self,
         document_id: uuid.UUID,

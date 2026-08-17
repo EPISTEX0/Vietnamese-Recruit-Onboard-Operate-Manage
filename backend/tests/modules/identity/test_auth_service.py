@@ -1,5 +1,6 @@
 """Tests for local Identity authentication."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -30,8 +31,7 @@ def service() -> AuthService:
     repository.get_by_employee_id = AsyncMock(return_value=None)
     repository.create_local_account = AsyncMock(return_value=user)
     repository.update_password = AsyncMock(return_value=user)
-    repository.session = MagicMock()
-    repository.session.flush = AsyncMock()
+    repository.record_login = AsyncMock(return_value=user)
     refresh_repository = MagicMock()
     refresh_repository.store = AsyncMock()
     refresh_repository.find_by_token_hash = AsyncMock(return_value=None)
@@ -56,6 +56,34 @@ async def test_login_uses_local_password(service: AuthService) -> None:
 
     assert result.access_token == "access"
     service._token_service.revoke_user_tokens.assert_awaited_once_with(service._test_user.id)
+
+
+@pytest.mark.asyncio
+async def test_login_stamps_last_login_through_repository(service: AuthService) -> None:
+    """login() must persist last_login via UserRepository.record_login, not
+    by reaching into the repository's session directly. The session the
+    stamped user carries is what ends up in the returned LocalAuthResult --
+    if login() went back to poking ``repository.session`` this would either
+    leave record_login uncalled or return the stale pre-login user.
+    """
+    service._test_user.password_hash = "not-a-real-hash"
+    from src.modules.identity.application import auth_service as module
+
+    module.verify_password = lambda password, password_hash: password == "secret"
+
+    stamped_user = MagicMock(
+        id=service._test_user.id,
+        email=service._test_user.email,
+        employee_id=None,
+        must_change_password=False,
+        last_login=datetime.now(UTC),
+    )
+    service._user_repository.record_login = AsyncMock(return_value=stamped_user)
+
+    result = await service.login("hr@example.com", "secret")
+
+    service._user_repository.record_login.assert_awaited_once_with(service._test_user.id)
+    assert result.user is stamped_user
 
 
 @pytest.mark.asyncio
