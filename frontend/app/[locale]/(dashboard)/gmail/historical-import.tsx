@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations, useFormatter } from 'next-intl';
 import { History, Loader2, Tag, Play, Ban, Clock, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import * as gmailApi from '@/lib/api/gmail';
+import type { ImportJobStatus } from '@/lib/api/gmail';
 import { useToast } from './toast';
 import { fmtDate, apiErrorText } from './helpers';
 
@@ -53,7 +54,7 @@ export default function HistoricalImportPanel() {
     staleTime: 15_000,
   });
 
-  const running = status.data?.status === 'running' || status.data?.status === 'pending';
+  const running = status.data?.status === 'running';
   const done   = status.data?.status === 'completed';
   const failed = status.data?.status === 'failed';
 
@@ -278,26 +279,24 @@ export default function HistoricalImportPanel() {
 // ---------------------------------------------------------------------------
 // Helpers for status labels
 // ---------------------------------------------------------------------------
-function trangThaiNhan(t: (key: string) => string, status: string | undefined | null): string {
-  const map: Record<string, string> = {
+function trangThaiNhan(t: (key: string) => string, status: ImportJobStatus | undefined | null): string {
+  const map: Record<Exclude<ImportJobStatus, 'none'>, string> = {
     running: t('statusRunning'),
-    pending: t('statusPending'),
     completed: t('statusCompleted'),
     cancelled: t('statusCancelled'),
     failed: t('statusFailed'),
   };
-  if (!status) return t('statusNone');
-  return map[status] ?? status;
+  if (!status || status === 'none') return t('statusNone');
+  return map[status];
 }
 
-function trangThaiMau(status: string | undefined | null): string {
-  if (!status) return 'bg-slate-50 text-slate-400 border-slate-100';
-  const map: Record<string, string> = {
+function trangThaiMau(status: ImportJobStatus | undefined | null): string {
+  if (!status || status === 'none') return 'bg-slate-50 text-slate-400 border-slate-100';
+  const map: Record<Exclude<ImportJobStatus, 'none'>, string> = {
     running: 'bg-amber-50 text-amber-700 border-amber-200',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
     completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
     failed: 'bg-rose-50 text-rose-700 border-rose-200',
   };
-  return map[status] ?? 'bg-slate-50 text-slate-500 border-slate-100';
+  return map[status];
 }

@@ -79,7 +79,7 @@ export interface DocumentUpdateResponse {
   id: string;
   display_name: string;
   category: string;
-  status: string;
+  status: DocumentStatus;
   description: string | null;
   updated_at: string;
 }

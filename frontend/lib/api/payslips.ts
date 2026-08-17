@@ -8,6 +8,10 @@ const BASE = "/api/payslips";
 // Types
 // ---------------------------------------------------------------------------
 
+// Backend `Payslip.status` (`payslip/domain/entities.py:83`) is typed
+// `PayslipStatus` on both the entity and `PayslipResponse` (`api/schemas.py:27`).
+export type PayslipStatus = "draft" | "published";
+
 export interface Payslip {
   id: string;
   employee_id: string;
@@ -19,7 +23,7 @@ export interface Payslip {
   pit_amount: string;
   net_salary: string;
   currency: string;
-  status: string;
+  status: PayslipStatus;
   published_at: string | null;
   pdf_url: string | null;
   created_at: string;

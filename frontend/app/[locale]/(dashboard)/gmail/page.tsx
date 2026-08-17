@@ -45,7 +45,11 @@ function GmailPageInner() {
   });
 
   const isConnected = conn.data?.status === 'connected';
-  const needsReauth = conn.data?.status === 'reauthorization_required';
+  // `degraded` (the DB-value sanitize fallback, see types.ts) is also a
+  // broken *existing* connection, not a fresh one — route it through the
+  // same reconnect flow as `reauthorization_required` rather than falling
+  // through to "never connected" (#363).
+  const needsReauth = conn.data?.status === 'reauthorization_required' || conn.data?.status === 'degraded';
 
 
   // --- calendars ---

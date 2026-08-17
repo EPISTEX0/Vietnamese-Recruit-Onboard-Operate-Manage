@@ -4,9 +4,10 @@ import React from 'react';
 import { useTranslations } from 'next-intl';
 import { Plug, Unplug, Loader2 } from 'lucide-react';
 import { getErrorMessage } from '@/lib/api/error-codes';
+import type { OrganizationGoogleConnectionStatus } from '@/lib/api/types';
 
 interface ConnectionPanelProps {
-  status: string | null;
+  status: OrganizationGoogleConnectionStatus | null;
   email: string | null;
   loading: boolean;
   error: string | null;
@@ -22,6 +23,11 @@ export default function ConnectionPanel({
 }: ConnectionPanelProps) {
   const t = useTranslations('gmail');
   const connected = status === 'connected';
+  // `degraded` is the DB-value sanitize fallback (see `types.ts`): a
+  // connection exists but is broken, not "never connected" — give it its
+  // own label rather than falling into the `disconnected` bucket (#363).
+  const degraded = status === 'degraded';
+  const needsReauth = status === 'reauthorization_required' || degraded;
   return (
     <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${connected ? 'bg-emerald-50' : 'bg-slate-100'}`}>
@@ -32,10 +38,11 @@ export default function ConnectionPanel({
           <h2 className="text-sm font-bold text-slate-900">{t('connectionTitle')}</h2>
           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
             connected ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : degraded ? 'bg-rose-50 text-rose-700 border-rose-200'
               : status === 'reauthorization_required' ? 'bg-amber-50 text-amber-700 border-amber-200'
               : 'bg-slate-50 text-slate-500 border-slate-200'
           }`}>
-            {connected ? t('connected') : status === 'reauthorization_required' ? t('reauthorize') : t('disconnected')}
+            {connected ? t('connected') : degraded ? t('degraded') : status === 'reauthorization_required' ? t('reauthorize') : t('disconnected')}
           </span>
         </div>
         {connected && email && <p className="text-xs text-slate-500 mt-0.5 truncate">{email}</p>}
@@ -52,7 +59,7 @@ export default function ConnectionPanel({
           className="inline-flex items-center gap-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg px-3 py-2 hover:bg-indigo-700 disabled:opacity-50"
         >
           {connectLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plug className="w-3.5 h-3.5" />}
-          {status === 'reauthorization_required' ? t('reauthorizeBtn') : t('connectBtn')}
+          {needsReauth ? t('reauthorizeBtn') : t('connectBtn')}
         </button>
       )}
       {connected && (

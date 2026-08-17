@@ -92,7 +92,7 @@ export interface PositionCreateData {
 // ---------------------------------------------------------------------------
 
 export interface OrganizationGoogleConnectionResponse {
-  status: ConnectionStatus;
+  status: OrganizationGoogleConnectionStatus;
   email: string | null;
   has_secret: boolean;
   redirect_url?: string | null;
@@ -115,17 +115,37 @@ export interface CapabilityHealth {
 // Gmail Integration Types
 // ---------------------------------------------------------------------------
 
-export type ConnectionStatus = "connected" | "disconnected" | "reauthorization_required";
+// Renamed from `ConnectionStatus` (#363): the old name collided with
+// backend's `gmail/domain/enums.py::ConnectionStatus`, a *different* entity
+// (`connected | disconnected | token_expired`) that this type never described.
+//
+// `degraded` is not a theoretical value — it is the sanitize fallback that
+// runs on every read:
+// `backend/src/modules/identity/application/organization_google_connection_service.py:134`
+// (`VALID_CONNECTION_STATUSES`, same file:42 and
+// `connection_state_repository.py:12`). An unrecognized DB value becomes
+// `"degraded"` before it ever reaches the client.
+export type OrganizationGoogleConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "degraded"
+  | "reauthorization_required";
 
-export interface ConnectionStatusResponse {
-  status: ConnectionStatus;
-  email: string | null;
-}
-
-export interface ConnectResponse {
-  status: ConnectionStatus | null;
-  redirect_url: string | null;
-}
+// `EmailMessageEntity.processing_status` (backend `gmail/domain/entities.py:58`)
+// is a raw `str` column with no backend StrEnum. Closed set confirmed by
+// grepping every literal assignment site (#363):
+// `gmail/domain/entities.py:58` (default "unprocessed"),
+// `gmail/application/classification_service.py:144,282,400,404,430,435,444,466,471`,
+// `gmail/api/router.py:669,693,703,712,714,1345`.
+export type EmailProcessingStatus =
+  | "unprocessed"
+  | "classification_failed"
+  | "needs_classification"
+  | "classified"
+  | "cv_processing"
+  | "needs_review"
+  | "ai_unavailable"
+  | "permanently_failed";
 
 export interface EmailMessage {
   id: string;
@@ -141,7 +161,7 @@ export interface EmailMessage {
   label_ids: string[];
   has_attachments: boolean;
   category: string | null;
-  processing_status?: string;
+  processing_status?: EmailProcessingStatus;
 }
 
 export interface MessageBodyResponse {
@@ -169,7 +189,9 @@ export interface LabelRemoveRequest {
 
 export interface SyncResponse {
   synced_count: number;
-  status: string;
+  // Backend has one construction site (`gmail/api/router.py:144`), always
+  // literal `"ok"` — not a documented multi-value status.
+  status: "ok";
 }
 
 export interface AttachmentMetadata {

@@ -1,6 +1,7 @@
 /** API client for Admin Payslip management (HR). */
 
 import { apiFetch } from "./client";
+import type { PayslipStatus } from "./payslips";
 const BASE = "/api/hr/payslips";
 // ---------------------------------------------------------------------------
 // Types
@@ -17,7 +18,7 @@ export interface Payslip {
   pit_amount: string;
   net_salary: string;
   currency: string;
-  status: "draft" | "published";
+  status: PayslipStatus;
   published_at: string | null;
   pdf_url: string | null;
   created_at: string;
@@ -63,7 +64,7 @@ export async function fetchPayslips(options?: {
   page?: number;
   page_size?: number;
   employee_id?: string;
-  status?: "draft" | "published";
+  status?: PayslipStatus;
   period_month?: string; // YYYY-MM
 }): Promise<PayslipListResponse> {
   const params = new URLSearchParams();
