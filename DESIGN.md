@@ -74,7 +74,8 @@ trục riêng — xem [Semantic palette](#semantic-palette) bên dưới.
 
 Quy ước: nền trang `bg-slate-50/50`, body text `text-slate-800` (xem
 `frontend/app/layout.tsx`). Icon nhấn dùng `text-indigo-600`, tiêu đề
-`text-slate-900`, subtitle `text-slate-500` (xem `frontend/components/operate.tsx`).
+`text-slate-900`, subtitle `text-slate-500` (xem `PageHeader` trong
+`frontend/components/shared-ui.tsx`).
 
 ## Semantic palette
 
