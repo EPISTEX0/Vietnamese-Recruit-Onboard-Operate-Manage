@@ -19,7 +19,7 @@
     import type { EmployeeListResponse } from '@/lib/api/types';
     import {
       PageHeader, Card, SectionTitle, Field, TextInput, Select, ButtonPrimary, ButtonGhost, ButtonDanger,
-      Badge, ErrorAlert, EmptyState, LoadingRows, Modal, formatDateTime,
+      Badge, ErrorAlert, EmptyState, LoadingRows, Modal, useFormatDateTime,
     } from '@/components/shared-ui';
     import { toast } from 'sonner';
 
@@ -95,6 +95,7 @@
       const tc = useTranslations('common');
       const qc = useQueryClient();
       const locale = useLocale();
+      const formatDateTime = useFormatDateTime();
       const [start, setStart] = useState(firstOfMonthISO());
       const [end, setEnd] = useState(todayISO());
       const [employeeId, setEmployeeId] = useState('');
@@ -341,6 +342,7 @@
     function NetworkTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       const t = useTranslations('attendance');
       const locale = useLocale();
+      const formatDateTime = useFormatDateTime();
       const tc = useTranslations('common');
       const { data, isLoading, error } = useQuery<NetworkAllowlistResponse>({
         queryKey: ['attendance-network-allowlist'],

@@ -30,8 +30,6 @@ export {
   ButtonDanger,
   Modal,
   formatVND,
-  formatDateTime,
-  formatDate,
   formatRuntimeDetail,
   formatLatency,
   formatAuditDetails,

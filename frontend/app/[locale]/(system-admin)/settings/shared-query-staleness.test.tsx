@@ -43,6 +43,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { QueryClientProvider, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import messages from '@/messages/vi.json';
+import { formats } from '@/i18n/request';
 import { createQueryClient } from '@/lib/query-client';
 
 // `createNavigation(routing)` reaches for `next/navigation` at import time,
@@ -210,7 +211,7 @@ function requestsOnMount(Page: () => ReactNode, shared: SharedQuery, ageMs: numb
   fetchSpy.mockClear();
   render(
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="vi" messages={messages}>
+      <NextIntlClientProvider locale="vi" messages={messages} formats={formats}>
         <Page />
       </NextIntlClientProvider>
     </QueryClientProvider>,

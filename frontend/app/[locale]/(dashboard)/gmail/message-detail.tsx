@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import { ChevronLeft, Loader2, RefreshCw, Paperclip, Sparkles, Send, FileText, Inbox } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import type { EmailMessage } from '@/lib/api/types';
@@ -50,6 +50,7 @@ export default function MessageDetail({
   onReply,
 }: MessageDetailProps) {
   const t = useTranslations('gmail');
+  const format = useFormatter();
 
   if (!selected) {
     return (
@@ -68,7 +69,7 @@ export default function MessageDetail({
             <h3 className="text-sm font-semibold text-slate-900 flex-1 truncate">{selected.subject || t('noSubject')}</h3>
             {selected.category && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{selected.category}</span>}
           </div>
-          <p className="text-[11px] text-slate-500">{t('from', { name: selected.sender_name, email: selected.sender_email })} · {fmtDate(selected.received_at)}</p>
+          <p className="text-[11px] text-slate-500">{t('from', { name: selected.sender_name, email: selected.sender_email })} · {fmtDate(selected.received_at, format)}</p>
         </div>
         <div className="p-4 text-sm text-slate-700 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">
           {bodyQuery.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : bodyQuery.error ? (

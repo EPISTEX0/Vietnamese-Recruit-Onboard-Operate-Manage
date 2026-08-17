@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen, Upload, FileText, Search, ChevronLeft, ChevronRight,
@@ -28,7 +28,7 @@ import type {
 import {
   PageHeader, Card, SectionTitle, Loading, LoadingRows, EmptyState,
   Badge, ButtonPrimary, ButtonGhost, ButtonDanger, TextInput, Select,
-  Field, Modal, ErrorBanner, formatDateTime,
+  Field, Modal, ErrorBanner, useFormatDateTime,
 } from '@/components/shared-ui';
 import type { BadgeTone } from '@/components/shared-ui';
 
@@ -55,7 +55,6 @@ function formatFileSize(bytes: number): string {
 // ---------------------------------------------------------------------------
 
 export default function KnowledgeBasePage() {
-  const locale = useLocale();
   const t = useTranslations('knowledgeBase');
 
   const [page, setPage] = useState(1);
@@ -404,6 +403,7 @@ function DocumentRow({
   onDelete: (doc: DocumentListItem) => void;
   onDetail: (id: string) => void;
 }) {
+  const formatDateTime = useFormatDateTime();
   const [showErrorTooltip, setShowErrorTooltip] = useState(false);
 
   return (
@@ -821,6 +821,7 @@ function DetailModal({
   kbType: KbType;
   categoryLabels: Record<string, string>;
 }) {
+  const formatDateTime = useFormatDateTime();
   const { data: doc, isLoading, error } = useQuery<DocumentDetail>({
     queryKey: ['kb-document-detail', kbType, docId],
     queryFn: () => getDocumentDetail(docId!, kbType),

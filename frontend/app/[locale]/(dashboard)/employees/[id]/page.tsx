@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   Users, FileText, KeyRound, Save, Upload, Download, Trash2, Plus, ArrowLeft,
 } from 'lucide-react';
@@ -18,13 +18,14 @@ import type { EmployeeAccountStatusResponse, EmployeeAccountCreateResponse } fro
 import { isUserRole } from '@/lib/auth/roles';
 import {
   PageHeader, Card, SectionTitle, Field, TextInput, TextArea, Select,
-  ButtonPrimary, ButtonGhost, ButtonDanger, Badge, ErrorAlert, Modal, formatDateTime, formatDate,
+  ButtonPrimary, ButtonGhost, ButtonDanger, Badge, ErrorAlert, Modal, useFormatDateTime, useFormatDate,
 } from '@/components/shared-ui';
 
 const DOC_TYPES_KEY = ['docContract', 'docIdCard', 'docDegree', 'docInsurance', 'docOther'] as const;
 
 export default function EmployeeDetailPage() {
-  const locale = useLocale();
+  const formatDateTime = useFormatDateTime();
+  const formatDate = useFormatDate();
   const t = useTranslations('employees');
   const tc = useTranslations('common');
   const tr = useTranslations('roles');

@@ -29,6 +29,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import messages from '@/messages/vi.json';
+import { formats } from '@/i18n/request';
 import { BADGE_TONE_PARTS, type BadgeTone } from '@/components/shared-ui';
 
 // `createNavigation(routing)` reaches for `next/navigation` at import time,
@@ -74,7 +75,7 @@ afterEach(() => {
 function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="vi" messages={messages}>
+      <NextIntlClientProvider locale="vi" messages={messages} formats={formats}>
         <SystemOverviewPage />
       </NextIntlClientProvider>
     </QueryClientProvider>,

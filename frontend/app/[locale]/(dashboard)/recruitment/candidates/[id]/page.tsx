@@ -1,5 +1,5 @@
 'use client';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +27,7 @@ import {
 export default function CandidateDetailPage() {
   const tc = useTranslations('common');
   const t = useTranslations('recruitment');
+  const format = useFormatter();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
@@ -177,7 +178,7 @@ export default function CandidateDetailPage() {
         )}
 
         <div className="mt-3 text-[11px] text-slate-400 font-mono">
-          {t('createdAt', { date: new Date(candidate.created_at).toLocaleString('vi-VN') })} · {t('updatedAt', { date: new Date(candidate.updated_at).toLocaleString('vi-VN') })}
+          {t('createdAt', { date: format.dateTime(new Date(candidate.created_at), 'full') })} · {t('updatedAt', { date: format.dateTime(new Date(candidate.updated_at), 'full') })}
         </div>
       </div>
 
@@ -227,7 +228,7 @@ export default function CandidateDetailPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${iv.status === 'scheduled' ? 'bg-indigo-50 text-indigo-600' : iv.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{iv.status}</span>
                     </div>
                     <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                      {new Date(iv.start_at).toLocaleString('vi-VN', { timeZone: iv.timezone })} ({iv.timezone})
+                      {format.dateTime(new Date(iv.start_at), 'full', { timeZone: iv.timezone })} ({iv.timezone})
                     </p>
                     {iv.needs_relink && <p className="text-[10px] text-amber-600 mt-0.5">{t('needsRelink')}</p>}
                     {iv.status === 'scheduled' && (
@@ -374,7 +375,7 @@ export default function CandidateDetailPage() {
           {candidate.rejection_reason && (
             <Section icon={AlertTriangle} title={t('rejectionReason')}>
               <p className="text-xs text-slate-600">{candidate.rejection_reason}</p>
-              {candidate.rejected_at && <p className="text-[10px] font-mono text-slate-400 mt-1">{new Date(candidate.rejected_at).toLocaleString('vi-VN')}</p>}
+              {candidate.rejected_at && <p className="text-[10px] font-mono text-slate-400 mt-1">{format.dateTime(new Date(candidate.rejected_at), 'full')}</p>}
             </Section>
           )}
         </div>

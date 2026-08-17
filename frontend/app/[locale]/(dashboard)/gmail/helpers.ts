@@ -1,7 +1,12 @@
+import type { useFormatter } from 'next-intl';
 import { ApiError } from '@/lib/api/types';
 import { getErrorMessage } from '@/lib/api/error-codes';
 
-export function fmtDate(iso: string | null): string {
+/**
+ * Not a component or hook, so it cannot call `useFormatter()` itself — the
+ * caller (always a component, #313) passes its own down instead.
+ */
+export function fmtDate(iso: string | null, format: ReturnType<typeof useFormatter>): string {
   if (!iso) return '—';
   try {
     // Backend có thể gửi Unix timestamp (giây) dạng string hoặc ISO 8601
@@ -10,7 +15,7 @@ export function fmtDate(iso: string | null): string {
       ? new Date(parsed * 1000) // Unix timestamp giây → ms
       : new Date(iso);          // ISO 8601
     if (isNaN(date.getTime())) return iso;
-    return date.toLocaleString('vi-VN');
+    return format.dateTime(date, 'full');
   } catch {
     return iso;
   }

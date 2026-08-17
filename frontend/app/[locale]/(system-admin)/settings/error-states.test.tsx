@@ -30,6 +30,7 @@ import {
 } from '@tanstack/react-query';
 
 import messages from '@/messages/vi.json';
+import { formats } from '@/i18n/request';
 
 // `useSession` only decides which row wears the "bạn" badge; it has nothing to
 // do with the three states under test, and left real it would fire its own
@@ -164,7 +165,7 @@ let queryClient: QueryClient;
 function renderPage(Page: () => ReactNode) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="vi" messages={messages}>
+      <NextIntlClientProvider locale="vi" messages={messages} formats={formats}>
         <Page />
       </NextIntlClientProvider>
     </QueryClientProvider>,

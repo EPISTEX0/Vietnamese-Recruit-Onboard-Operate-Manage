@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import { motion } from 'motion/react';
 import { X, Loader2, PenSquare } from 'lucide-react';
 import type { EmailMessage } from '@/lib/api/types';
@@ -19,6 +19,7 @@ export default function ComposeDialog({
   open, onClose, replyTo, replyBodyText, onSend, sending,
 }: ComposeDialogProps) {
   const t = useTranslations('gmail');
+  const format = useFormatter();
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
@@ -30,7 +31,7 @@ export default function ComposeDialog({
       setCc('');
       setSubject(replyTo ? `Re: ${replyTo.subject || ''}` : '');
       if (replyTo) {
-        const date = replyTo.received_at ? new Date(replyTo.received_at).toLocaleString('vi-VN') : '';
+        const date = replyTo.received_at ? format.dateTime(new Date(replyTo.received_at), 'full') : '';
         const header = `Vào ${date}, ${replyTo.sender_name || replyTo.sender_email} đã viết:\n`;
         const sourceText = replyBodyText || replyTo.snippet || '';
         const quoted = sourceText
@@ -42,7 +43,7 @@ export default function ComposeDialog({
         setBodyText('');
       }
     }
-  }, [open, replyTo, replyBodyText]);
+  }, [open, replyTo, replyBodyText, format]);
 
   if (!open) return null;
   const submit = (e: React.FormEvent) => {

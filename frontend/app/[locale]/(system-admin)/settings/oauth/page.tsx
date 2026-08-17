@@ -43,7 +43,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useFormatter } from 'next-intl';
 import {
   KeyRound, Loader2, Save, AlertCircle, CheckCircle2, Database, Server, HelpCircle,
 } from 'lucide-react';
@@ -110,6 +110,7 @@ export default function OAuthConfigPage() {
  */
 function CurrentConfig({ config }: { config: OAuthConfig }) {
   const t = useTranslations('settings.oauth');
+  const format = useFormatter();
   const configured = typeof config.client_id === 'string' && config.client_id.trim().length > 0;
 
   return (
@@ -126,7 +127,7 @@ function CurrentConfig({ config }: { config: OAuthConfig }) {
             mono
           />
           <ConfigRow label={t('redirectUri')} value={config.redirect_uri} mono />
-          <ConfigRow label={t('updatedAt')} value={formatUpdatedAt(config.updated_at, t('updatedAtUnknown'))} />
+          <ConfigRow label={t('updatedAt')} value={formatUpdatedAt(config.updated_at, t('updatedAtUnknown'), format)} />
         </dl>
       ) : (
         <Empty text={t('notConfigured')} />
@@ -153,13 +154,11 @@ function ConfigRow({ label, value, mono }: { label: string; value: string; mono?
 }
 
 /** `null` on every environment-sourced configuration — the env has no mtime. */
-function formatUpdatedAt(updatedAt: string | null, fallback: string): string {
+function formatUpdatedAt(updatedAt: string | null, fallback: string, format: ReturnType<typeof useFormatter>): string {
   if (!updatedAt) return fallback;
   const parsed = new Date(updatedAt);
   if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed.toLocaleString('vi-VN', {
-    hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+  return format.dateTime(parsed, 'shortWithYear');
 }
 
 /**

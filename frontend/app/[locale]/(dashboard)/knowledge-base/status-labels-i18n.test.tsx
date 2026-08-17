@@ -48,6 +48,7 @@ import type {
 } from '@/lib/api/knowledge-base';
 import enMessages from '@/messages/en.json';
 import viMessages from '@/messages/vi.json';
+import { formats } from '@/i18n/request';
 
 // The page's only I/O. Faked wholesale rather than through `fetch`, because
 // what is under test is the label the badge prints for a status, and every
@@ -130,7 +131,7 @@ function renderPage(locale: string, messages: Record<string, unknown>) {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale={locale} messages={messages}>
+      <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
         <KnowledgeBasePage />
       </NextIntlClientProvider>
     </QueryClientProvider>,
