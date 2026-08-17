@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckSquare, ChevronDown, ChevronRight, Circle, CheckCircle2, UserCheck, AlertTriangle } from 'lucide-react';
 import { useTranslations, useFormatter } from 'next-intl';
 import {
-  getOnboardingCounts, listOnboardingProcesses, getOnboardingProcess,
+  getOnboardingCounts, listOnboardingProcesses,
   updateTaskStatus,
   type OnboardingProcess, type OnboardingCounts, type OnboardingTaskStatus, type ProcessFilter,
 } from '@/lib/api/onboarding';

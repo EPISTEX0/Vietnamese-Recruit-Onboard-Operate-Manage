@@ -2,7 +2,6 @@
 
     import React, { useState } from 'react';
     import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-    import { useLocale } from 'next-intl';
     import { useTranslations } from 'next-intl';
     import {
       Clock, Network, Plus, Trash2, Save, Pencil, ChevronLeft, ChevronRight,
@@ -49,7 +48,6 @@
     }
 
     export default function AttendancePage() {
-      const locale = useLocale();
       const t = useTranslations('attendance');
       const qc = useQueryClient();
       const [tab, setTab] = useState<Tab>('records');
@@ -94,7 +92,6 @@
       const t = useTranslations('attendance');
       const tc = useTranslations('common');
       const qc = useQueryClient();
-      const locale = useLocale();
       const formatDateTime = useFormatDateTime();
       const [start, setStart] = useState(firstOfMonthISO());
       const [end, setEnd] = useState(todayISO());
@@ -341,7 +338,6 @@
 
     function NetworkTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       const t = useTranslations('attendance');
-      const locale = useLocale();
       const formatDateTime = useFormatDateTime();
       const tc = useTranslations('common');
       const { data, isLoading, error } = useQuery<NetworkAllowlistResponse>({

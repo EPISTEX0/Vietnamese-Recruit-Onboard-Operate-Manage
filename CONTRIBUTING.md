@@ -245,9 +245,18 @@ refactor(identity): consolidate OAuth config into single source
 
 Guidelines:
 
-- The **subject line** is imperative, lowercase, and ≤ 72 characters.
 - Reference issues in the footer when relevant: `Closes #123`.
 - Write the body explaining **what** and **why**, not how.
+- The subject line is imperative and lowercase.
+
+**Subject length is a convention, not a gate** — no commit-msg hook, no CI check enforces it.
+This repo merges squash-only, so the branch commit subject never reaches `main`; the string
+that survives is the **PR title**, plus the ` (#<PR>)` suffix GitHub appends on merge. Aim
+for **≤ 72 characters in the PR title**, counting only what you write — the GitHub-appended
+suffix doesn't count against the limit, but an issue reference like `(#123)` that you typed
+yourself does. As of 2026-08-17, 11 of the last 15 subjects on `main` exceed 72 characters
+by this count (longest: 106); treat that as the current baseline to improve on, not a reason
+to ignore the guideline.
 
 ### Pull Request Process
 

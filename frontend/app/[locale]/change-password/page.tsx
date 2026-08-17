@@ -18,7 +18,7 @@ export default function ChangePasswordPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const t = useTranslations('changePassword');
-  const { isAuthenticated, mustChangePassword, isLoading } = useSession();
+  const { isAuthenticated, isLoading } = useSession();
 
   const {
     register,

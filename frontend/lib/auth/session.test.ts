@@ -15,7 +15,6 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/types";
-import type { UserRole } from "@/lib/auth/roles";
 
 const { mockReplace, mockApiFetch, mockRouter } = vi.hoisted(() => {
   const replace = vi.fn();

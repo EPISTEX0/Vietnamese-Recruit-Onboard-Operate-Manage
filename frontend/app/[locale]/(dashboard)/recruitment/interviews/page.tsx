@@ -5,12 +5,11 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@/i18n/navigation';
 import {
-  Calendar, AlertTriangle, CheckCircle2, XCircle, Link2Off, CalendarClock, ShieldAlert,
+  Calendar, AlertTriangle, CheckCircle2, CalendarClock, ShieldAlert,
 } from 'lucide-react';
 import {
   listCandidates, listCalendarConflicts, resolveCalendarConflict,
   type CalendarConflict, type CandidateListItem,
-  type CreateInterviewRequest, type InterviewResponse,
 } from '@/lib/api/recruitment';
 import { getCalendars, selectCalendar, type CalendarListResponse } from '@/lib/api/gmail';
 import { ErrorBanner, Loading, EmptyState, StatusPill, CONFLICT_STATUS_META, formatAuditDetails } from '@/components/shared-ui';

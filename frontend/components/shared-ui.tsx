@@ -11,7 +11,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
+import { AlertTriangle, Inbox } from 'lucide-react';
 import type { ApiError } from '@/lib/api/types';
 import { getErrorMessage } from '@/lib/api/error-codes';
 import { useFormatter, useTranslations } from 'next-intl';

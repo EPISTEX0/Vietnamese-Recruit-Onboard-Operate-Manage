@@ -188,9 +188,7 @@ function GmailPageInner() {
     onError: (e) => push({ kind: 'error', text: t('deleteDraftFail', { error: apiErrorText(e) }) }),
   });
 
-  // --- GMAIL_NOT_CONNECTED banner ---
   const connError = conn.error instanceof ApiError ? conn.error : null;
-  const showNotConnectedBanner = !isConnected || connError?.errorCode === 'GMAIL_NOT_CONNECTED';
 
   return (
     <div className="space-y-4">
