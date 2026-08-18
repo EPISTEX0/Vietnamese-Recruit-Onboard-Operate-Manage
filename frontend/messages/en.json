@@ -573,7 +573,8 @@
     "gmail_worker": "Email Sync",
     "onboarding_worker": "Onboarding Processing",
     "gmail-worker": "Email Sync",
-    "onboarding-worker": "Onboarding Processing"
+    "onboarding-worker": "Onboarding Processing",
+    "kb-worker": "Knowledge Base Sync"
   },
   "payroll": {
     "nav": "Payslips",
