@@ -708,7 +708,7 @@ export async function getJobOpeningMetrics(): Promise<JobOpeningMetrics> {
 // Outbound Email Types and API Functions
 // ---------------------------------------------------------------------------
 
-// `OutboundEmailStatus` was declared twice (here and `gmail.ts:356`) with
+// `OutboundEmailStatus` was declared twice (here and in `gmail.ts`) with
 // identical values — canonical source is `gmail.ts` (#363), since the backend
 // enum it mirrors lives in `gmail/domain/enums.py`.
 
