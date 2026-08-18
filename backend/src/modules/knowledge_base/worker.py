@@ -76,9 +76,9 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     if redis_client:
         try:
             await redis_client.delete("runtime:heartbeat:kb-worker")
-            await redis_client.aclose()
         except Exception:
-            pass
+            logger.warning("Failed to clear heartbeat on shutdown")
+        await redis_client.aclose()
 
 
 async def refresh_heartbeat(ctx: dict[str, Any]) -> None:
@@ -92,7 +92,11 @@ async def refresh_heartbeat(ctx: dict[str, Any]) -> None:
                 ex=600,
             )
         except Exception:
-            pass
+            # Unlike gmail/onboarding, no reader for runtime:heartbeat:kb-worker
+            # exists yet (tracked separately in #397), so an expired key doesn't
+            # surface anywhere. Log here so the failure isn't silently invisible
+            # until that reader lands.
+            logger.warning("Failed to refresh heartbeat")
 
 
 # Load settings for the Redis connection configuration.

@@ -93,9 +93,9 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     if redis_client:
         try:
             await redis_client.delete("runtime:heartbeat:onboarding-worker")
-            await redis_client.aclose()
         except Exception:
-            pass
+            logger.warning("Failed to clear heartbeat on shutdown")
+        await redis_client.aclose()
 
 
 async def refresh_heartbeat(ctx: dict[str, Any]) -> None:
@@ -109,6 +109,10 @@ async def refresh_heartbeat(ctx: dict[str, Any]) -> None:
                 ex=600,
             )
         except Exception:
+            # Intentionally silent: runtime_router.py:130 reads this key. A failed
+            # set() just means the key isn't refreshed, so it expires after its
+            # existing ex=600 TTL and /runtime/health flips to unhealthy on its own
+            # — the failure is already fail-visible without a log line here.
             pass
 
 
