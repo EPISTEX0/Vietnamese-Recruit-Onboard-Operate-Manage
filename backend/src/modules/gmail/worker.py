@@ -114,7 +114,7 @@ async def refresh_heartbeat(ctx: dict[str, Any]) -> None:
                 "runtime:heartbeat:gmail-worker", __import__("time").time(), ex=600
             )
         except Exception:
-            # Intentionally silent: runtime_router.py:108 reads this key. A failed
+            # Intentionally silent: runtime_health() reads this key. A failed
             # set() just means the key isn't refreshed, so it expires after its
             # existing ex=600 TTL and /runtime/health flips to unhealthy on its own
             # — the failure is already fail-visible without a log line here.

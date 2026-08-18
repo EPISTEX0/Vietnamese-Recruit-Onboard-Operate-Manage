@@ -207,8 +207,9 @@ describe('formatAuditDetails', () => {
   });
 
   // No default: `locale` used to be optional and silently fall back to
-  // `'vi-VN'`, which is exactly how `recruitment/interviews/page.tsx:145`
-  // ended up rendering an English UI's audit summaries in Vietnamese without
+  // `'vi-VN'`, which is exactly how the `formatAuditDetails` call in
+  // `recruitment/interviews/page.tsx` ended up rendering an English UI's
+  // audit summaries in Vietnamese without
   // a single call site spelling out that locale (#313). `tsc` now refuses to
   // compile a call that omits the argument, so there is no runtime case left
   // to assert here — the guard moved to compile time.
