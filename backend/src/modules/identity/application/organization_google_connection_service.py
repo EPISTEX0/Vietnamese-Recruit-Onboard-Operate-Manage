@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -42,6 +43,8 @@ REQUIRED_SCOPES = [
 VALID_CONNECTION_STATUSES = frozenset(
     {"disconnected", "connected", "degraded", "reauthorization_required"}
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -335,22 +338,54 @@ class OrganizationGoogleConnectionService:
         )
 
     async def disconnect(self, hr: User) -> OrganizationGoogleConnectionResponse:
+        """Revoke the Organization's Google grant and clear the local connection.
+
+        The local ``disconnected`` state and its audit record must only ever
+        assert what actually happened at Google, not what we merely attempted.
+        Google's ``/revoke`` returns 200 when it confirms the grant is gone,
+        and 400 when the token was already invalid/expired/revoked -- in both
+        cases the grant no longer exists, so both count as a genuine
+        disconnect. Any other outcome (network failure, decrypt failure, a
+        5xx or unexpected status) means we could not confirm the revoke, so
+        we raise instead of clearing local state: doing so keeps the stored
+        refresh token around so a retry can still attempt the revoke, and
+        keeps this method from ever writing an audit record that claims
+        "disconnected" for a grant that may still be live at Google.
+        """
         current = await self._connection_repo.get_singleton()
+        revoke_outcome = "not_attempted"
         if current and current.refresh_token_enc:
             try:
-                await self._http_client.post(
+                response = await self._http_client.post(
                     GOOGLE_REVOKE_URL,
                     data={"token": self._crypto.decrypt(current.refresh_token_enc)},
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("Google token revoke request failed during disconnect")
+                raise GoogleAuthError("Unable to confirm Google token revocation") from exc
+            if response.status_code == 200:
+                revoke_outcome = "revoked"
+            elif response.status_code == 400:
+                # Google's documented behaviour for an already-invalid/expired/
+                # revoked token. The grant is already gone, so refusing to
+                # disconnect here would trap the user with a connection that's
+                # dead at Google but stuck "connected" locally.
+                revoke_outcome = "already_revoked"
+            else:
+                logger.error(
+                    "Google token revoke returned unexpected status %s during disconnect",
+                    response.status_code,
+                )
+                raise GoogleAuthError(
+                    f"Unable to confirm Google token revocation (status {response.status_code})"
+                )
         if self._sync_cursor_repo is not None:
             await self._sync_cursor_repo.clear_cursor()
         await self._connection_repo.disconnect()
         await self._audit_service.log_action(
             admin=hr,
             action_type=AuditActionType.ORG_GOOGLE_DISCONNECT,
-            details={"result": "disconnected"},
+            details={"result": "disconnected", "google_revoke": revoke_outcome},
         )
         return OrganizationGoogleConnectionResponse(status="disconnected")
 

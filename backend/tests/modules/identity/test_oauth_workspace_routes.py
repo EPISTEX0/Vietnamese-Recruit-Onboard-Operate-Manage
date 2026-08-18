@@ -25,7 +25,11 @@ from src.modules.identity.application.organization_google_connection_service imp
 )
 from src.modules.identity.container import get_current_user
 from src.modules.identity.domain.entities import User
-from src.modules.identity.domain.exceptions import DomainAccessDeniedError, InvalidStateError
+from src.modules.identity.domain.exceptions import (
+    DomainAccessDeniedError,
+    GoogleAuthError,
+    InvalidStateError,
+)
 from src.modules.identity.infrastructure.crypto_utils import CryptoUtils
 from src.modules.identity.infrastructure.jwt_utils import JWTUtils
 
@@ -310,18 +314,147 @@ async def test_callback_rejects_wrong_org_domain(
 
 
 @pytest.mark.asyncio
-async def test_disconnect_revoke_best_effort(
+async def test_disconnect_posts_revoke_and_clears_sync_cursor(
     service: OrganizationGoogleConnectionService,
     hr_user: User,
     http_client: FakeHttpClient,
     crypto: CryptoUtils,
 ) -> None:
+    """Pins the success path only (revoke returns 200, the fixture default).
+
+    Disconnect is no longer best-effort -- a failed revoke raises instead of
+    proceeding silently. The failure branches (transport error, non-2xx
+    without an exception, and the 400-is-still-success case) live in the
+    dedicated tests below, not here.
+    """
     service._connection_repo.get_singleton = AsyncMock(
         return_value=SimpleNamespace(refresh_token_enc=crypto.encrypt("refresh"))
     )
     await service.disconnect(hr_user)
     assert any(url == GOOGLE_REVOKE_URL for url, _ in http_client.posts)
     service._sync_cursor_repo.clear_cursor.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_with_no_existing_grant_skips_revoke_and_audits_that(
+    service: OrganizationGoogleConnectionService,
+    hr_user: User,
+    http_client: FakeHttpClient,
+    connection_repo: DurableConnectionRepo,
+    audit_service: AsyncMock,
+) -> None:
+    """No stored grant means nothing to revoke -- that must show up as its own value.
+
+    Pins the ``"not_attempted"`` audit outcome so a future edit can't quietly
+    rename or drop it without a test noticing.
+    """
+    connection_repo.state = None
+
+    result = await service.disconnect(hr_user)
+
+    assert result.status == "disconnected"
+    assert not any(url == GOOGLE_REVOKE_URL for url, _ in http_client.posts)
+    details = audit_service.log_action.await_args.kwargs["details"]
+    assert details == {"result": "disconnected", "google_revoke": "not_attempted"}
+
+
+@pytest.mark.asyncio
+async def test_disconnect_confirmed_revoke_audits_true_result(
+    service: OrganizationGoogleConnectionService,
+    hr_user: User,
+    connection_repo: DurableConnectionRepo,
+    audit_service: AsyncMock,
+    crypto: CryptoUtils,
+) -> None:
+    """A 200 from Google's /revoke is what actually licenses "disconnected"."""
+    connection_repo.state = SimpleNamespace(refresh_token_enc=crypto.encrypt("refresh"))
+
+    result = await service.disconnect(hr_user)
+
+    assert result.status == "disconnected"
+    assert connection_repo.disconnect_calls == 1
+    details = audit_service.log_action.await_args.kwargs["details"]
+    assert details == {"result": "disconnected", "google_revoke": "revoked"}
+
+
+@pytest.mark.asyncio
+async def test_disconnect_raises_when_revoke_request_transport_fails(
+    service: OrganizationGoogleConnectionService,
+    hr_user: User,
+    http_client: FakeHttpClient,
+    connection_repo: DurableConnectionRepo,
+    audit_service: AsyncMock,
+    crypto: CryptoUtils,
+) -> None:
+    """A transport error must not report "disconnected" (#384 lỗ 1).
+
+    Google's grant may still be live -- ``except Exception: pass`` used to
+    swallow this and audit a disconnect that never happened.
+    """
+    connection_repo.state = SimpleNamespace(refresh_token_enc=crypto.encrypt("refresh"))
+    http_client.revoke = ConnectionError("boom")
+
+    with pytest.raises(GoogleAuthError):
+        await service.disconnect(hr_user)
+
+    audit_service.log_action.assert_not_awaited()
+    assert connection_repo.disconnect_calls == 0
+    assert connection_repo.state is not None
+
+
+@pytest.mark.asyncio
+async def test_disconnect_raises_when_revoke_returns_500_without_exception(
+    service: OrganizationGoogleConnectionService,
+    hr_user: User,
+    http_client: FakeHttpClient,
+    connection_repo: DurableConnectionRepo,
+    audit_service: AsyncMock,
+    crypto: CryptoUtils,
+) -> None:
+    """A non-2xx Google response raises nothing in bare httpx -- this is #384 lỗ 2.
+
+    ``self._http_client`` never calls ``raise_for_status()``, so a plain 500
+    from Google produced no exception at all: the ``except Exception: pass``
+    handler was never even entered, and the audit was written regardless. The
+    fix has to check ``status_code`` explicitly, not just add a log to the
+    handler.
+    """
+    connection_repo.state = SimpleNamespace(refresh_token_enc=crypto.encrypt("refresh"))
+    http_client.revoke = FakeResponse(500, {})
+
+    with pytest.raises(GoogleAuthError):
+        await service.disconnect(hr_user)
+
+    audit_service.log_action.assert_not_awaited()
+    assert connection_repo.disconnect_calls == 0
+    assert connection_repo.state is not None
+
+
+@pytest.mark.asyncio
+async def test_disconnect_treats_already_revoked_token_as_success(
+    service: OrganizationGoogleConnectionService,
+    hr_user: User,
+    http_client: FakeHttpClient,
+    connection_repo: DurableConnectionRepo,
+    audit_service: AsyncMock,
+    crypto: CryptoUtils,
+) -> None:
+    """Google returns 400 for a token that's already invalid/expired/revoked.
+
+    Treating that as a failure would trap the user: they could never
+    disconnect a connection that's already dead at Google. The grant is
+    already gone either way, so this must still succeed -- distinctly
+    recorded, not a bare "disconnected".
+    """
+    connection_repo.state = SimpleNamespace(refresh_token_enc=crypto.encrypt("refresh"))
+    http_client.revoke = FakeResponse(400, {})
+
+    result = await service.disconnect(hr_user)
+
+    assert result.status == "disconnected"
+    assert connection_repo.disconnect_calls == 1
+    details = audit_service.log_action.await_args.kwargs["details"]
+    assert details == {"result": "disconnected", "google_revoke": "already_revoked"}
 
 
 @pytest.mark.asyncio

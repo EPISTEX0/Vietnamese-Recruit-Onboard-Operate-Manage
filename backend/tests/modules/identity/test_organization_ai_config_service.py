@@ -500,6 +500,49 @@ async def test_capability_state_unavailable_when_credential_revoked(
 
 
 # ---------------------------------------------------------------------------
+# #384 — a key present but undecryptable must not look like "no key"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_view_flags_decrypt_failure_distinct_from_no_key(
+    service: OrganizationAIConfigService,
+) -> None:
+    """decrypt() raising must not collapse to the same payload as no key at all.
+
+    Before #384, ``get_view`` either crashed outright (the credential-usability
+    check only caught the "missing key" validation error, not a real decrypt
+    failure) or -- once that crash was avoided -- reported ``api_key_masked =
+    None`` indistinguishable from "never configured". An admin who sees that
+    concludes there's no key and enters a new one, silently overwriting
+    whatever was there. The two situations need opposite actions (restore the
+    encryption key vs. add a new one), so the view must carry a signal that
+    tells them apart.
+    """
+    service.repository.config = OrganizationAIConfiguration(
+        id=uuid4(),
+        organization_singleton_key="default",
+        provider="openai",
+        base_url="https://api.example.test/v1",
+        model="gpt-4o",
+        api_key_enc="not-valid-ciphertext-at-all",
+        credential_source=CredentialSource.ORG_API_KEY.value,
+    )
+
+    broken_view = await service.get_view()
+
+    assert broken_view.api_key_masked is None
+    assert broken_view.api_key_decrypt_failed is True
+
+    assert service.repository.config is not None
+    service.repository.config.api_key_enc = ""
+    unconfigured_view = await service.get_view()
+
+    assert unconfigured_view.api_key_masked is None
+    assert unconfigured_view.api_key_decrypt_failed is False
+
+
+# ---------------------------------------------------------------------------
 # Enable rejection tests (safe enable)
 # ---------------------------------------------------------------------------
 
