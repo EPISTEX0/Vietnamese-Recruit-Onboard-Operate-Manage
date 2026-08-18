@@ -381,6 +381,21 @@ class CandidateLifecycleService:
             cv_documents=cv_document_details,
         )
 
+    async def ensure_candidate_exists(self, candidate_id: UUID) -> None:
+        """Raise CandidateNotFoundError if no Candidate has this id.
+
+        A cheap existence check for callers that only need to know "does this
+        candidate exist" -- unlike ``get_candidate``, this does not touch CV
+        documents or generate presigned MinIO URLs.
+
+        Args:
+            candidate_id: UUID of the candidate to check.
+
+        Raises:
+            CandidateNotFoundError: If no candidate exists with the given ID.
+        """
+        await self._get_candidate_or_raise(candidate_id)
+
     # ─── Status transition actions ─────────────────────────────────────
 
     async def reject_candidate(self, candidate_id: UUID, reason: str | None = None) -> Candidate:

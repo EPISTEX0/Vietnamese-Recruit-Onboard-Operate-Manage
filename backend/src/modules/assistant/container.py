@@ -42,7 +42,13 @@ from src.modules.onboarding.container import get_onboarding_service
 from src.modules.recruitment.application.candidate_lifecycle_service import (
     CandidateLifecycleService,
 )
-from src.modules.recruitment.container import get_candidate_lifecycle_service
+from src.modules.recruitment.application.interview_scheduler_service import (
+    InterviewSchedulerService,
+)
+from src.modules.recruitment.container import (
+    get_candidate_lifecycle_service,
+    get_interview_scheduler_service,
+)
 from src.modules.recruitment.infrastructure.org_settings_repository import (
     OrganizationSettingsRepository,
 )
@@ -76,6 +82,9 @@ async def get_tool_registry(
     candidate_service: CandidateLifecycleService = Depends(get_candidate_lifecycle_service),
     onboarding_service: OnboardingService = Depends(get_onboarding_service),
     department_service: DepartmentService = Depends(get_department_service),
+    interview_scheduler_service: InterviewSchedulerService = Depends(
+        get_interview_scheduler_service
+    ),
 ) -> ToolRegistry:
     """Provide a ToolRegistry wired to recruitment + onboarding + employee services.
 
@@ -84,6 +93,7 @@ async def get_tool_registry(
     return ToolRegistry(
         candidate_service=candidate_service,
         onboarding_service=onboarding_service,
+        interview_lister=interview_scheduler_service,
         session=session,
         department_service=department_service,
     )

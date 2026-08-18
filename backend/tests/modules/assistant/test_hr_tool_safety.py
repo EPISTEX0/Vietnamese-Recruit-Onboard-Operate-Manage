@@ -6,12 +6,36 @@ All 8 handler-wired tools in ToolRegistry are covered.
 
 from __future__ import annotations
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.modules.assistant.application.tool_registry import ToolRegistry
+from src.modules.assistant.application.tool_registry import InterviewLister, ToolRegistry
+from src.modules.onboarding.application.onboarding_service import OnboardingService
+from src.modules.recruitment.application.candidate_lifecycle_service import (
+    CandidateLifecycleService,
+)
+from src.modules.recruitment.domain.exceptions import CandidateNotFoundError
 from tests.modules.assistant.test_base_safety import BaseToolSafetyTest
+
+
+def _make_registry(
+    candidate_service: MagicMock | None = None,
+    onboarding_service: MagicMock | None = None,
+    interview_lister: MagicMock | None = None,
+) -> ToolRegistry:
+    """Build a ToolRegistry with spec='d mocks.
+
+    #382: an unspecced mock auto-generates any attribute a test assigns to
+    it, hiding a handler wired to a method the real service does not have.
+    """
+    return ToolRegistry(
+        candidate_service=candidate_service or MagicMock(spec=CandidateLifecycleService),
+        onboarding_service=onboarding_service or MagicMock(spec=OnboardingService),
+        interview_lister=interview_lister or MagicMock(spec=InterviewLister),
+    )
+
 
 # =========================================================================
 # Read-Tools — no entity lookup
@@ -29,10 +53,7 @@ class TestCountCandidatesByStatusSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        return ToolRegistry(
-            candidate_service=AsyncMock(),
-            onboarding_service=AsyncMock(),
-        )
+        return _make_registry()
 
     @pytest.fixture
     def valid_args(self) -> dict:
@@ -84,10 +105,7 @@ class TestListInProgressOnboardingSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        return ToolRegistry(
-            candidate_service=AsyncMock(),
-            onboarding_service=AsyncMock(),
-        )
+        return _make_registry()
 
     @pytest.fixture
     def valid_args(self) -> dict:
@@ -162,10 +180,7 @@ class TestSearchCandidatesSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        return ToolRegistry(
-            candidate_service=AsyncMock(),
-            onboarding_service=AsyncMock(),
-        )
+        return _make_registry()
 
     @pytest.fixture
     def valid_args(self) -> dict:
@@ -232,10 +247,7 @@ class TestGetCandidateParsedCVSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        reg = ToolRegistry(
-            candidate_service=MagicMock(),
-            onboarding_service=AsyncMock(),
-        )
+        reg = _make_registry()
         reg._candidate_service.get_candidate = AsyncMock()
         return reg
 
@@ -306,11 +318,9 @@ class TestListInterviewsForCandidateSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        reg = ToolRegistry(
-            candidate_service=MagicMock(),
-            onboarding_service=AsyncMock(),
-        )
-        reg._candidate_service.list_interviews_for_candidate = AsyncMock()
+        reg = _make_registry()
+        reg._candidate_service.ensure_candidate_exists = AsyncMock()
+        reg._interview_lister.list_interviews_for_candidate = AsyncMock()
         return reg
 
     @pytest.fixture
@@ -320,26 +330,39 @@ class TestListInterviewsForCandidateSafety(BaseToolSafetyTest):
     @pytest.mark.asyncio
     async def test_tool_respects_scope(self, registry: ToolRegistry) -> None:
         """Tool lists interviews for the specified candidate only."""
+        registry._candidate_service.ensure_candidate_exists = AsyncMock(return_value=None)
         mock_interviews = [
-            {"id": "i1", "scheduled_time": "2026-07-20T09:00:00+07:00", "status": "scheduled"}
+            {
+                "id": uuid.uuid4(),
+                "candidate_id": uuid.UUID(self._VALID_CANDIDATE_ID),
+                "status": "scheduled",
+                "round_name": "Technical",
+                "start_at": None,
+                "end_at": None,
+                "timezone": "Asia/Ho_Chi_Minh",
+                "calendar_event_id": None,
+                "needs_relink": False,
+                "participants": [],
+            }
         ]
-        registry._candidate_service.list_interviews_for_candidate = AsyncMock(
+        registry._interview_lister.list_interviews_for_candidate = AsyncMock(
             return_value=mock_interviews
         )
 
         result = await self.execute_tool(registry, {"candidate_id": self._VALID_CANDIDATE_ID})
         assert "error" not in result
         assert result["total"] == 1
-        registry._candidate_service.list_interviews_for_candidate.assert_called_once()
+        registry._interview_lister.list_interviews_for_candidate.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_tool_handles_missing_entity(self, registry: ToolRegistry) -> None:
-        """Tool returns clear error for nonexistent candidate."""
-        registry._candidate_service.list_interviews_for_candidate = AsyncMock(
-            side_effect=Exception("Candidate not found")
+        """Tool returns clear error for nonexistent candidate (D3, #382)."""
+        registry._candidate_service.ensure_candidate_exists = AsyncMock(
+            side_effect=CandidateNotFoundError("Candidate not found")
         )
         result = await self.execute_tool(registry, {"candidate_id": self._MISSING_CANDIDATE_ID})
         self.assert_error(result)
+        registry._interview_lister.list_interviews_for_candidate.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_tool_handles_invalid_input(self, registry: ToolRegistry) -> None:
@@ -366,10 +389,7 @@ class TestGetOnboardingTaskDetailsSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        reg = ToolRegistry(
-            candidate_service=AsyncMock(),
-            onboarding_service=MagicMock(),
-        )
+        reg = _make_registry()
         reg._onboarding_service.get_process = AsyncMock()
         return reg
 
@@ -445,10 +465,7 @@ class _BaseDraftToolSafety(BaseToolSafetyTest):
 
     @pytest.fixture
     def registry(self) -> ToolRegistry:
-        reg = ToolRegistry(
-            candidate_service=MagicMock(),
-            onboarding_service=AsyncMock(),
-        )
+        reg = _make_registry()
         reg._candidate_service.get_candidate = AsyncMock()
         return reg
 
