@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.modules.gmail.domain.entities import EmailMessage, SyncCursor
 from src.modules.gmail.domain.exceptions import (
-    GmailFetchError,
     GmailNotConnectedException,
     RateLimitedException,
 )
@@ -148,7 +147,6 @@ class EmailSyncService:
             exc_str = str(exc).lower()
             is_invalid_grant = "invalid_grant" in exc_str or "revoked" in exc_str
 
-            await self._update_ingestion_health("degraded")
             logger.error("Token refresh failed for organization connection: %s", exc)
 
             if is_invalid_grant or (
@@ -169,12 +167,6 @@ class EmailSyncService:
                     metadata={"error": "token_refresh_failed", "reason": str(exc)},
                 )
             return None
-
-    async def _update_ingestion_health(self, status: str) -> None:
-        try:
-            await self._redis.set("gmail:health:gmail_ingestion", status, ex=3600)
-        except Exception:
-            pass
 
     async def poll_emails(self, user_id: UUID) -> int:
         """Execute a poll cycle to fetch new emails from Gmail.
@@ -207,7 +199,6 @@ class EmailSyncService:
 
             try:
                 count = await self._fetch_and_persist(connected_user_id, access_token, cursor)
-                await self._update_ingestion_health("healthy")
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:
                     new_access_token = await self._handle_connection_token_refresh(
@@ -215,27 +206,15 @@ class EmailSyncService:
                     )
                     if new_access_token is None:
                         return 0
-                    try:
-                        count = await self._fetch_and_persist(
-                            connected_user_id, new_access_token, cursor
-                        )
-                        await self._update_ingestion_health("healthy")
-                    except Exception as retry_exc:
-                        if isinstance(
-                            retry_exc, (RateLimitedException, httpx.HTTPError, TimeoutError)
-                        ):
-                            await self._update_ingestion_health("degraded")
-                        raise
+                    count = await self._fetch_and_persist(
+                        connected_user_id, new_access_token, cursor
+                    )
                 else:
                     if exc.response.status_code == 400:
                         connection.status = "reauthorization_required"
                         connection.updated_at = datetime.now(UTC)
                         await connection_repo.upsert_singleton(connection)
-                    await self._update_ingestion_health("degraded")
                     raise
-            except (RateLimitedException, httpx.HTTPError, TimeoutError, GmailFetchError):
-                await self._update_ingestion_health("degraded")
-                raise
 
             await self._audit_logger.log_operation(
                 operation_type="fetch",
@@ -275,7 +254,6 @@ class EmailSyncService:
 
             try:
                 count = await self._fetch_and_persist(connected_user_id, access_token, cursor)
-                await self._update_ingestion_health("healthy")
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:
                     new_access_token = await self._handle_connection_token_refresh(
@@ -283,27 +261,15 @@ class EmailSyncService:
                     )
                     if new_access_token is None:
                         return 0
-                    try:
-                        count = await self._fetch_and_persist(
-                            connected_user_id, new_access_token, cursor
-                        )
-                        await self._update_ingestion_health("healthy")
-                    except Exception as retry_exc:
-                        if isinstance(
-                            retry_exc, (RateLimitedException, httpx.HTTPError, TimeoutError)
-                        ):
-                            await self._update_ingestion_health("degraded")
-                        raise
+                    count = await self._fetch_and_persist(
+                        connected_user_id, new_access_token, cursor
+                    )
                 else:
                     if exc.response.status_code == 400:
                         connection.status = "reauthorization_required"
                         connection.updated_at = datetime.now(UTC)
                         await connection_repo.upsert_singleton(connection)
-                    await self._update_ingestion_health("degraded")
                     raise
-            except (RateLimitedException, httpx.HTTPError, TimeoutError, GmailFetchError):
-                await self._update_ingestion_health("degraded")
-                raise
 
             await self._record_manual_sync_timestamp(user_id)
             await self._audit_logger.log_operation(
