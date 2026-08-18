@@ -1,5 +1,6 @@
 """Unit tests for OutboundEmailService."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -14,6 +15,7 @@ from src.modules.gmail.application.outbound_email_service import (
 from src.modules.gmail.domain.entities import OutboundEmail
 from src.modules.gmail.domain.enums import OutboundEmailStatus
 from src.modules.gmail.domain.exceptions import (
+    GmailFetchError,
     GmailSendFailedException,
     OrganizationNotConnectedError,
     OutboundEmailAlreadySentError,
@@ -380,10 +382,101 @@ async def test_send_outbound_auth_failure_sets_reauthorization(
 
 
 @pytest.mark.asyncio
-async def test_send_outbound_retryable_error(
+async def test_send_outbound_http_status_error_is_permanent(
     service: OutboundEmailService,
 ) -> None:
-    """Retryable error (500) with retries left keeps status as pending."""
+    """An httpx.HTTPStatusError (401 is the only status that reaches this
+    branch — GmailAdapter wraps every other HTTP error into
+    GmailSendFailedException) is classified by exception type, not status
+    code, and is never auto-retried.
+    """
+    pending = _make_outbound(retry_count=0, max_retries=3)
+    service._outbound_repo.get_by_id.return_value = pending
+    service._connection_repo.get_singleton.return_value = _make_connection()
+    service._outbound_repo.update_status.return_value = _make_outbound(
+        status=OutboundEmailStatus.failed,
+    )
+
+    response = MagicMock()
+    response.status_code = 401
+    response.text = "Invalid Credentials"
+    http_error = httpx.HTTPStatusError("Unauthorized", request=MagicMock(), response=response)
+
+    async def fake_send(token, mime):
+        raise http_error
+
+    service._gmail_adapter.send_message = fake_send
+
+    with pytest.raises(GmailSendFailedException):
+        await service.send_outbound(pending.id)
+
+    service._connection_repo.update_status.assert_called_with("reauthorization_required")
+    _, kwargs = service._outbound_repo.update_status.call_args
+    assert kwargs["status"] == OutboundEmailStatus.failed
+    assert "Invalid Credentials" in kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_unexpected_exception_is_permanent_and_preserves_detail(
+    service: OutboundEmailService,
+) -> None:
+    """An unforeseen exception (e.g. a bug) fails outright and keeps its
+    original message instead of a false "will retry" promise.
+    """
+    pending = _make_outbound(retry_count=0, max_retries=3)
+    service._outbound_repo.get_by_id.return_value = pending
+    service._connection_repo.get_singleton.return_value = _make_connection()
+    service._outbound_repo.update_status.return_value = _make_outbound(
+        status=OutboundEmailStatus.failed,
+    )
+
+    async def fake_send(token, mime):
+        raise TypeError("unexpected boom")
+
+    service._gmail_adapter.send_message = fake_send
+
+    with pytest.raises(GmailSendFailedException):
+        await service.send_outbound(pending.id)
+
+    _, kwargs = service._outbound_repo.update_status.call_args
+    assert kwargs["status"] == OutboundEmailStatus.failed
+    assert "unexpected boom" in kwargs["error_message"]
+    assert "will retry" not in kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_unexpected_exception_is_logged(
+    service: OutboundEmailService,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The unexpected-exception branch logs with a traceback, not silently."""
+    pending = _make_outbound(retry_count=0, max_retries=3)
+    service._outbound_repo.get_by_id.return_value = pending
+    service._connection_repo.get_singleton.return_value = _make_connection()
+    service._outbound_repo.update_status.return_value = _make_outbound(
+        status=OutboundEmailStatus.failed,
+    )
+
+    async def fake_send(token, mime):
+        raise TypeError("unexpected boom")
+
+    service._gmail_adapter.send_message = fake_send
+
+    logger_name = "src.modules.gmail.application.outbound_email_service"
+    with caplog.at_level(logging.ERROR, logger=logger_name):
+        with pytest.raises(GmailSendFailedException):
+            await service.send_outbound(pending.id)
+
+    matching = [r for r in caplog.records if str(pending.id) in r.message]
+    assert matching, "expected an error-level log mentioning the outbound id"
+    assert matching[0].exc_info is not None
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_gmail_fetch_error_stays_pending_with_detail(
+    service: OutboundEmailService,
+) -> None:
+    """GmailFetchError (transient network failure) stays pending and keeps detail."""
     pending = _make_outbound(retry_count=0, max_retries=3)
     service._outbound_repo.get_by_id.return_value = pending
     service._connection_repo.get_singleton.return_value = _make_connection()
@@ -391,20 +484,43 @@ async def test_send_outbound_retryable_error(
         status=OutboundEmailStatus.pending,
     )
 
-    response = MagicMock()
-    response.status_code = 500
-    response.text = "Internal server error"
-    http_error = httpx.HTTPStatusError("Server Error", request=MagicMock(), response=response)
-
     async def fake_send(token, mime):
-        raise http_error
+        raise GmailFetchError("connection reset by peer")
 
     service._gmail_adapter.send_message = fake_send
 
     result = await service.send_outbound(pending.id)
 
     assert result.status == OutboundEmailStatus.pending
-    service._connection_repo.update_status.assert_not_called()
+    _, kwargs = service._outbound_repo.update_status.call_args
+    assert kwargs["status"] == OutboundEmailStatus.pending
+    assert "connection reset by peer" in kwargs["error_message"]
+    assert "will retry" not in kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_send_outbound_gmail_send_failed_exception_is_permanent(
+    service: OutboundEmailService,
+) -> None:
+    """GmailSendFailedException (adapter already gave up) fails outright with detail."""
+    pending = _make_outbound(retry_count=0, max_retries=3)
+    service._outbound_repo.get_by_id.return_value = pending
+    service._connection_repo.get_singleton.return_value = _make_connection()
+    service._outbound_repo.update_status.return_value = _make_outbound(
+        status=OutboundEmailStatus.failed,
+    )
+
+    async def fake_send(token, mime):
+        raise GmailSendFailedException("Failed to send email: 403 Forbidden")
+
+    service._gmail_adapter.send_message = fake_send
+
+    with pytest.raises(GmailSendFailedException):
+        await service.send_outbound(pending.id)
+
+    _, kwargs = service._outbound_repo.update_status.call_args
+    assert kwargs["status"] == OutboundEmailStatus.failed
+    assert "Failed to send email: 403 Forbidden" in kwargs["error_message"]
 
 
 # ── retry_outbound tests ───────────────────────────────────────────

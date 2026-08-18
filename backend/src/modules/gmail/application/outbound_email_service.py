@@ -19,11 +19,13 @@ import httpx
 from src.modules.gmail.domain.entities import OutboundEmail
 from src.modules.gmail.domain.enums import OutboundEmailStatus
 from src.modules.gmail.domain.exceptions import (
+    GmailFetchError,
     GmailSendFailedException,
     OrganizationNotConnectedError,
     OutboundEmailAlreadySentError,
     OutboundEmailMaxRetriesExceededError,
     OutboundEmailNotFoundError,
+    RateLimitedException,
 )
 
 if TYPE_CHECKING:
@@ -304,22 +306,56 @@ class OutboundEmailService:
             )
 
         except httpx.HTTPStatusError as exc:
+            # Only 401 ever reaches this branch in practice (GmailAdapter wraps
+            # every other HTTP error into GmailSendFailedException), and an auth
+            # failure is not something a manual retry alone fixes.
             outbound = await self._handle_send_error(
                 outbound_id=outbound_id,
                 outbound=outbound,
                 connection=connection,
                 status_code=exc.response.status_code,
                 error_detail=exc.response.text[:500],
+                is_retryable=False,
                 hr_user=hr_user,
             )
 
-        except Exception as exc:
+        except (GmailFetchError, RateLimitedException, TimeoutError) as exc:
+            logger.warning(
+                "Transient error sending outbound %s, eligible for manual retry: %s",
+                outbound_id,
+                exc,
+            )
             outbound = await self._handle_send_error(
                 outbound_id=outbound_id,
                 outbound=outbound,
                 connection=connection,
                 status_code=0,
                 error_detail=str(exc),
+                is_retryable=True,
+                hr_user=hr_user,
+            )
+
+        except GmailSendFailedException as exc:
+            logger.warning("Permanent send failure for outbound %s: %s", outbound_id, exc)
+            outbound = await self._handle_send_error(
+                outbound_id=outbound_id,
+                outbound=outbound,
+                connection=connection,
+                status_code=0,
+                error_detail=str(exc),
+                is_retryable=False,
+                hr_user=hr_user,
+            )
+
+        except Exception as exc:
+            logger.exception("Unexpected error sending outbound %s", outbound_id)
+            outbound = await self._handle_send_error(
+                outbound_id=outbound_id,
+                outbound=outbound,
+                connection=connection,
+                status_code=0,
+                error_detail=str(exc),
+                is_retryable=False,
                 hr_user=hr_user,
             )
 
@@ -333,6 +369,7 @@ class OutboundEmailService:
         connection: Any,
         status_code: int,
         error_detail: str,
+        is_retryable: bool,
         hr_user: Any | None = None,
     ) -> OutboundEmail:
         """Handle a send error by updating status and optionally connection.
@@ -347,6 +384,8 @@ class OutboundEmailService:
             connection: The OrganizationGoogleConnection entity.
             status_code: HTTP status code (0 for non-HTTP errors).
             error_detail: Error detail string.
+            is_retryable: Whether the caller classified the underlying
+                exception as transient (see send_outbound's except clauses).
             hr_user: Optional User entity for audit logging.
 
         Returns:
@@ -365,11 +404,11 @@ class OutboundEmailService:
                 outbound_id,
             )
 
-        # Determine if retryable
-        is_retryable = status_code in (429,) or 500 <= status_code < 600 or status_code == 0
         if is_retryable and outbound.retry_count < outbound.max_retries:
             new_status = OutboundEmailStatus.pending
-            error_msg = f"Temporary failure (HTTP {status_code}), will retry"
+            error_msg = (
+                f"Temporary failure (HTTP {status_code}): {error_detail} — awaiting manual retry"
+            )
         else:
             new_status = OutboundEmailStatus.failed
             error_msg = f"Send failed (HTTP {status_code}): {error_detail}"
