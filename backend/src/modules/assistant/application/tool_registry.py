@@ -19,7 +19,7 @@ import logging
 import typing
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from src.modules.assistant.domain.tools import DraftAction, ToolKind
+from src.modules.assistant.domain.tools import TOOL_ERROR_KEY, DraftAction, ToolKind
 from src.modules.onboarding.domain.exceptions import OnboardingProcessNotFoundError
 from src.modules.recruitment.domain.exceptions import CandidateNotFoundError
 from src.shared.messages import get_message
@@ -149,14 +149,14 @@ class ToolRegistry:
 
         handler = handlers.get(tool_name)
         if handler is None:
-            return json.dumps({"error": f"Unknown tool: {tool_name}"})
+            return json.dumps({"error": f"Unknown tool: {tool_name}", TOOL_ERROR_KEY: True})
 
         try:
             result = await handler(arguments)
             return json.dumps(result, ensure_ascii=False)
         except Exception as exc:
             logger.exception("Tool execution failed: %s", tool_name)
-            return json.dumps({"error": f"Tool execution failed: {exc}"})
+            return json.dumps({"error": f"Tool execution failed: {exc}", TOOL_ERROR_KEY: True})
 
     def is_draft_tool(self, tool_name: str) -> bool:
         """Check if a tool is a Draft-Tool (returns Draft Action, not data)."""

@@ -41,6 +41,7 @@ from src.modules.assistant.application.assistant_service import (
 from src.modules.assistant.application.employee_assistant_service import (
     EmployeeAssistantService,
 )
+from src.modules.assistant.domain.tools import TOOL_ERROR_KEY
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import LLMStreamChunk
 from src.modules.assistant.infrastructure.quality_models import (
@@ -220,10 +221,11 @@ class TestToolTurn:
     async def test_tool_failure_is_reported_as_a_result_not_a_crash(
         self, make_subject: Callable[..., Subject]
     ) -> None:
-        """A raising tool ends its own turn, not the stream.
+        """A failing tool ends its own turn, not the stream.
 
-        The loop swallows the exception into a JSON error the LLM can read and
-        keeps going, so the employee gets a sentence rather than a dead stream.
+        The registry turns the failure into a JSON error the LLM can read (its
+        own contract, per #400 -- it never raises out of ``execute()``) and the
+        loop keeps going, so the employee gets a sentence rather than a dead stream.
         """
         subject = make_subject(
             [tool_turn(name="a_tool"), text_turn("Công cụ lỗi rồi")],
@@ -233,7 +235,9 @@ class TestToolTurn:
         events = await _collect(subject.stream(USER))
 
         assert _names(events) == ["tool_start", "tool_end", "text_delta", "done"]
-        assert json.loads(events[1]["data"]["result"]) == {"error": "Tool execution failed: a_tool"}
+        result = json.loads(events[1]["data"]["result"])
+        assert result["error"] == "Tool execution failed: a_tool"
+        assert result[TOOL_ERROR_KEY] is True
 
     async def test_draft_action_is_announced_before_done(
         self, make_subject: Callable[..., Subject]
@@ -335,7 +339,7 @@ class TestTelemetry:
     async def test_failed_tool_is_recorded_as_a_failure(
         self, make_subject: Callable[..., Subject]
     ) -> None:
-        """Telemetry distinguishes a tool that raised from one that worked."""
+        """Telemetry distinguishes a tool that failed from one that worked."""
         subject = make_subject(
             [tool_turn(name="a_tool"), text_turn("Lỗi")],
             failing=frozenset({"a_tool"}),

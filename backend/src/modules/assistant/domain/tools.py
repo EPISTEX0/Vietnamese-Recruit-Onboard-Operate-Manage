@@ -19,6 +19,7 @@ Backend thực thi tool trực tiếp — LLM chỉ định nghĩa tool cần g�
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -73,6 +74,35 @@ class DraftAction:
     confirm_endpoint: str
     confirm_method: str
     confirm_body: dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Tool-call error contract — shared between both registries (who set the key)
+# and both tool-calling loops plus the streaming loop (who read it), per #400.
+# ---------------------------------------------------------------------------
+
+# Set only where a registry generates its own error (unknown tool name, a
+# handler raising unexpectedly) -- never by a handler's own {"error": ...}
+# business-facing message (e.g. "invalid month"), which is valid tool output,
+# not a tool-calling failure. The loops key failure detection off this, not
+# off the presence of an "error" field, which handlers use for both cases.
+TOOL_ERROR_KEY = "__tool_error__"
+
+
+def is_registry_error(result_json: str) -> bool:
+    """Whether a tool's JSON result string carries the registry's own error sentinel.
+
+    Malformed JSON reads as "no sentinel found", not a parse failure -- this
+    runs on every tool result, including from tools whose own downstream
+    parsing (draft-action extraction) already has its own logged fallback for
+    that shape. Duplicating that failure here would crash the loop instead of
+    letting the existing fallback handle it.
+    """
+    try:
+        data = json.loads(result_json)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, dict) and data.get(TOOL_ERROR_KEY) is True
 
 
 # ---------------------------------------------------------------------------

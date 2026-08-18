@@ -23,7 +23,12 @@ from uuid import UUID
 from src.modules.assistant.domain.employee_tools import (
     EMPLOYEE_TOOL_DEFINITIONS,
 )
-from src.modules.assistant.domain.tools import TOOL_DEFINITIONS, DraftAction, ToolKind
+from src.modules.assistant.domain.tools import (
+    TOOL_DEFINITIONS,
+    TOOL_ERROR_KEY,
+    DraftAction,
+    ToolKind,
+)
 
 if TYPE_CHECKING:
     from src.modules.attendance.infrastructure.attendance_record_repository import (
@@ -79,11 +84,14 @@ class EmployeeToolRegistry:
         }
 
         if tool_name in _HR_TOOL_NAMES:
+            # Policy refusal, not a registry failure -- the registry did exactly
+            # what it should. No TOOL_ERROR_KEY: same bucket as a handler's own
+            # validation message (e.g. "invalid month"), not a tool-calling failure.
             return json.dumps({"error": _REFUSAL_MSG, "code": "scope_denied"}, ensure_ascii=False)
 
         handler = handlers.get(tool_name)
         if handler is None:
-            return json.dumps({"error": _TOOL_ERROR_MSG})
+            return json.dumps({"error": _TOOL_ERROR_MSG, TOOL_ERROR_KEY: True})
 
         try:
             result = await handler(arguments)
@@ -91,11 +99,11 @@ class EmployeeToolRegistry:
         except (ValueError, TypeError) as exc:
             # Input validation errors — safe to return message, no PII
             logger.warning("Tool input validation failed: %s", exc)
-            return json.dumps({"error": str(exc)})
+            return json.dumps({"error": str(exc), TOOL_ERROR_KEY: True})
         except Exception:
             # Unknown error — log full traceback, return generic message
             logger.exception("Employee tool execution failed: %s", tool_name)
-            return json.dumps({"error": _TOOL_ERROR_MSG})
+            return json.dumps({"error": _TOOL_ERROR_MSG, TOOL_ERROR_KEY: True})
 
     @staticmethod
     def is_draft_tool(tool_name: str) -> bool:

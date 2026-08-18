@@ -36,6 +36,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.modules.assistant.domain.tools import is_registry_error
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
 from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
 
@@ -195,7 +196,6 @@ async def stream_tool_loop(
             }
 
             tool_start = time.monotonic()
-            success = True
             try:
                 result_str = await tool_registry.execute(tool_name, tool_args)
             except Exception:
@@ -206,6 +206,8 @@ async def stream_tool_loop(
                     tool_name,
                     session_id,
                 )
+            else:
+                success = not is_registry_error(result_str)
             tool_duration_ms = (time.monotonic() - tool_start) * 1000
             logger.debug(
                 "%s tool %s took %.0f ms (success=%s)",

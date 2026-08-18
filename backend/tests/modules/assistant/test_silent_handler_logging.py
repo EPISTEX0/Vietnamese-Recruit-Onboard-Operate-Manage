@@ -94,7 +94,7 @@ class TestAssistantServiceLogging:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         llm = FakeLLMClient([tool_turn(name="a_tool"), text_turn("Lỗi rồi")])
-        registry = FakeRegistry(failing=frozenset({"a_tool"}))
+        registry = FakeRegistry(raising=frozenset({"a_tool"}))
         service = self._service(llm, registry)
 
         with caplog.at_level(logging.ERROR, logger=self.LOGGER):
@@ -181,7 +181,7 @@ class TestEmployeeAssistantServiceLogging:
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         llm = FakeLLMClient([tool_turn(name="a_tool"), text_turn("Lỗi rồi")])
-        registry = FakeRegistry(failing=frozenset({"a_tool"}))
+        registry = FakeRegistry(raising=frozenset({"a_tool"}))
         service = self._service(monkeypatch, llm, registry)
 
         with caplog.at_level(logging.ERROR, logger=self.LOGGER):
@@ -259,7 +259,7 @@ class TestStreamingLoopLogging:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         llm = FakeLLMClient([tool_turn(name="a_tool"), text_turn("Lỗi rồi")])
-        registry = FakeRegistry(failing=frozenset({"a_tool"}))
+        registry = FakeRegistry(raising=frozenset({"a_tool"}))
 
         with caplog.at_level(logging.ERROR, logger=self.LOGGER):
             events = await self._run(llm, registry)
