@@ -122,9 +122,15 @@ function AIConfigSections() {
   if (error) return <ErrorBox text={apiErrorText(error)} onRetry={() => qc.invalidateQueries({ queryKey: ['ai-config'] })} />;
   if (!cfg) return null;
 
-  const CONNECTION_STATUS = cfg.configured
-    ? { label: t('connected'), color: 'text-emerald-600 bg-emerald-50', dot: 'bg-emerald-500' }
-    : { label: t('notConnected'), color: 'text-slate-500 bg-slate-100', dot: 'bg-slate-300' };
+  // Distinct from `stateLabel()` below: that one speaks per-capability state
+  // (gated on automation/assistant `enabled`), this badge speaks credential
+  // health regardless of whether either capability is toggled on — the same
+  // signal the decrypt-failed banner already keys off (#411, #394).
+  const CONNECTION_STATUS = !cfg.configured
+    ? { label: t('notConnected'), text: 'text-slate-500', bg: 'bg-slate-100', dot: 'bg-slate-300' }
+    : cfg.api_key_decrypt_failed
+    ? { label: t('connectionUnavailable'), text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' }
+    : { label: t('connected'), text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' };
 
   const PRESETS = [
     {
@@ -191,7 +197,7 @@ function AIConfigSections() {
             <p className="text-[12px] text-slate-500">{t('aiProviderDesc')}</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${CONNECTION_STATUS.color}`}>
+            <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${CONNECTION_STATUS.text} ${CONNECTION_STATUS.bg}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${CONNECTION_STATUS.dot}`} />
               {CONNECTION_STATUS.label}
             </span>
@@ -251,7 +257,7 @@ function AIConfigSections() {
               <div className="flex items-center gap-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
                 <span>{t('credentialSource')}: <strong className="text-slate-700 font-medium">{cfg.credential_source === 'org_api_key' ? t('apiKey') : cfg.credential_source ?? '—'}</strong></span>
                 <span className="text-slate-300">|</span>
-                <span>{t('status')}: <strong className={`font-medium ${cfg.configured ? 'text-emerald-600' : 'text-slate-500'}`}>{CONNECTION_STATUS.label}</strong></span>
+                <span>{t('status')}: <strong className={`font-medium ${CONNECTION_STATUS.text}`}>{CONNECTION_STATUS.label}</strong></span>
                 <span className="text-slate-300">|</span>
                 <span>{t('updated')}: <strong className="text-slate-700 font-medium">{cfg.updated_at ? format.dateTime(new Date(cfg.updated_at), 'shortWithYear') : '—'}</strong></span>
               </div>

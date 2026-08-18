@@ -137,3 +137,52 @@ describe('telling apart "no key yet" from "key present but undecryptable"', () =
     expect(screen.getByText(t.apiKeyDecryptFailedDesc)).toBeTruthy();
   });
 });
+
+/**
+ * The connection badge (header of Section 1, and the "Trạng thái" line right
+ * below it) used to be computed from `configured` alone — true the moment a
+ * config row exists, even if its key can no longer be decrypted. That made it
+ * contradict the amber decrypt-failed banner above (#411, same underlying gap
+ * as #394: the backend already exposes the real state, this call site just
+ * wasn't reading it).
+ */
+describe('connection badge reflects real state (#411)', () => {
+  it('shows the gray "not connected" badge when no config exists', async () => {
+    stubFetch(NOT_CONFIGURED);
+    renderPage();
+
+    await screen.findByPlaceholderText(t.apiKeyPlaceholder);
+    expect(screen.getAllByText(t.notConnected).length).toBeGreaterThan(0);
+    expect(screen.queryByText(t.connected)).toBeNull();
+    expect(screen.queryByText(t.connectionUnavailable)).toBeNull();
+  });
+
+  it('shows the green "connected" badge when the saved key still decrypts', async () => {
+    stubFetch(KEY_WORKING);
+    renderPage();
+
+    await screen.findByPlaceholderText(t.apiKeyMasked);
+    expect(screen.getAllByText(t.connected).length).toBeGreaterThan(0);
+    expect(screen.queryByText(t.notConnected)).toBeNull();
+    expect(screen.queryByText(t.connectionUnavailable)).toBeNull();
+  });
+
+  it('does NOT show the green "connected" badge when the saved key fails to decrypt', async () => {
+    stubFetch(KEY_DECRYPT_FAILED);
+    renderPage();
+
+    await screen.findByText(t.apiKeyDecryptFailedTitle);
+    expect(screen.queryByText(t.connected)).toBeNull();
+    expect(screen.getAllByText(t.connectionUnavailable).length).toBeGreaterThan(0);
+  });
+
+  it('shows the same badge label in both the header and the "Trạng thái" line', async () => {
+    stubFetch(KEY_DECRYPT_FAILED);
+    renderPage();
+
+    await screen.findByText(t.apiKeyDecryptFailedTitle);
+    // Both call sites of CONNECTION_STATUS.label in page.tsx: the Section 1
+    // header badge, and the "Trạng thái: …" line below it.
+    expect(screen.getAllByText(t.connectionUnavailable)).toHaveLength(2);
+  });
+});

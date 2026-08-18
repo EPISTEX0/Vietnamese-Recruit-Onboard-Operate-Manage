@@ -948,6 +948,7 @@
     "policyAccepted": "Đã đồng ý toàn bộ chính sách. Bạn có thể bật tính năng AI ngay bây giờ.",
     "connected": "Đã kết nối",
     "notConnected": "Chưa kết nối",
+    "connectionUnavailable": "Không khả dụng",
     "presetConservative": "Thận trọng",
     "presetConservativeDesc": "Độ chính xác cao nhất. Chỉ tự động khi AI rất chắc chắn.",
     "conservativeUse1": "Mới bắt đầu dùng AI, muốn làm quen dần",

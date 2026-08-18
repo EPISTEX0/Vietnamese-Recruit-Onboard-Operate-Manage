@@ -948,6 +948,7 @@
     "policyAccepted": "All policies accepted. You can enable AI features now.",
     "connected": "Connected",
     "notConnected": "Not connected",
+    "connectionUnavailable": "Unavailable",
     "presetConservative": "Conservative",
     "presetConservativeDesc": "Highest accuracy. Only auto when AI is very certain.",
     "conservativeUse1": "Just starting with AI, want to get familiar gradually",
