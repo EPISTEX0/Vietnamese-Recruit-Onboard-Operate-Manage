@@ -53,6 +53,7 @@ export interface OrganizationAIConfiguration {
   base_url: string | null;
   model: string | null;
   api_key_masked: string | null;
+  api_key_decrypt_failed: boolean;
   configured: boolean;
   updated_at: string | null;
   credential_source: string | null;

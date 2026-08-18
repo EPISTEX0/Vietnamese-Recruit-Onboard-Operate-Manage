@@ -972,6 +972,8 @@
     "apiKey": "API Key",
     "apiKeyMasked": "•••••••• (saved, leave empty to keep)",
     "apiKeyPlaceholder": "Enter API key",
+    "apiKeyDecryptFailedTitle": "The existing API key cannot be read",
+    "apiKeyDecryptFailedDesc": "This organization has an API key saved, but the system cannot decrypt it — usually because the encryption key was rotated. Restore the old encryption key to use this key again, or enter a new API key below to overwrite it (the old key will be permanently lost).",
     "saveConfig": "Save configuration",
     "testConnection": "Test connection",
     "credentialSource": "Auth source",
