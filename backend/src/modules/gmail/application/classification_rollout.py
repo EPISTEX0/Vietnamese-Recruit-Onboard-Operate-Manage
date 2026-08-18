@@ -186,6 +186,15 @@ class ClassificationRollout:
             try:
                 candidate_result = await candidate()
             except Exception:
+                # Intentionally silent here: candidate_provider_error is carried into
+                # the RolloutTelemetryEvent recorded below, persisted per-message by
+                # ClassificationRolloutRepository, and aggregated into
+                # provider_error_rate (classification_telemetry.py) which
+                # evaluate_release_gates() checks against _MAX_PROVIDER_ERROR_RATE
+                # before a candidate can be promoted out of shadow mode. A log line
+                # here would duplicate that audit trail without adding a channel
+                # anyone reads — shadow-mode candidate failures are expected and
+                # never affect the production result (stable_result, selected below).
                 candidate_result = None
                 candidate_provider_error = True
             candidate_latency_ms = int((time.monotonic() - candidate_started) * 1000)

@@ -248,7 +248,12 @@ class ClassificationService:
             ):
                 try:
                     fallback_result = await classify_with(self._fallback_ai)
-                except Exception:
+                except Exception as fallback_exc:
+                    logger.warning(
+                        "Privacy-compatible fallback provider also failed for %s: %s",
+                        email.gmail_message_id,
+                        fallback_exc,
+                    )
                     fallback_result = None
                 if fallback_result is not None:
                     logger.warning(

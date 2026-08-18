@@ -4,12 +4,15 @@ Parses .xlsx files into structured dictionaries, validating required fields
 and normalizing date formats.
 """
 
+import logging
 import re
 from datetime import date, datetime
 from io import BytesIO
 from typing import Any
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
+
+logger = logging.getLogger(__name__)
 
 # Required fields that must be present and non-empty in each row.
 REQUIRED_FIELDS = {"full_name", "email"}
@@ -113,6 +116,7 @@ def parse_excel(file_bytes: bytes) -> tuple[list[dict[str, Any]], list[dict[str,
         rows = list(ws.iter_rows(values_only=True))
         wb.close()
     except Exception as e:
+        logger.exception("Failed to read Excel file for bulk employee import")
         return [], [{"row": 0, "error": f"Failed to read Excel file: {str(e)}"}]
 
     if not rows:
