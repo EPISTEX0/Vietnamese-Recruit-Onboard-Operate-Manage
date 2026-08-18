@@ -9,6 +9,8 @@ Requirements: 6.8, 7.3-7.5, 8.2-8.5, 9.3, 9.5-9.7, 10.4-10.8,
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -20,7 +22,9 @@ from src.modules.recruitment.application.review_service import (
 )
 from src.modules.recruitment.domain.exceptions import RecruitmentError
 from src.shared.error_logging import log_domain_exception
-from src.shared.messages import get_request_language, resolve_error_message
+from src.shared.messages import get_message, get_request_language, resolve_error_message
+
+logger = logging.getLogger(__name__)
 
 
 def register_recruitment_error_handlers(app: FastAPI) -> None:
@@ -80,12 +84,22 @@ def register_recruitment_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-        """Handle ValueError with 422 for general validation errors."""
+        """Handle an unanticipated ``ValueError`` (incl. ``pydantic.ValidationError``,
+        which subclasses it) with a fixed, localized 422 message.
+
+        Registered app-wide, this is the catch-all for any ``ValueError`` a route
+        does not itself translate into a domain exception -- including a Pydantic
+        model failing to build outside request parsing, whose ``str(exc)`` echoes
+        the raw ``input_value`` back. The instance message is logged server-side
+        only, never placed in the response body.
+        """
+        lang = get_request_language(request)
+        logger.exception("Unhandled ValueError on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=422,
             content={
                 "error_code": "VALIDATION_ERROR",
-                "message": str(exc),
+                "message": get_message("VALIDATION_ERROR", lang),
                 "details": None,
             },
         )

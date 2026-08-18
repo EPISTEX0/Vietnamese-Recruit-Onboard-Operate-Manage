@@ -16,6 +16,7 @@ Covers two concerns for task 9.3:
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from uuid import UUID, uuid4
@@ -23,7 +24,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from src.modules.recruitment.api.error_handler import (
     register_recruitment_error_handlers,
@@ -131,6 +132,13 @@ def app_with_routes(app: FastAPI) -> FastAPI:
     @app.get("/test/value-error")
     async def raise_value_error():
         raise ValueError("Invalid page number")
+
+    class _SalaryModel(BaseModel):
+        salary: int
+
+    @app.get("/test/pydantic-validation-error")
+    async def raise_pydantic_validation_error():
+        _SalaryModel.model_validate({"salary": "SECRET-VALUE-12345"})
 
     @app.get("/test/calendar-grant-missing")
     async def raise_calendar_grant_missing():
@@ -354,12 +362,37 @@ class TestValueError:
         assert response.status_code == 422
 
     @pytest.mark.anyio
-    async def test_returns_error_code_and_message(self, client: AsyncClient):
+    async def test_returns_fixed_message_not_exception_text(self, client: AsyncClient):
+        """The raw ``str(exc)`` ("Invalid page number") must never reach the client."""
         response = await client.get("/test/value-error")
         data = response.json()
         assert data["error_code"] == "VALIDATION_ERROR"
-        assert data["message"] == "Invalid page number"
+        assert data["message"] == "Vui lòng kiểm tra lại thông tin đã nhập."
+        assert "Invalid page number" not in response.text
         assert data["details"] is None
+
+    @pytest.mark.anyio
+    async def test_logs_the_exception_server_side(
+        self, client: AsyncClient, caplog: pytest.LogCaptureFixture
+    ):
+        """The withheld detail is still recorded server-side for on-call triage."""
+        with caplog.at_level(logging.ERROR, logger="src.modules.recruitment.api.error_handler"):
+            response = await client.get("/test/value-error")
+        assert response.status_code == 422
+        assert "Invalid page number" in caplog.text
+        assert "/test/value-error" in caplog.text
+
+    @pytest.mark.anyio
+    async def test_pydantic_validation_error_does_not_leak_input_value(self, client: AsyncClient):
+        """``pydantic.ValidationError`` is a ``ValueError`` and hits this same handler;
+        its default ``str(exc)`` echoes the raw ``input_value``, which must not leak.
+        """
+        response = await client.get("/test/pydantic-validation-error")
+        assert response.status_code == 422
+        data = response.json()
+        assert data["error_code"] == "VALIDATION_ERROR"
+        assert "input_value" not in response.text
+        assert "SECRET-VALUE-12345" not in response.text
 
 
 class TestCustomMessage:
@@ -594,12 +627,18 @@ class TestPastStartValueErrorMapping:
     async def test_value_error_maps_to_422(self, client: AsyncClient):
         """A service ``ValueError`` surfaces as a 422 via ``_value_error_handler``.
 
-        This is the same mapping the past-``start`` rejection relies on: the
-        ``ScheduleInterviewRequest`` model accepts the value (it carries no
-        future-``start`` validator) and the service raises ``ValueError``, which
-        the registered handler turns into a 422 ``VALIDATION_ERROR`` response.
+        This is the same status/error_code mapping the past-``start`` rejection
+        relies on: the ``ScheduleInterviewRequest`` model accepts the value (it
+        carries no future-``start`` validator) and the service raises
+        ``ValueError``, which the registered handler turns into a 422
+        ``VALIDATION_ERROR`` response. The *message* is no longer the service's
+        own ``str(exc)`` -- ``_value_error_handler`` now returns a fixed,
+        localized message instead, since the past-``start`` raise site
+        (``interview_scheduler_service.py``) built its instance message in
+        English only, which was never the UX contract to preserve.
         """
         response = await client.get("/test/value-error")
         assert response.status_code == 422
         data = response.json()
         assert data["error_code"] == "VALIDATION_ERROR"
+        assert data["message"] == "Vui lòng kiểm tra lại thông tin đã nhập."
