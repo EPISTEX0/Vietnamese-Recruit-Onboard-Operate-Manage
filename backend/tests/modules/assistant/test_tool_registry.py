@@ -10,39 +10,61 @@ Verifies that:
 from __future__ import annotations
 
 import json
+import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.modules.assistant.application.tool_registry import ToolRegistry
+from src.modules.assistant.application.tool_registry import InterviewLister, ToolRegistry
+from src.modules.onboarding.application.onboarding_service import OnboardingService
 from src.modules.onboarding.domain.exceptions import OnboardingProcessNotFoundError
+from src.modules.recruitment.application.candidate_lifecycle_service import (
+    CandidateLifecycleService,
+)
 from src.modules.recruitment.domain.exceptions import CandidateNotFoundError
 from src.shared.messages import get_message
 
 
 @pytest.fixture
 def mock_candidate_service() -> AsyncMock:
-    """Mock CandidateService for testing."""
-    service = AsyncMock()
-    return service
+    """Mock CandidateService for testing.
+
+    ``spec=CandidateLifecycleService`` is load-bearing (#382): an unspecced
+    ``AsyncMock`` auto-generates any attribute a test assigns to it *as
+    another AsyncMock* -- awaitable, so a handler calling a method the real
+    service does not have would pass every test while raising AttributeError
+    in production. ``AsyncMock``, not ``MagicMock``, is the base here because
+    that auto-generation-is-awaitable behaviour is exactly what let #382
+    hide: a plain ``MagicMock()`` child is not awaitable and would have
+    failed loudly (for the wrong reason) even without ``spec=``.
+    """
+    return AsyncMock(spec=CandidateLifecycleService)
 
 
 @pytest.fixture
 def mock_onboarding_service() -> AsyncMock:
     """Mock OnboardingService for testing."""
-    service = AsyncMock()
-    return service
+    return AsyncMock(spec=OnboardingService)
+
+
+@pytest.fixture
+def mock_interview_lister() -> AsyncMock:
+    """Mock InterviewLister port for testing."""
+    return AsyncMock(spec=InterviewLister)
 
 
 @pytest.fixture
 def registry(
     mock_candidate_service: AsyncMock,
     mock_onboarding_service: AsyncMock,
+    mock_interview_lister: AsyncMock,
 ) -> ToolRegistry:
     """Create a ToolRegistry with mocked dependencies."""
     return ToolRegistry(
         candidate_service=mock_candidate_service,
         onboarding_service=mock_onboarding_service,
+        interview_lister=mock_interview_lister,
     )
 
 
@@ -434,44 +456,205 @@ class TestGetCandidateParsedCV:
 
 
 class TestListInterviewsForCandidate:
-    """Test the list_interviews_for_candidate Read-Tool."""
+    """Test the list_interviews_for_candidate Read-Tool.
+
+    #382: the handler used to call ``list_interviews_for_candidate`` on
+    ``_candidate_service`` (a ``CandidateLifecycleService``, which has no such
+    method) instead of the injected ``InterviewLister`` port. These tests use
+    a ``spec=``'d mock for both, so a fixture that assigns an attribute the
+    real class does not have fails loudly instead of silently succeeding.
+    """
 
     @pytest.mark.asyncio
     async def test_returns_interviews(
-        self, registry: ToolRegistry, mock_candidate_service: AsyncMock
+        self,
+        registry: ToolRegistry,
+        mock_candidate_service: AsyncMock,
+        mock_interview_lister: AsyncMock,
     ) -> None:
-        """list_interviews_for_candidate returns the service's interview list."""
-        mock_candidate_service.list_interviews_for_candidate = AsyncMock(
-            return_value=[{"id": "iv-1", "status": "scheduled"}]
+        """list_interviews_for_candidate returns the port's interview list, serialized."""
+        candidate_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        mock_candidate_service.ensure_candidate_exists = AsyncMock(return_value=None)
+        mock_interview_lister.list_interviews_for_candidate = AsyncMock(
+            return_value=[
+                {
+                    "id": uuid.uuid4(),
+                    "candidate_id": candidate_id,
+                    "status": "scheduled",
+                    "round_name": "Technical",
+                    "start_at": datetime(2026, 7, 20, 2, 0, tzinfo=UTC),
+                    "end_at": datetime(2026, 7, 20, 3, 0, tzinfo=UTC),
+                    "timezone": "Asia/Ho_Chi_Minh",
+                    "calendar_event_id": "evt-1",
+                    "needs_relink": False,
+                    "participants": [],
+                }
+            ]
         )
+
         result_str = await registry.execute(
-            "list_interviews_for_candidate",
-            {"candidate_id": "00000000-0000-0000-0000-000000000001"},
+            "list_interviews_for_candidate", {"candidate_id": str(candidate_id)}
         )
         result = json.loads(result_str)
+
+        assert "error" not in result, result
         assert result["total"] == 1
-        assert result["interviews"] == [{"id": "iv-1", "status": "scheduled"}]
+        assert result["interviews"][0]["status"] == "scheduled"
+        assert result["interviews"][0]["round_name"] == "Technical"
+        assert result["interviews"][0]["start_at"] == "2026-07-20T02:00:00+00:00"
+        mock_interview_lister.list_interviews_for_candidate.assert_called_once_with(candidate_id)
 
     @pytest.mark.asyncio
-    async def test_lookup_error_not_reported_as_not_found(
-        self, registry: ToolRegistry, mock_candidate_service: AsyncMock
+    async def test_nonexistent_candidate_returns_not_found(
+        self,
+        registry: ToolRegistry,
+        mock_candidate_service: AsyncMock,
+        mock_interview_lister: AsyncMock,
     ) -> None:
-        """A lookup failure must not be reported as CANDIDATE_NOT_FOUND (#381).
+        """An unknown candidate_id says so honestly (D3, #382).
 
-        Unlike ``get_candidate``, this call has no narrow not-found exception
-        to preserve: it never raises for an unknown candidate_id, so every
-        exception reaching this handler is a lookup failure.
+        Unlike ``get_candidate``, ``InterviewLister.list_interviews_for_candidate``
+        has no not-found branch of its own -- it queries by candidate_id and
+        would just return an empty list. Without the existence check below, an
+        unknown candidate_id is indistinguishable from "no interviews
+        scheduled" (same defect class as #381).
         """
-        mock_candidate_service.list_interviews_for_candidate = AsyncMock(
+        mock_candidate_service.ensure_candidate_exists = AsyncMock(
+            side_effect=CandidateNotFoundError("Candidate not found: <id>")
+        )
+
+        result_str = await registry.execute(
+            "list_interviews_for_candidate",
+            {"candidate_id": "00000000-0000-0000-0000-000000000099"},
+        )
+        result = json.loads(result_str)
+
+        assert result["error"] == get_message("CANDIDATE_NOT_FOUND", "vi")
+        mock_interview_lister.list_interviews_for_candidate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_candidate_lookup_infra_error_does_not_claim_not_found(
+        self,
+        registry: ToolRegistry,
+        mock_candidate_service: AsyncMock,
+        mock_interview_lister: AsyncMock,
+    ) -> None:
+        """A DB/infra failure during the candidate existence check is not 'not found' (#381)."""
+        mock_candidate_service.ensure_candidate_exists = AsyncMock(
             side_effect=RuntimeError("db down")
         )
+
+        result_str = await registry.execute(
+            "list_interviews_for_candidate",
+            {"candidate_id": "00000000-0000-0000-0000-000000000099"},
+        )
+        result = json.loads(result_str)
+
+        assert result["error"] == get_message("CANDIDATE_LOOKUP_ERROR", "vi")
+        assert result["error"] != get_message("CANDIDATE_NOT_FOUND", "vi")
+        mock_interview_lister.list_interviews_for_candidate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_interview_lookup_error_not_reported_as_not_found(
+        self,
+        registry: ToolRegistry,
+        mock_candidate_service: AsyncMock,
+        mock_interview_lister: AsyncMock,
+    ) -> None:
+        """An interview-lookup failure must not be reported as CANDIDATE_NOT_FOUND (#381)."""
+        mock_candidate_service.ensure_candidate_exists = AsyncMock(return_value=None)
+        mock_interview_lister.list_interviews_for_candidate = AsyncMock(
+            side_effect=RuntimeError("db down")
+        )
+
         result_str = await registry.execute(
             "list_interviews_for_candidate",
             {"candidate_id": "00000000-0000-0000-0000-000000000001"},
         )
         result = json.loads(result_str)
+
         assert result["error"] == get_message("CANDIDATE_LOOKUP_ERROR", "vi")
         assert result["error"] != get_message("CANDIDATE_NOT_FOUND", "vi")
+
+
+class TestListInterviewsForCandidateRealSeam:
+    """Prove the tool returns real interview data through the real seam (#382).
+
+    ``TestListInterviewsForCandidate`` above mocks the ``InterviewLister``
+    port directly, which only proves the handler calls *something* by that
+    name -- exactly the class of test that let #382 hide behind 2835 green
+    tests. This drives ``ToolRegistry`` against a real
+    ``InterviewSchedulerService`` (backed by the in-memory fakes the
+    interview-calendar property tests use), so a regression that reintroduces
+    the wrong service -- or a JSON-serialization bug in the handler that
+    ``json.dumps`` would otherwise swallow into a generic "Tool execution
+    failed" error -- fails here.
+    """
+
+    @pytest.mark.asyncio
+    async def test_lists_real_interviews_through_the_real_scheduler_service(self) -> None:
+        from src.modules.recruitment.domain.entities import InterviewParticipant
+        from tests.modules.recruitment._interview_support import (
+            build_calendar_harness,
+            make_candidate,
+            make_interview,
+        )
+
+        candidate = make_candidate()
+        interview = make_interview(
+            candidate_id=candidate.id,
+            round_name="Technical",
+            start_at=datetime(2026, 7, 20, 2, 0, tzinfo=UTC),
+        )
+        harness = build_calendar_harness(candidates=[candidate], interviews=[interview])
+        harness.session.participants.append(
+            InterviewParticipant(
+                interview_id=interview.id,
+                type="employee",
+                email="interviewer@example.com",
+                name="Nguyen Van B",
+            )
+        )
+        registry = ToolRegistry(
+            candidate_service=harness.lifecycle,
+            onboarding_service=MagicMock(spec=OnboardingService),
+            interview_lister=harness.service,
+        )
+
+        result_str = await registry.execute(
+            "list_interviews_for_candidate", {"candidate_id": str(candidate.id)}
+        )
+        result = json.loads(result_str)
+
+        assert "error" not in result, result
+        assert result["total"] == 1
+        returned = result["interviews"][0]
+        assert returned["id"] == str(interview.id)
+        assert returned["candidate_id"] == str(candidate.id)
+        assert returned["round_name"] == "Technical"
+        assert returned["start_at"] == "2026-07-20T02:00:00+00:00"
+        assert len(returned["participants"]) == 1
+        assert returned["participants"][0]["email"] == "interviewer@example.com"
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_candidate_through_the_real_scheduler_service(self) -> None:
+        from tests.modules.recruitment._interview_support import build_calendar_harness
+
+        harness = build_calendar_harness(candidates=[])
+
+        registry = ToolRegistry(
+            candidate_service=harness.lifecycle,
+            onboarding_service=MagicMock(spec=OnboardingService),
+            interview_lister=harness.service,
+        )
+
+        result_str = await registry.execute(
+            "list_interviews_for_candidate",
+            {"candidate_id": str(uuid.uuid4())},
+        )
+        result = json.loads(result_str)
+
+        assert result["error"] == get_message("CANDIDATE_NOT_FOUND", "vi")
 
 
 class TestGetOnboardingTaskDetails:

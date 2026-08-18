@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import typing
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from src.modules.assistant.domain.tools import DraftAction, ToolKind
 from src.modules.onboarding.domain.exceptions import OnboardingProcessNotFoundError
@@ -25,6 +25,8 @@ from src.modules.recruitment.domain.exceptions import CandidateNotFoundError
 from src.shared.messages import get_message
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.modules.employee.application.department_service import DepartmentService
@@ -42,6 +44,55 @@ _VALID_STATUSES = {"new", "reviewing", "interview_scheduled", "accepted", "rejec
 _VALID_JOB_OPENING_STATUSES = {"draft", "open", "closed", "cancelled"}
 
 
+@runtime_checkable
+class InterviewLister(Protocol):
+    """Protocol for listing a Candidate's booked interviews (Read-Tool).
+
+    ``list_interviews_for_candidate`` is Calendar/scheduling data, owned by
+    ``InterviewSchedulerService``, not ``CandidateLifecycleService`` -- that
+    class has no such method (#382). This protocol is the one-method surface
+    the tool needs, so nothing about Calendar scheduling leaks into the
+    assistant module. Mirrors the ``InterviewCanceller`` seam
+    (``candidate_lifecycle_service.py``) that already does the same narrowing
+    for the reject/archive path.
+    """
+
+    async def list_interviews_for_candidate(self, candidate_id: UUID) -> list[dict[str, object]]:
+        """Return every interview booked for a Candidate."""
+        ...
+
+
+def _serialize_interview(interview: dict[str, Any]) -> dict[str, Any]:
+    """Convert an interview dict's UUID/datetime fields to JSON-safe values."""
+    start_at = interview.get("start_at")
+    end_at = interview.get("end_at")
+    participants = []
+    for p in interview.get("participants", []):
+        employee_id = p.get("employee_id")
+        participants.append(
+            {
+                "id": str(p["id"]),
+                "interview_id": str(p["interview_id"]),
+                "type": p["type"],
+                "email": p["email"],
+                "name": p["name"],
+                "employee_id": str(employee_id) if employee_id else None,
+            }
+        )
+    return {
+        "id": str(interview["id"]),
+        "candidate_id": str(interview["candidate_id"]),
+        "status": interview["status"],
+        "round_name": interview["round_name"],
+        "start_at": start_at.isoformat() if start_at else None,
+        "end_at": end_at.isoformat() if end_at else None,
+        "timezone": interview["timezone"],
+        "calendar_event_id": interview["calendar_event_id"],
+        "needs_relink": interview["needs_relink"],
+        "participants": participants,
+    }
+
+
 class ToolRegistry:
     """Executes tools and returns results for the LLM.
 
@@ -52,17 +103,21 @@ class ToolRegistry:
     Args:
         candidate_service: Recruitment CandidateLifecycleService for read operations.
         onboarding_service: Onboarding OnboardingService for read operations.
+        interview_lister: Narrow port for listing a Candidate's interviews,
+            backed by InterviewSchedulerService (see InterviewLister).
     """
 
     def __init__(
         self,
         candidate_service: CandidateLifecycleService,
         onboarding_service: OnboardingService,
+        interview_lister: InterviewLister,
         session: AsyncSession | None = None,
         department_service: DepartmentService | None = None,
     ) -> None:
         self._candidate_service = candidate_service
         self._onboarding_service = onboarding_service
+        self._interview_lister = interview_lister
         self._session = session
         self._department_service = department_service
 
@@ -545,20 +600,37 @@ class ToolRegistry:
         except ValueError as e:
             return {"error": f"Invalid candidate_id: {str(e)}"}
 
+        # InterviewSchedulerService.list_interviews_for_candidate queries
+        # interviews by candidate_id and would just return an empty list for
+        # an unknown one -- it has no not-found branch of its own. Checking
+        # existence here first means an unknown candidate_id is reported
+        # honestly instead of being conflated with "no interviews scheduled"
+        # (same defect class as #381). ensure_candidate_exists is a cheap
+        # existence check -- unlike get_candidate, it does not fetch CV
+        # documents or generate presigned MinIO URLs, so this handler does
+        # not pay for data it is about to throw away.
         try:
-            interviews = await self._candidate_service.list_interviews_for_candidate(candidate_id)
+            await self._candidate_service.ensure_candidate_exists(candidate_id)
+        except CandidateNotFoundError:
+            return {"error": get_message("CANDIDATE_NOT_FOUND", "vi")}
         except Exception:
-            # No narrow not-found branch here: unlike get_candidate, this call
-            # never raises CandidateNotFoundError for an unknown candidate_id
-            # (it queries interviews by id and would just return an empty
-            # list) -- so any exception reaching this handler is a lookup
-            # failure, never a legitimate "not found".
             logger.exception(
-                "list_interviews_for_candidate: lookup failed (candidate_id=%s)", candidate_id
+                "list_interviews_for_candidate: candidate lookup failed (candidate_id=%s)",
+                candidate_id,
             )
             return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
 
-        return {"interviews": interviews, "total": len(interviews)}
+        try:
+            interviews = await self._interview_lister.list_interviews_for_candidate(candidate_id)
+        except Exception:
+            logger.exception(
+                "list_interviews_for_candidate: interview lookup failed (candidate_id=%s)",
+                candidate_id,
+            )
+            return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
+
+        serialized = [_serialize_interview(iv) for iv in interviews]
+        return {"interviews": serialized, "total": len(serialized)}
 
     async def _get_onboarding_task_details(self, args: dict[str, Any]) -> dict[str, typing.Any]:
         """Read-Tool: get task details for an onboarding process."""

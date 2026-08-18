@@ -585,6 +585,10 @@ class FakeInterviewRepository:
         self._session.participants.append(participant)
         return participant
 
+    async def get_participants(self, interview_id: UUID) -> list[InterviewParticipant]:
+        """Return every recorded InterviewParticipant for an Interview."""
+        return [p for p in self._session.participants if p.interview_id == interview_id]
+
 
 class FakeCalendarSession:
     """Minimal async session modelling commit/rollback over staged Interviews.
