@@ -176,9 +176,17 @@ async def stream_tool_loop(
 
         for tc in tool_calls_result:
             tool_name = tc["function"]["name"]
+            session_id = chat_session.id if chat_session is not None else None
             try:
                 tool_args = json.loads(tc["function"]["arguments"])
             except json.JSONDecodeError:
+                logger.warning(
+                    "Tool %s (session=%s): LLM sent malformed JSON arguments, "
+                    "calling with empty args",
+                    tool_name,
+                    session_id,
+                    exc_info=True,
+                )
                 tool_args = {}
 
             yield {
@@ -193,6 +201,11 @@ async def stream_tool_loop(
             except Exception:
                 success = False
                 result_str = json.dumps({"error": f"Tool execution failed: {tool_name}"})
+                logger.exception(
+                    "Tool %s (session=%s): execution raised, returning failure result to LLM",
+                    tool_name,
+                    session_id,
+                )
             tool_duration_ms = (time.monotonic() - tool_start) * 1000
             logger.debug(
                 "%s tool %s took %.0f ms (success=%s)",
@@ -217,7 +230,12 @@ async def stream_tool_loop(
                     if "draft_action" in result_data:
                         draft_action = result_data["draft_action"]
                 except json.JSONDecodeError:
-                    pass
+                    logger.exception(
+                        "Tool %s (session=%s): draft result JSON parse failed, "
+                        "draft_action omitted from response",
+                        tool_name,
+                        session_id,
+                    )
 
             openai_messages.append(
                 {
