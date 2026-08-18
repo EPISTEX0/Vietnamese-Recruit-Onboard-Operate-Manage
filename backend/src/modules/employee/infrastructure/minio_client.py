@@ -94,37 +94,3 @@ class MinIOClient:
                 Bucket=self._settings.minio_bucket,
                 Key=path,
             )
-
-    async def generate_presigned_url(self, path: str, expires_seconds: int = 900) -> str:
-        """Generate a pre-signed download URL for a file.
-
-        Args:
-            path: The storage path (key) within the bucket.
-            expires_seconds: URL expiry in seconds. Defaults to 900 (15 minutes).
-
-        Returns:
-            A pre-signed URL string valid for the specified duration.
-
-        Raises:
-            FileNotFoundError: If the file does not exist in storage.
-            OSError: If MinIO is unreachable or another storage error occurs.
-        """
-        async with self._client_context() as client:
-            # Verify the object exists before generating URL
-            try:
-                await client.head_object(
-                    Bucket=self._settings.minio_bucket,
-                    Key=path,
-                )
-            except Exception as exc:
-                raise FileNotFoundError(f"File not found at path: {path}") from exc
-
-            url = await client.generate_presigned_url(
-                "get_object",
-                Params={
-                    "Bucket": self._settings.minio_bucket,
-                    "Key": path,
-                },
-                ExpiresIn=expires_seconds,
-            )
-            return str(url)
