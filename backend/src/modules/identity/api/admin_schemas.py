@@ -23,6 +23,7 @@ class OrganizationAIConfigurationResponse(BaseModel):
     updated_at: datetime | None
     credential_source: str | None = None
     deployment_key_available: bool = False
+    api_key_decrypt_failed: bool = False
     data_policy_accepted: bool = False
     data_policy_accepted_at: datetime | None = None
     data_policy_version: str | None = None

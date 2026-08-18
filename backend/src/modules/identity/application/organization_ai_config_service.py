@@ -1,5 +1,6 @@
 """Application service for safe Organization AI configuration updates."""
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -26,6 +27,8 @@ from src.modules.identity.infrastructure.organization_ai_config_repository impor
 # ---------------------------------------------------------------------------
 
 DATA_POLICY_VERSION = "1.0"
+
+logger = logging.getLogger(__name__)
 
 
 class AIPolicyPreset(str, Enum):
@@ -100,6 +103,11 @@ class AIConfigurationView:
     updated_at: datetime | None
     credential_source: str = CredentialSource.ORG_API_KEY.value
     deployment_key_available: bool = False
+    # True only when an api_key_enc is present but cannot be decrypted (e.g. an
+    # encryption key rotation invalidated it). Distinguishes that state from
+    # api_key_masked=None meaning "no key configured at all" -- the two need
+    # opposite admin actions (restore the key vs enter a new one).
+    api_key_decrypt_failed: bool = False
     # Consent & toggles
     data_policy_accepted: bool = False
     data_policy_accepted_at: datetime | None = None
@@ -242,13 +250,19 @@ class OrganizationAIConfigService:
     async def _check_credential_usable(self, config: OrganizationAIConfiguration) -> bool:
         """Check if the credential can be resolved without an HTTP call.
 
-        Returns False if the credential source is broken (missing key, empty encrypted key).
-        True means the credential is at least present; actual connectivity is verified
-        during enable actions via health check.
+        Returns False if the credential source is broken: missing key, empty
+        encrypted key, or a key present but that fails to decrypt (e.g. after
+        an encryption key rotation). The broad ``except`` matters here --
+        ``_resolve_api_key`` lets a raw decrypt failure propagate as-is
+        (``ValueError``, ``InvalidTag``, ...); catching only the validation
+        error left that case unhandled, crashing ``get_view()`` instead of
+        reporting the credential as unusable. True means the credential is at
+        least present and decryptable; actual connectivity is verified during
+        enable actions via health check.
         """
         try:
             await self._resolve_api_key(config)
-        except OrganizationAIConfigValidationError:
+        except Exception:
             return False
         return True
 
@@ -336,7 +350,12 @@ class OrganizationAIConfigService:
                 key = self.crypto.decrypt(config.api_key_enc)
                 params["api_key_masked"] = self._mask_key(key)
             except Exception:
+                logger.warning(
+                    "Organization API key present but failed to decrypt for masking",
+                    exc_info=True,
+                )
                 params["api_key_masked"] = None
+                params["api_key_decrypt_failed"] = True
         else:
             params["api_key_masked"] = None
         return AIConfigurationView(**params)  # type: ignore[arg-type]

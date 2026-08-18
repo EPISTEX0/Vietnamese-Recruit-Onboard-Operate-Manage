@@ -215,6 +215,7 @@ def _ai_view_response(view: object) -> OrganizationAIConfigurationResponse:
         updated_at=view.updated_at,  # type: ignore[attr-defined]
         credential_source=view.credential_source,  # type: ignore[attr-defined]
         deployment_key_available=view.deployment_key_available,  # type: ignore[attr-defined]
+        api_key_decrypt_failed=view.api_key_decrypt_failed,  # type: ignore[attr-defined]
         data_policy_accepted=view.data_policy_accepted,  # type: ignore[attr-defined]
         data_policy_accepted_at=view.data_policy_accepted_at,  # type: ignore[attr-defined]
         data_policy_version=view.data_policy_version,  # type: ignore[attr-defined]
