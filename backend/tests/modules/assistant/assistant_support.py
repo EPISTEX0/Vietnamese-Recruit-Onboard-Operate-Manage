@@ -24,6 +24,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from src.modules.assistant.domain.tools import TOOL_ERROR_KEY
 from src.modules.assistant.infrastructure.llm_client import LLMResponse, LLMStreamChunk
 
 
@@ -121,24 +122,40 @@ class ExplodingLLMClient:
 
 
 class FakeRegistry:
-    """A tool registry with scripted results, usable by either assistant."""
+    """A tool registry with scripted results, usable by either assistant.
+
+    ``failing`` and ``raising`` are deliberately different failure shapes.
+    Both real registries (``ToolRegistry``, ``EmployeeToolRegistry``) never
+    let a handler's exception escape ``execute()`` -- they catch it and
+    return a JSON error string carrying ``TOOL_ERROR_KEY`` (#400). ``failing``
+    reproduces that: it is the shape a scripted "handler blew up" test should
+    use. ``raising`` breaks the contract on purpose -- ``execute()`` itself
+    raises -- to exercise the loops' own defensive ``except Exception`` around
+    the call, which now only fires when a registry violates its contract.
+    """
 
     def __init__(
         self,
         results: dict[str, str] | None = None,
         draft_tools: frozenset[str] = frozenset(),
         failing: frozenset[str] = frozenset(),
+        raising: frozenset[str] = frozenset(),
     ) -> None:
         self._results = results or {}
         self._draft_tools = draft_tools
         self._failing = failing
+        self._raising = raising
         self.executed: list[tuple[str, dict[str, Any]]] = []
 
     async def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """Record the call and return the scripted result, or raise."""
+        """Record the call and return the scripted result, a registry error, or raise."""
         self.executed.append((tool_name, arguments))
-        if tool_name in self._failing:
+        if tool_name in self._raising:
             raise RuntimeError("tool blew up")
+        if tool_name in self._failing:
+            return json.dumps(
+                {"error": f"Tool execution failed: {tool_name}", TOOL_ERROR_KEY: True}
+            )
         return self._results.get(tool_name, "{}")
 
     def is_draft_tool(self, tool_name: str) -> bool:

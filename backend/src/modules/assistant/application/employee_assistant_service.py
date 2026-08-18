@@ -27,6 +27,7 @@ from src.modules.assistant.application.streaming_loop import (
     TOOL_LOOP_FALLBACK,
     stream_tool_loop,
 )
+from src.modules.assistant.domain.tools import is_registry_error
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
 from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
@@ -198,7 +199,6 @@ class EmployeeAssistantService:
                     tool_args = {}
 
                 tool_start = time.monotonic()
-                success = True
                 try:
                     result_str = await tool_registry.execute(tool_name, tool_args)
                 except Exception:
@@ -209,6 +209,8 @@ class EmployeeAssistantService:
                         tool_name,
                         session_id,
                     )
+                else:
+                    success = not is_registry_error(result_str)
                 tool_duration_ms = (time.monotonic() - tool_start) * 1000
                 logger.debug(
                     "Employee tool %s took %.0f ms (success=%s)",

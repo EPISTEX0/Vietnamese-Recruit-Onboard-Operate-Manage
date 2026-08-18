@@ -28,7 +28,7 @@ from src.modules.assistant.application.streaming_loop import (
     stream_tool_loop,
 )
 from src.modules.assistant.application.tool_registry import ToolRegistry
-from src.modules.assistant.domain.tools import TOOL_DEFINITIONS, get_openai_tools
+from src.modules.assistant.domain.tools import TOOL_DEFINITIONS, get_openai_tools, is_registry_error
 from src.modules.assistant.infrastructure.config import AssistantSettings
 from src.modules.assistant.infrastructure.llm_client import AssistantLLMClient
 from src.modules.assistant.infrastructure.quality_models import AssistantChatSession
@@ -202,7 +202,6 @@ class AssistantService:
                     tool_args = {}
 
                 tool_start = time.monotonic()
-                success = True
                 try:
                     result_str = await self._tool_registry.execute(tool_name, tool_args)
                 except Exception:
@@ -213,6 +212,8 @@ class AssistantService:
                         tool_name,
                         session_id,
                     )
+                else:
+                    success = not is_registry_error(result_str)
                 tool_duration_ms = (time.monotonic() - tool_start) * 1000
                 logger.debug(
                     "Tool %s took %.0f ms (success=%s)",

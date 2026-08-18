@@ -574,7 +574,7 @@ class TestToolCallEvents:
     async def test_a_failing_tool_call_is_recorded_as_a_failure(
         self, make_stack: Any, hr_account: Account
     ) -> None:
-        """A tool that raises still leaves a row, marked unsuccessful.
+        """A tool that fails still leaves a row, marked unsuccessful.
 
         Without this the metric would silently under-report exactly the calls
         anyone reading it cares about.
