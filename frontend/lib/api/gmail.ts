@@ -7,8 +7,6 @@
 
 import { API_BASE_URL } from "./client";
 import type {
-  CapabilityHealth,
-  CapabilityHealthState,
   OrganizationGoogleConnectionResponse,
   SyncResponse,
   MessageBodyResponse,
@@ -131,33 +129,6 @@ export async function selectCalendar(calendarId: string): Promise<void> {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     throw new ApiError(res.status, body?.error_code || "UNKNOWN_ERROR", body?.detail || "Không thể chọn calendar", body);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Capability Health
-// ---------------------------------------------------------------------------
-
-export const CAPABILITIES = [
-  { capability: "gmail_ingestion", label: "Gmail ingestion" },
-  { capability: "gmail_sending", label: "Gmail sending" },
-  { capability: "calendar_sync", label: "Calendar sync" },
-] as const;
-
-export function getCapabilityLabel(capability: string): string {
-  const entry = CAPABILITIES.find((c) => c.capability === capability);
-  return entry?.label ?? capability;
-}
-
-export function getCapabilityHealth(isConnected: boolean): CapabilityHealth[] {
-  const baseHealth: CapabilityHealthState = isConnected ? "unknown" : "unavailable";
-  return CAPABILITIES.map((c) => ({
-    capability: c.capability,
-    health: baseHealth,
-    label: c.label,
-    description: isConnected
-      ? "Không thể xác thực trạng thái dịch vụ"
-      : "Chưa kết nối Gmail",
-  }));
 }
 
 // ---------------------------------------------------------------------------

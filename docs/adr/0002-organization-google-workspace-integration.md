@@ -42,7 +42,7 @@ Trạng thái quyền của connection là:
 disconnected → connected → reauthorization_required
 ```
 
-Sức khỏe `gmail_ingestion`, `gmail_sending` và `calendar_sync` được theo dõi riêng. Lỗi quota/network tạm thời chỉ làm capability `degraded` và được retry có backoff; token bị revoke, `invalid_grant` hoặc thiếu scope mới chuyển connection sang `reauthorization_required`.
+Không có capability health riêng cho `gmail_ingestion`, `gmail_sending` hay `calendar_sync`; chỉ connection có trạng thái. Lỗi quota/network tạm thời khi ingest được log và tự retry ở lần poll kế tiếp mà không đổi trạng thái connection; grant không còn dùng được — bị Google từ chối (revoke, `invalid_grant`, hoặc lỗi xác thực 4xx khi refresh/fetch/gửi) hoặc bị hệ thống chủ động thu hồi — mới chuyển connection sang `reauthorization_required`.
 
 ### Gmail ingestion
 
@@ -99,7 +99,7 @@ Thiết kế hiện tại đang gắn OAuth grant, Gmail cursor và email với 
 
 Thứ tự triển khai đề xuất:
 
-1. Thêm persistence cho Organization Google Connection, capability health, Gmail/Calendar cursors và audit; chuyển OAuth callback/status/worker từ `user_id` sang Organization singleton. Giữ `connected_by_hr_id` chỉ để audit. Dùng encrypted-payload format có version; các grant HR cũ sẽ được revoke thay vì giả định có thể decrypt/migrate sang ownership mới.
+1. Thêm persistence cho Organization Google Connection, Gmail/Calendar cursors và audit; chuyển OAuth callback/status/worker từ `user_id` sang Organization singleton. Giữ `connected_by_hr_id` chỉ để audit. Dùng encrypted-payload format có version; các grant HR cũ sẽ được revoke thay vì giả định có thể decrypt/migrate sang ownership mới.
 2. Thay scope hiện tại bằng bộ scope đã chốt; bỏ LabelService/write-label; thêm kiểm tra Internal Workspace account và allowed domain.
 3. Chuyển Gmail worker sang baseline-no-backfill, incremental History API và import job riêng; giữ pipeline phân loại/CV hiện có sau boundary ingestion.
 4. Thêm Interview, Interview participant và calendar sync metadata; chuyển Calendar adapter từ `primary`/HR token sang selected `calendar_id`/Organization token, thêm syncToken, RSVP, ETag conflict và optional Meet.
@@ -107,7 +107,7 @@ Thứ tự triển khai đề xuất:
 6. Chuyển toàn bộ read/write sang Interview trong cùng release, kiểm chứng migration rồi xóa calendar fields trên Candidate. Không duy trì dual-write dài hạn.
 7. Sau migration, vô hiệu/revoke các OAuth grant Gmail theo HR và loại các endpoint cho phép gửi email hoặc sửa lịch mà không qua bước HR confirmation.
 
-Các test bắt buộc bao gồm OAuth state/replay/domain/scope failures; token refresh không làm mất refresh token; secret redaction; singleton connection; capability degradation; Gmail cursor 404 recovery và idempotency; không tự backfill; send retry không trùng; nhiều Interview/Candidate; selected calendar thay vì primary; optional Meet; attendee/RSVP; Calendar 410/412; event deletion; Candidate deletion guard; migration và rollback.
+Các test bắt buộc bao gồm OAuth state/replay/domain/scope failures; token refresh không làm mất refresh token; secret redaction; singleton connection; Gmail cursor 404 recovery và idempotency; không tự backfill; send retry không trùng; nhiều Interview/Candidate; selected calendar thay vì primary; optional Meet; attendee/RSVP; Calendar 410/412; event deletion; Candidate deletion guard; migration và rollback.
 
 ## Tham chiếu
 
