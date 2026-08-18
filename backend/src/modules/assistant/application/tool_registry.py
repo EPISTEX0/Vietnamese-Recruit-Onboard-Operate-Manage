@@ -20,6 +20,8 @@ import typing
 from typing import TYPE_CHECKING, Any
 
 from src.modules.assistant.domain.tools import DraftAction, ToolKind
+from src.modules.onboarding.domain.exceptions import OnboardingProcessNotFoundError
+from src.modules.recruitment.domain.exceptions import CandidateNotFoundError
 from src.shared.messages import get_message
 
 if TYPE_CHECKING:
@@ -186,8 +188,13 @@ class ToolRegistry:
         try:
             detail = await self._candidate_service.get_candidate(candidate_id)
             candidate = detail.candidate
-        except Exception:
+        except CandidateNotFoundError:
             return {"error": get_message("CANDIDATE_NOT_FOUND", "vi")}
+        except Exception:
+            logger.exception(
+                "get_candidate_parsed_cv: candidate lookup failed (candidate_id=%s)", candidate_id
+            )
+            return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
 
         return {
             "candidate_id": str(candidate.id),
@@ -220,10 +227,20 @@ class ToolRegistry:
 
         try:
             candidate_id = uuid.UUID(candidate_id_str)
+        except ValueError as e:
+            return {"error": f"Invalid candidate_id: {str(e)}"}
+
+        try:
             detail = await self._candidate_service.get_candidate(candidate_id)
             candidate = detail.candidate
-        except Exception:
+        except CandidateNotFoundError:
             return {"error": get_message("CANDIDATE_NOT_FOUND", "vi")}
+        except Exception:
+            logger.exception(
+                "draft_interview_invitation: candidate lookup failed (candidate_id=%s)",
+                candidate_id,
+            )
+            return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
 
         import html
 
@@ -294,10 +311,20 @@ class ToolRegistry:
 
         try:
             candidate_id = uuid.UUID(candidate_id_str)
+        except ValueError as e:
+            return {"error": f"Invalid candidate_id: {str(e)}"}
+
+        try:
             detail = await self._candidate_service.get_candidate(candidate_id)
             candidate = detail.candidate
-        except Exception:
+        except CandidateNotFoundError:
             return {"error": get_message("CANDIDATE_NOT_FOUND", "vi")}
+        except Exception:
+            logger.exception(
+                "draft_congratulations_email: candidate lookup failed (candidate_id=%s)",
+                candidate_id,
+            )
+            return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
 
         import html
 
@@ -521,7 +548,15 @@ class ToolRegistry:
         try:
             interviews = await self._candidate_service.list_interviews_for_candidate(candidate_id)
         except Exception:
-            return {"error": get_message("CANDIDATE_NOT_FOUND", "vi")}
+            # No narrow not-found branch here: unlike get_candidate, this call
+            # never raises CandidateNotFoundError for an unknown candidate_id
+            # (it queries interviews by id and would just return an empty
+            # list) -- so any exception reaching this handler is a lookup
+            # failure, never a legitimate "not found".
+            logger.exception(
+                "list_interviews_for_candidate: lookup failed (candidate_id=%s)", candidate_id
+            )
+            return {"error": get_message("CANDIDATE_LOOKUP_ERROR", "vi")}
 
         return {"interviews": interviews, "total": len(interviews)}
 
@@ -541,8 +576,13 @@ class ToolRegistry:
 
         try:
             detail = await self._onboarding_service.get_process(process_id)
-        except Exception:
+        except OnboardingProcessNotFoundError:
             return {"error": get_message("ONBOARDING_PROCESS_NOT_FOUND", "vi")}
+        except Exception:
+            logger.exception(
+                "get_onboarding_task_details: process lookup failed (process_id=%s)", process_id
+            )
+            return {"error": get_message("ONBOARDING_PROCESS_LOOKUP_ERROR", "vi")}
 
         tasks = []
         for task in detail.tasks:
