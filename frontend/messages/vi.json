@@ -972,6 +972,8 @@
     "apiKey": "Khóa API",
     "apiKeyMasked": "•••••••• (đã lưu, để trống nếu giữ nguyên)",
     "apiKeyPlaceholder": "Nhập khóa API",
+    "apiKeyDecryptFailedTitle": "Không đọc được khóa API hiện có",
+    "apiKeyDecryptFailedDesc": "Tổ chức đã lưu một khóa API nhưng hệ thống không giải mã được — thường xảy ra sau khi encryption key bị xoay. Khôi phục encryption key cũ để dùng lại khóa này, hoặc nhập khóa API mới bên dưới để ghi đè (khóa cũ sẽ mất vĩnh viễn).",
     "saveConfig": "Lưu cấu hình",
     "testConnection": "Kiểm tra kết nối",
     "credentialSource": "Nguồn xác thực",

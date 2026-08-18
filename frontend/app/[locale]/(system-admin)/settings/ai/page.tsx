@@ -198,6 +198,15 @@ function AIConfigSections() {
           </div>
         </div>
         <div className="p-5">
+          {cfg.api_key_decrypt_failed && (
+            <div className="flex gap-3 p-4 mb-4 bg-amber-50 rounded-xl border border-amber-200">
+              <span className="text-xl shrink-0">⚠️</span>
+              <div className="text-sm text-amber-800">
+                <p className="font-semibold mb-1">{t('apiKeyDecryptFailedTitle')}</p>
+                <p className="text-amber-700">{t('apiKeyDecryptFailedDesc')}</p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Config form */}
             <div className="space-y-4">
