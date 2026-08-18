@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -807,6 +808,41 @@ class TestParseCVJson:
         result = adapter._parse_cv_json(content)
         assert result is not None
         assert result.name == "Test"
+
+    def test_logs_warning_for_invalid_json(
+        self, adapter: LLMAdapter, caplog: pytest.LogCaptureFixture
+    ):
+        """Malformed JSON should log a warning naming the JSON failure."""
+        with caplog.at_level(
+            logging.WARNING, logger="src.modules.recruitment.infrastructure.llm_adapter"
+        ):
+            result = adapter._parse_cv_json("{invalid}")
+        assert result is None
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.levelno == logging.WARNING
+        assert "not valid JSON" in record.getMessage()
+
+    def test_logs_exception_for_schema_validation_failure(
+        self, adapter: LLMAdapter, caplog: pytest.LogCaptureFixture
+    ):
+        """Well-formed JSON that fails ParsedCV validation logs at exception level.
+
+        Distinct from the JSON-decode failure above: this is the strongest
+        available signal of LLM prompt/schema drift, so it gets exc_info too.
+        """
+        # "name" is a required field on ParsedCV; omitting it fails model_validate.
+        content = json.dumps({"email": "test@test.com"})
+        with caplog.at_level(
+            logging.WARNING, logger="src.modules.recruitment.infrastructure.llm_adapter"
+        ):
+            result = adapter._parse_cv_json(content)
+        assert result is None
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.levelno == logging.ERROR
+        assert "schema validation" in record.getMessage()
+        assert record.exc_info is not None
 
 
 class TestTokenUsageExtraction:

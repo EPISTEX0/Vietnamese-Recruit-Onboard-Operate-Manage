@@ -516,7 +516,8 @@ class LLMAdapter:
 
         try:
             data = json.loads(content)
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("LLM CV response is not valid JSON: %s", exc)
             return None
 
         if not isinstance(data, dict):
@@ -525,6 +526,13 @@ class LLMAdapter:
         try:
             return ParsedCV.model_validate(data)
         except Exception:
+            # Unlike the JSONDecodeError case above, this is well-formed JSON that
+            # no longer matches the ParsedCV schema — the strongest signal of LLM
+            # prompt/schema drift, so it gets exception-level logging with traceback.
+            logger.exception(
+                "LLM CV response is valid JSON but failed ParsedCV schema validation "
+                "(possible prompt or schema drift)"
+            )
             return None
 
     @staticmethod

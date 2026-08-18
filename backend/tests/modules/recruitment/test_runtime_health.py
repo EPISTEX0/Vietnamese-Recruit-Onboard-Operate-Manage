@@ -12,6 +12,7 @@ Requirements: runtime backbone wiring
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -133,6 +134,26 @@ async def test_health_returns_unhealthy_when_redis_down():
     redis_svc = next(s for s in data["services"] if s["name"] == "redis")
     assert redis_svc["status"] == "unhealthy"
     assert "Connection refused" in redis_svc["detail"]
+
+
+@pytest.mark.asyncio
+async def test_health_logs_warning_server_side_when_redis_down(
+    caplog: pytest.LogCaptureFixture,
+):
+    """A service failure must leave a server-side trace to correlate against.
+
+    The client response already carries ``detail``, but nothing previously
+    recorded the failure anywhere queryable after that single response.
+    """
+    logger_name = "src.modules.recruitment.api.runtime_router"
+    with caplog.at_level(logging.WARNING, logger=logger_name):
+        await _call_health(redis_ping_side_effect=Exception("Connection refused"))
+    matching = [r for r in caplog.records if r.name == logger_name]
+    assert len(matching) == 1
+    record = matching[0]
+    assert record.levelno == logging.WARNING
+    assert "redis" in record.getMessage()
+    assert "Connection refused" in record.getMessage()
 
 
 @pytest.mark.asyncio

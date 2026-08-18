@@ -1,8 +1,10 @@
 """Unit tests for the Excel parser module."""
 
+import logging
 from datetime import date, datetime
 from io import BytesIO
 
+import pytest
 from openpyxl import Workbook
 
 from src.modules.employee.infrastructure.excel_parser import parse_excel
@@ -286,6 +288,22 @@ class TestParseExcelEdgeCases:
         assert len(errors) == 1
         assert errors[0]["row"] == 0
         assert "Failed to read Excel file" in errors[0]["error"]
+
+    def test_invalid_excel_file_logs_server_side(self, caplog: pytest.LogCaptureFixture):
+        """A read failure must leave a server-side trace, not just the returned error.
+
+        Previously the exception only reached the caller as a string in the
+        returned ``errors`` list — nothing was recorded for operators.
+        """
+        logger_name = "src.modules.employee.infrastructure.excel_parser"
+        with caplog.at_level(logging.ERROR, logger=logger_name):
+            parsed, errors = parse_excel(b"garbage bytes string")
+
+        assert parsed == []
+        matching = [r for r in caplog.records if r.name == logger_name]
+        assert len(matching) == 1
+        assert matching[0].levelno == logging.ERROR
+        assert matching[0].exc_info is not None
 
     def test_empty_file(self):
         """An empty workbook should return empty results."""

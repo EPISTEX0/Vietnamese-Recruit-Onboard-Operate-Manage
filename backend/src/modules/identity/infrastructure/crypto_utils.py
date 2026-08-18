@@ -90,6 +90,13 @@ class CryptoUtils:
                 try:
                     return key.decrypt(nonce, encrypted, aad).decode()
                 except Exception as exc:
+                    # Intentionally silent per-attempt: this loop tries every
+                    # configured key (current, previous) x AAD combination, and
+                    # `raise last` below re-raises the final attempt's exception
+                    # once all combinations are exhausted. Logging here would fire
+                    # on every legacy-format decrypt, since the legacy path always
+                    # fails its first (AAD-bound) attempt before succeeding on the
+                    # second — that's normal operation, not an error to trace.
                     last = exc
         if last is not None:
             raise last

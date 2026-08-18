@@ -104,6 +104,11 @@ class ClassificationResult:
                 try:
                     return int(normalized_value) > 1
                 except ValueError:
+                    logger.warning(
+                        "Provider sent non-numeric %s source_hint: %r; treating as no split",
+                        normalized_key,
+                        value,
+                    )
                     return False
         return False
 
@@ -334,6 +339,10 @@ class AIClassifier:
             else:
                 logger.debug("LLM response type: %s", type(response).__name__)
         except Exception:
+            # Intentionally silent: this try only wraps two logger.debug() calls
+            # made purely for diagnostics. Logging the failure of a debug log call
+            # would be circular, and nothing downstream depends on this block —
+            # extraction continues unconditionally right below.
             pass
 
         content = self._try_extract_message_content(response)
@@ -394,6 +403,12 @@ class AIClassifier:
             try:
                 first = next(iter(choices))  # type: ignore[arg-type]
             except (TypeError, StopIteration):
+                # Intentionally silent: every "" return from this helper —
+                # including this one — flows back to
+                # _extract_content_from_response(), which already logs a warning
+                # with the raw response when content comes back empty (see the
+                # "Could not extract content" warning there). Logging here too
+                # would duplicate that trace for the same event.
                 return ""
 
         # Normalise first item and message for consistent access.
@@ -435,11 +450,17 @@ class AIClassifier:
             if hasattr(response, "model_dump"):
                 return response.model_dump()  # type: ignore[union-attr]
         except Exception:
+            # Intentionally silent: try-then-fallback chain. model_dump() failing
+            # just means the response isn't a pydantic v2 model shape — the
+            # .dict() attempt right below is the fallback, and returning None at
+            # the end of the chain if neither works is the documented contract.
             pass
         try:
             if hasattr(response, "dict"):
                 return response.dict()  # type: ignore[union-attr]
         except Exception:
+            # Intentionally silent: same try-then-fallback chain as above; this is
+            # the last fallback before the documented `return None`.
             pass
         return None
 
@@ -465,6 +486,9 @@ class AIClassifier:
         try:
             return EmailCategory(cleaned)
         except ValueError:
+            # Intentionally silent: try-then-fallback chain. Not a valid enum
+            # value as-is just means we fall through to substring matching below,
+            # which has its own documented uncategorized default at the end.
             pass
 
         # Try matching as substring

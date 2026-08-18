@@ -6,6 +6,7 @@ Mounted under /api/admin/runtime for admin-only access.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +21,8 @@ from src.modules.identity.api.admin_router import require_system_admin
 from src.modules.identity.container import get_db_session
 from src.modules.identity.domain.entities import User
 from src.modules.identity.infrastructure.config import AuthSettings
+
+logger = logging.getLogger(__name__)
 
 runtime_router = APIRouter(prefix="/api/system-admin/runtime", tags=["system-admin-runtime"])
 
@@ -57,6 +60,7 @@ async def runtime_health(
         latency = (time.monotonic() - start) * 1000
         services.append(ServiceStatus(name="redis", status="healthy", latency_ms=round(latency, 1)))
     except Exception as exc:
+        logger.warning("Runtime health check failed for service=redis: %s", exc)
         services.append(ServiceStatus(name="redis", status="unhealthy", detail=str(exc)))
 
     # 2. PostgreSQL
@@ -74,6 +78,7 @@ async def runtime_health(
             )
         )
     except Exception as exc:
+        logger.warning("Runtime health check failed for service=postgresql: %s", exc)
         services.append(ServiceStatus(name="postgresql", status="unhealthy", detail=str(exc)))
 
     # 3. MinIO
@@ -101,6 +106,7 @@ async def runtime_health(
                 )
             )
     except Exception as exc:
+        logger.warning("Runtime health check failed for service=minio: %s", exc)
         services.append(ServiceStatus(name="minio", status="unhealthy", detail=str(exc)))
 
     # 4. Gmail Worker heartbeat
@@ -123,6 +129,7 @@ async def runtime_health(
                 )
             )
     except Exception as exc:
+        logger.warning("Runtime health check failed for service=gmail-worker: %s", exc)
         services.append(ServiceStatus(name="gmail-worker", status="unhealthy", detail=str(exc)))
 
     # 5. Onboarding Worker heartbeat
@@ -145,6 +152,7 @@ async def runtime_health(
                 )
             )
     except Exception as exc:
+        logger.warning("Runtime health check failed for service=onboarding-worker: %s", exc)
         services.append(
             ServiceStatus(
                 name="onboarding-worker",
