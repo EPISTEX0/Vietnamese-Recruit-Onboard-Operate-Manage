@@ -34,6 +34,7 @@ from src.modules.recruitment.infrastructure.repositories import (
     JobApplicationRepository,
     JobOpeningRepository,
 )
+from src.shared.messages import get_message
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,12 @@ async def assign_job_application(
     except RecruitmentError:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(
+            "Failed to assign job application %s to job opening %s",
+            job_application_id,
+            body.job_opening_id,
+        )
+        raise HTTPException(status_code=500, detail=get_message("INTERNAL_ERROR")) from exc
 
     return JobApplicationAssignmentResponse(
         id=result.id,
@@ -195,7 +201,12 @@ async def promote_job_application(
     except RecruitmentError:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception(
+            "Failed to promote job application %s to candidate (job_opening_id=%s)",
+            job_application_id,
+            body.job_opening_id,
+        )
+        raise HTTPException(status_code=500, detail=get_message("INTERNAL_ERROR")) from exc
 
     return JobApplicationPromoteResponse(
         id=app.id,

@@ -17,9 +17,11 @@ Covers:
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -359,6 +361,30 @@ class TestAssignmentAccessControl:
         )
         assert resp.status_code == 404
 
+    def test_assign_unexpected_error_does_not_leak_and_is_logged(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unforeseen exception must not reach the client, and must be logged."""
+        secret = "column job_applications.internal_notes violates constraint fk_9f3a"
+        err = RuntimeError(secret)
+        service = FakeJobApplicationServiceError(err)
+        app = _build_app(FakeAdminUser(), service)
+        client = TestClient(app)
+
+        logger_name = "src.modules.recruitment.api.job_application_router"
+        with caplog.at_level(logging.ERROR, logger=logger_name):
+            resp = client.post(
+                f"/api/recruitment/job-applications/{uuid4()}/assignment",
+                json={"job_opening_id": str(uuid4())},
+            )
+
+        assert resp.status_code == 500
+        assert secret not in resp.text
+
+        matching = [r for r in caplog.records if r.name == logger_name]
+        assert matching, "expected an error-level log from the router"
+        assert matching[0].exc_info is not None
+
 
 # ─── Promotion Access Control ─────────────────────────────────────────
 
@@ -549,6 +575,33 @@ class TestPromotionAccessControl:
             },
         )
         assert resp.status_code == 404
+
+    def test_promote_unexpected_error_does_not_leak_and_is_logged(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unforeseen exception must not reach the client, and must be logged."""
+        secret = "column candidates.tax_code violates constraint fk_2b7e"
+        err = RuntimeError(secret)
+        service = FakeJobApplicationServiceError(err)
+        app = _build_app(FakeAdminUser(), service)
+        client = TestClient(app)
+
+        logger_name = "src.modules.recruitment.api.job_application_router"
+        with caplog.at_level(logging.ERROR, logger=logger_name):
+            resp = client.post(
+                f"/api/recruitment/job-applications/{uuid4()}/promote",
+                json={
+                    "applicant_name": "Test",
+                    "applicant_email": "test@example.com",
+                },
+            )
+
+        assert resp.status_code == 500
+        assert secret not in resp.text
+
+        matching = [r for r in caplog.records if r.name == logger_name]
+        assert matching, "expected an error-level log from the router"
+        assert matching[0].exc_info is not None
 
     def test_promote_idempotent_returns_same(self) -> None:
         """Repeated promotion with same data returns success."""
