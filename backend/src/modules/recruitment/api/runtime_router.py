@@ -1,6 +1,7 @@
 """Runtime health API — status check for all infrastructure services.
 
-Checks: Redis, PostgreSQL, MinIO, Gmail Worker heartbeat, Onboarding Worker heartbeat.
+Checks: Redis, PostgreSQL, MinIO, Gmail Worker heartbeat, Onboarding Worker heartbeat,
+Knowledge Base Worker heartbeat.
 Mounted under /api/admin/runtime for admin-only access.
 """
 
@@ -25,8 +26,6 @@ from src.modules.identity.infrastructure.config import AuthSettings
 logger = logging.getLogger(__name__)
 
 runtime_router = APIRouter(prefix="/api/system-admin/runtime", tags=["system-admin-runtime"])
-
-HEARTBEAT_TTL_SECONDS = 600  # must match worker TTL
 
 
 @dataclass
@@ -160,6 +159,29 @@ async def runtime_health(
                 detail=str(exc),
             )
         )
+
+    # 6. Knowledge Base Worker heartbeat
+    try:
+        ts = await r.get("runtime:heartbeat:kb-worker")
+        if ts:
+            services.append(
+                ServiceStatus(
+                    name="kb-worker",
+                    status="healthy",
+                    detail=f"last beat: {ts}",
+                )
+            )
+        else:
+            services.append(
+                ServiceStatus(
+                    name="kb-worker",
+                    status="unhealthy",
+                    detail="no heartbeat",
+                )
+            )
+    except Exception as exc:
+        logger.warning("Runtime health check failed for service=kb-worker: %s", exc)
+        services.append(ServiceStatus(name="kb-worker", status="unhealthy", detail=str(exc)))
 
     await r.aclose()
 

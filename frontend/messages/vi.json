@@ -573,7 +573,8 @@
     "gmail_worker": "Đồng bộ email",
     "onboarding_worker": "Xử lý onboarding",
     "gmail-worker": "Đồng bộ email",
-    "onboarding-worker": "Xử lý onboarding"
+    "onboarding-worker": "Xử lý onboarding",
+    "kb-worker": "Đồng bộ tài liệu nội bộ"
   },
   "payroll": {
     "nav": "Phiếu lương",

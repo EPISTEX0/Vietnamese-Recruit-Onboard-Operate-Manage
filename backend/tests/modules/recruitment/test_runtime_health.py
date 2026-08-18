@@ -2,7 +2,7 @@
 
 Verifies the GET /api/system-admin/runtime/health endpoint returns correct status
 for all infrastructure services (Redis, PostgreSQL, MinIO, Gmail Worker,
-Onboarding Worker) and handles unhealthy states properly.
+Onboarding Worker, Knowledge Base Worker) and handles unhealthy states properly.
 
 Uses ``app.dependency_overrides`` to bypass auth and DB dependencies,
 matching the pattern used by other endpoint tests in this codebase.
@@ -119,9 +119,16 @@ async def test_health_returns_healthy_when_all_ok():
     """All services healthy → overall status is 'healthy'."""
     data = await _call_health()
     assert data["status"] == "healthy"
-    assert len(data["services"]) == 5
+    assert len(data["services"]) == 6
     names = [s["name"] for s in data["services"]]
-    assert names == ["redis", "postgresql", "minio", "gmail-worker", "onboarding-worker"]
+    assert names == [
+        "redis",
+        "postgresql",
+        "minio",
+        "gmail-worker",
+        "onboarding-worker",
+        "kb-worker",
+    ]
     for svc in data["services"]:
         assert svc["status"] == "healthy"
 
@@ -163,10 +170,13 @@ async def test_health_returns_unhealthy_when_worker_no_heartbeat():
     assert data["status"] == "unhealthy"
     gmail = next(s for s in data["services"] if s["name"] == "gmail-worker")
     onb = next(s for s in data["services"] if s["name"] == "onboarding-worker")
+    kb = next(s for s in data["services"] if s["name"] == "kb-worker")
     assert gmail["status"] == "unhealthy"
     assert gmail["detail"] == "no heartbeat"
     assert onb["status"] == "unhealthy"
     assert onb["detail"] == "no heartbeat"
+    assert kb["status"] == "unhealthy"
+    assert kb["detail"] == "no heartbeat"
 
 
 @pytest.mark.asyncio
@@ -175,9 +185,12 @@ async def test_health_worker_healthy_when_heartbeat_present():
     data = await _call_health(redis_get_return="1717800000.0")
     gmail = next(s for s in data["services"] if s["name"] == "gmail-worker")
     onb = next(s for s in data["services"] if s["name"] == "onboarding-worker")
+    kb = next(s for s in data["services"] if s["name"] == "kb-worker")
     assert gmail["status"] == "healthy"
     assert "last beat" in gmail["detail"]
     assert onb["status"] == "healthy"
+    assert kb["status"] == "healthy"
+    assert "last beat" in kb["detail"]
 
 
 @pytest.mark.asyncio
