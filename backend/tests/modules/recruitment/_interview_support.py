@@ -606,23 +606,45 @@ class FakeCalendarSession:
     def __init__(
         self,
         interviews: Sequence[Interview] | None = None,
+        fail_on_flush: Exception | None = None,
     ) -> None:
         """Initialize the session and seed the interview lookup.
 
         Args:
             interviews: Interviews that already exist (committed state), i.e.
                 Candidates that are already scheduled on the calendar.
+            fail_on_flush: When set, :meth:`flush` raises this exception instead
+                of staging, letting a test model a flush-time constraint
+                violation the way a real ``AsyncSession`` would.
         """
         self.interviews: dict[UUID, Interview] = {iv.id: iv for iv in (interviews or [])}
         self.participants: list[InterviewParticipant] = []
         self.commit_count = 0
         self.rollback_count = 0
+        self.flush_count = 0
+        self.fail_on_flush = fail_on_flush
         self._candidate_repo: FakeCandidateRepository | None = None
         self._staged_candidate_ids: set[UUID] = set()
         self._committed_interviews: dict[UUID, dict[str, Any]] = {
             iv.id: _snapshot_interview(iv) for iv in (interviews or [])
         }
         self._staged_interview_ids: set[UUID] = set()
+
+    async def flush(self) -> None:
+        """Mirror ``AsyncSession.flush()`` closely enough that a caller cannot
+        tell staged writes were skipped: raises when a test has armed
+        :attr:`fail_on_flush`, otherwise records the call and returns.
+
+        This fake has no DB to send statements to, so there is nothing to
+        actually flush -- ``add`` already stages the mutation synchronously.
+        The reason this method exists at all is that its *absence* let
+        production code branch on ``hasattr(session, "flush")`` undetected
+        (#385); the counter and injectable failure keep that from happening
+        silently again.
+        """
+        self.flush_count += 1
+        if self.fail_on_flush is not None:
+            raise self.fail_on_flush
 
     def add(self, instance: object) -> None:
         """Stage an Interview (visible on commit, undone on rollback).
@@ -1213,7 +1235,9 @@ class CalendarServiceHarness:
         ``interview_event_cancelled`` / ``interview_cancel_failed`` through
         ``interview_scheduler_service``'s, so both module-level names have to be
         replaced for one sink to see the whole story. The real helper would call
-        ``session.add``/``flush``, which the fake session does not implement.
+        ``session.add``/``flush`` on an audit row, but the fake session's
+        ``add`` only stages ``Interview`` instances -- an audit row would be
+        silently dropped rather than made readable back.
         """
         return _patch_audit_sinks(self.audit_sink)
 
@@ -1253,6 +1277,7 @@ def build_calendar_harness(
     clock: FixedClock | None = None,
     user_id: UUID | None = None,
     connection_repo: object | None | _Default = _DEFAULT,
+    fail_on_flush: Exception | None = None,
 ) -> CalendarServiceHarness:
     """Builds the in-memory candidate repository/session (seeded with
     ``candidates`` and ``employees``), the :class:`FakeCalendarPort`, the
@@ -1288,6 +1313,8 @@ def build_calendar_harness(
         clock: The injected :class:`FixedClock` (a default is created when
             omitted).
         user_id: The acting HR user id (a fresh UUID when omitted).
+        fail_on_flush: When set, the session's ``flush()`` raises this
+            exception instead of staging, modelling a flush-time DB failure.
 
     Returns:
         A :class:`CalendarServiceHarness` bundling the service and its seams.
@@ -1297,7 +1324,7 @@ def build_calendar_harness(
     calendar = calendar or FakeCalendarPort()
     audit_sink = audit_sink or SpyAuditSink()
 
-    session = FakeCalendarSession(interviews=interviews)
+    session = FakeCalendarSession(interviews=interviews, fail_on_flush=fail_on_flush)
     candidate_repo = FakeCandidateRepository(session, candidates)
     interview_repo = FakeInterviewRepository(session)
     calendar_conflict_repo = FakeCalendarConflictRepository(calendar_conflicts)
