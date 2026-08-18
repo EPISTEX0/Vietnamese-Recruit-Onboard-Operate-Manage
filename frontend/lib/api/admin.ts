@@ -48,6 +48,18 @@ export interface WhitelistEntryCreated {
   created_at: string;
 }
 
+/**
+ * Mirrors backend `AICapabilityState` (`organization_ai_config_service.py`).
+ * Hand-copied, not generated — a backend member added without updating this
+ * union won't be caught here (nothing outside `backend/` diffs it; #363's
+ * `test_status_union_freshness.py` only auto-registers `export type
+ * *Status*` names, and this ticket doesn't touch backend to add one for
+ * `*State`). What this union does buy: `stateLabel`'s switch below becomes
+ * exhaustive-checked by tsc, so a case going missing from *this* file is a
+ * compile error instead of a silent raw-string fallback (#414).
+ */
+export type AICapabilityState = 'not_configured' | 'disabled' | 'ready' | 'unavailable';
+
 export interface OrganizationAIConfiguration {
   provider: string | null;
   base_url: string | null;
@@ -62,9 +74,9 @@ export interface OrganizationAIConfiguration {
   data_policy_accepted_at: string | null;
   data_policy_version: string | null;
   automation_enabled: boolean;
-  automation_state: string;
+  automation_state: AICapabilityState;
   assistant_enabled: boolean;
-  assistant_state: string;
+  assistant_state: AICapabilityState;
   classification_policy: string;
   classification_policy_version: string;
   stable_classifier_version: string;
