@@ -8,12 +8,13 @@ Requirements: runtime backbone wiring
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.modules.onboarding.container import process_candidate_accepted
-from src.modules.onboarding.worker import OnboardingWorkerSettings
+from src.modules.onboarding.worker import OnboardingWorkerSettings, shutdown
 
 
 class TestOnboardingWorkerSettings:
@@ -95,3 +96,34 @@ class TestProcessCandidateAccepted:
             await process_candidate_accepted(ctx, payload)
 
         mock_service.start_from_event.assert_awaited_once()
+
+
+class TestOnboardingWorkerShutdown:
+    """shutdown() must close the Redis connection even if clearing the heartbeat fails.
+
+    Regression guard for #386 C2: delete() and aclose() used to share one try
+    block, so a failing delete() skipped aclose() entirely and leaked the
+    connection until the heartbeat's own ex=600 TTL expired.
+    """
+
+    @pytest.mark.asyncio
+    async def test_aclose_called_and_logged_when_delete_raises(self, caplog) -> None:
+        redis_client = AsyncMock()
+        redis_client.delete = AsyncMock(side_effect=RuntimeError("redis unreachable"))
+        ctx = {"engine": None, "redis_client": redis_client}
+
+        with caplog.at_level(logging.WARNING):
+            await shutdown(ctx)
+
+        redis_client.aclose.assert_awaited_once()
+        assert "Failed to clear heartbeat on shutdown" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_aclose_called_when_delete_succeeds(self) -> None:
+        redis_client = AsyncMock()
+        ctx = {"engine": None, "redis_client": redis_client}
+
+        await shutdown(ctx)
+
+        redis_client.delete.assert_awaited_once_with("runtime:heartbeat:onboarding-worker")
+        redis_client.aclose.assert_awaited_once()
