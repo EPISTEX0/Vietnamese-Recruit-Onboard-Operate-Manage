@@ -62,6 +62,23 @@ class TestImportServiceBasic:
         assert result["errors"] == []
 
     @pytest.mark.asyncio
+    async def test_import_unreadable_file_result_matches_import_result_schema(self):
+        """A file-level read failure must still produce a valid ImportResult.
+
+        The parser's error dict must use the 'message' key the ImportResult
+        schema requires; a mismatched key would make the router's
+        ``ImportResult(**result)`` raise a pydantic ValidationError instead
+        of returning the classified message to the client.
+        """
+        from src.modules.employee.api.schemas import ImportResult
+
+        service = _make_service()
+        result = await service.import_from_excel(b"not an excel file")
+
+        assert result["error_count"] == 1
+        ImportResult(**result)
+
+    @pytest.mark.asyncio
     async def test_import_single_valid_row_creates_employee(self):
         """A valid row with no existing employee should create a new one."""
         headers = ["full_name", "email", "phone"]

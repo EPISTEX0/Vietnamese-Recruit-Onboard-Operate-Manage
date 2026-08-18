@@ -1,13 +1,18 @@
 """Unit tests for the Excel parser module."""
 
 import logging
+import zipfile
 from datetime import date, datetime
 from io import BytesIO
 
 import pytest
 from openpyxl import Workbook
 
-from src.modules.employee.infrastructure.excel_parser import parse_excel
+from src.modules.employee.infrastructure.excel_parser import (
+    _MSG_CORRUPTED_FILE,
+    _MSG_WRONG_FORMAT,
+    parse_excel,
+)
 
 
 def _create_excel(headers: list[str], rows: list[list]) -> bytes:
@@ -275,19 +280,124 @@ class TestParseExcelValidation:
         assert len(errors) == 0
 
 
-class TestParseExcelEdgeCases:
-    """Tests for edge cases."""
+class TestParseExcelReadFailures:
+    """Tests for file-level read failures, classified by exception type.
 
-    def test_invalid_excel_file_bytes(self):
-        """A non-Excel byte sequence should be caught and handled gracefully."""
-        file_bytes = b"garbage bytes string"
+    Each case builds a real broken input (no mocking of ``load_workbook``)
+    and asserts the returned message is Vietnamese, actionable, and never
+    contains library/exception internals.
+    """
+
+    _LIBRARY_TERMS = ("BadZipFile", "zip file", "Content_Types", "KeyError", "Traceback")
+
+    def test_empty_bytes_reports_wrong_format(self):
+        """Empty bytes are not a valid zip; classified as wrong format."""
+        parsed, errors = parse_excel(b"")
+
+        assert parsed == []
+        assert len(errors) == 1
+        assert errors[0]["row"] == 0
+        assert errors[0]["message"] == _MSG_WRONG_FORMAT
+        for term in self._LIBRARY_TERMS:
+            assert term not in errors[0]["message"]
+
+    def test_plain_text_reports_wrong_format(self):
+        """Plain text bytes are not a valid zip; classified as wrong format."""
+        parsed, errors = parse_excel(b"just some plain text, not an excel file at all")
+
+        assert parsed == []
+        assert len(errors) == 1
+        assert errors[0]["message"] == _MSG_WRONG_FORMAT
+        for term in self._LIBRARY_TERMS:
+            assert term not in errors[0]["message"]
+
+    def test_truncated_xlsx_reports_wrong_format(self):
+        """A real .xlsx cut off mid-file breaks the zip container itself."""
+        headers = ["full_name", "email"]
+        rows = [["Nguyen Van A", "a@example.com"]]
+        full_bytes = _create_excel(headers, rows)
+        truncated = full_bytes[: len(full_bytes) // 2]
+
+        parsed, errors = parse_excel(truncated)
+
+        assert parsed == []
+        assert len(errors) == 1
+        assert errors[0]["message"] == _MSG_WRONG_FORMAT
+        for term in self._LIBRARY_TERMS:
+            assert term not in errors[0]["message"]
+
+    def test_valid_zip_but_not_xlsx_reports_corrupted_file(self):
+        """A valid zip missing the OOXML parts is a structurally broken .xlsx."""
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as zf:
+            zf.writestr("hello.txt", "not an excel file")
+        file_bytes = buffer.getvalue()
 
         parsed, errors = parse_excel(file_bytes)
 
         assert parsed == []
         assert len(errors) == 1
-        assert errors[0]["row"] == 0
-        assert "Failed to read Excel file" in errors[0]["error"]
+        assert errors[0]["message"] == _MSG_CORRUPTED_FILE
+        for term in self._LIBRARY_TERMS:
+            assert term not in errors[0]["message"]
+
+    def test_cell_type_mismatch_does_not_leak_cell_content(self):
+        """A numeric-typed cell holding unparseable text raises a ValueError
+        from openpyxl that echoes the raw cell content in str(e). This must
+        never reach the returned message.
+        """
+        content_types = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            b'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'  # noqa: E501
+            b'<Default Extension="xml" ContentType="application/xml"/>'
+            b'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'  # noqa: E501
+            b'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'  # noqa: E501
+            b"</Types>"
+        )
+        rels = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'  # noqa: E501
+            b"</Relationships>"
+        )
+        workbook_xml = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            b'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            b'<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>'
+            b"</workbook>"
+        )
+        workbook_rels = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'  # noqa: E501
+            b"</Relationships>"
+        )
+        sheet1 = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            b"<sheetData>"
+            b'<row r="1"><c r="A1" t="n"><v>SECRET_TAX_CODE_998877</v></c></row>'
+            b"</sheetData>"
+            b"</worksheet>"
+        )
+
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as zf:
+            zf.writestr("[Content_Types].xml", content_types)
+            zf.writestr("_rels/.rels", rels)
+            zf.writestr("xl/workbook.xml", workbook_xml)
+            zf.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+            zf.writestr("xl/worksheets/sheet1.xml", sheet1)
+        file_bytes = buffer.getvalue()
+
+        parsed, errors = parse_excel(file_bytes)
+
+        assert parsed == []
+        assert len(errors) == 1
+        assert "SECRET_TAX_CODE_998877" not in errors[0]["message"]
+        assert errors[0]["message"] == _MSG_CORRUPTED_FILE
 
     def test_invalid_excel_file_logs_server_side(self, caplog: pytest.LogCaptureFixture):
         """A read failure must leave a server-side trace, not just the returned error.
@@ -304,6 +414,10 @@ class TestParseExcelEdgeCases:
         assert len(matching) == 1
         assert matching[0].levelno == logging.ERROR
         assert matching[0].exc_info is not None
+
+
+class TestParseExcelEdgeCases:
+    """Tests for edge cases."""
 
     def test_empty_file(self):
         """An empty workbook should return empty results."""

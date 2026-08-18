@@ -9,6 +9,8 @@ import re
 from datetime import date, datetime
 from io import BytesIO
 from typing import Any
+from xml.etree.ElementTree import ParseError
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
@@ -35,6 +37,19 @@ KNOWN_FIELDS = {
 
 # Basic email regex for format validation.
 _EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+# File-level read failure messages, classified by exception type. Never
+# interpolate the caught exception's str() here: openpyxl can raise a
+# ValueError that echoes a cell's raw content (e.g. a numeric-typed cell
+# holding unparseable text) back through its message.
+_MSG_WRONG_FORMAT = (
+    "File không đúng định dạng .xlsx. Kiểm tra lại đuôi file (ví dụ file .csv "
+    "bị đổi tên thành .xlsx), hoặc file có bị rỗng/hỏng không."
+)
+_MSG_CORRUPTED_FILE = (
+    "File .xlsx bị hỏng hoặc không đọc được cấu trúc. Vui lòng thử xuất lại file từ Excel."
+)
+_MSG_GENERIC_READ_ERROR = "Không thể đọc file. Vui lòng kiểm tra lại file và thử lại."
 
 
 def _normalize_header(header: str) -> str:
@@ -115,9 +130,15 @@ def parse_excel(file_bytes: bytes) -> tuple[list[dict[str, Any]], list[dict[str,
 
         rows = list(ws.iter_rows(values_only=True))
         wb.close()
-    except Exception as e:
+    except BadZipFile:
         logger.exception("Failed to read Excel file for bulk employee import")
-        return [], [{"row": 0, "error": f"Failed to read Excel file: {str(e)}"}]
+        return [], [{"row": 0, "message": _MSG_WRONG_FORMAT}]
+    except (KeyError, IndexError, ValueError, ParseError):
+        logger.exception("Failed to read Excel file for bulk employee import")
+        return [], [{"row": 0, "message": _MSG_CORRUPTED_FILE}]
+    except Exception:
+        logger.exception("Failed to read Excel file for bulk employee import")
+        return [], [{"row": 0, "message": _MSG_GENERIC_READ_ERROR}]
 
     if not rows:
         return [], []
