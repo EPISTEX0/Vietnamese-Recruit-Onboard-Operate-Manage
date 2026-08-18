@@ -21,6 +21,11 @@ from src.modules.knowledge_base.domain.entities import (
     KnowledgeBaseDocument,
 )
 from src.modules.knowledge_base.domain.enums import KnowledgeBaseDocumentStatus
+from src.modules.knowledge_base.domain.exceptions import (
+    DocumentNotFoundError,
+    InvalidDocumentFileError,
+    InvalidKnowledgeBaseTypeError,
+)
 from src.modules.knowledge_base.infrastructure.config import KnowledgeBaseSettings
 from src.modules.knowledge_base.infrastructure.repository import (
     KnowledgeBaseRepository,
@@ -66,19 +71,21 @@ class DocumentService:
 
     @staticmethod
     def _validate_file(mime_type: str, file_size: int, max_size: int) -> None:
-        """Validate MIME type and file size. Raises ValueError on failure."""
+        """Validate MIME type and file size. Raises InvalidDocumentFileError on failure."""
         if mime_type not in ALLOWED_MIME_TYPES:
-            raise ValueError(
+            raise InvalidDocumentFileError(
                 f"Loại file không được hỗ trợ: {mime_type}. Chỉ chấp nhận PDF, DOCX, DOC, TXT."
             )
         if file_size > max_size:
-            raise ValueError(f"File vượt quá kích thước tối đa {max_size // (1024 * 1024)}MB.")
+            raise InvalidDocumentFileError(
+                f"File vượt quá kích thước tối đa {max_size // (1024 * 1024)}MB."
+            )
 
     @staticmethod
     def _validate_kb_type(kb_type: str) -> None:
-        """Validate kb_type. Raises ValueError on failure."""
+        """Validate kb_type. Raises InvalidKnowledgeBaseTypeError on failure."""
         if kb_type not in ("hr", "employee"):
-            raise ValueError(
+            raise InvalidKnowledgeBaseTypeError(
                 f"Loại knowledge base không hợp lệ: {kb_type}. Chỉ chấp nhận hr hoặc employee."
             )
 
@@ -109,7 +116,8 @@ class DocumentService:
             The created document entity with status='pending'.
 
         Raises:
-            ValueError: If the file type is not allowed or file is too large.
+            InvalidKnowledgeBaseTypeError: If kb_type is not 'hr' or 'employee'.
+            InvalidDocumentFileError: If the file type is not allowed or file is too large.
         """
         self._validate_kb_type(kb_type)
 
@@ -272,14 +280,16 @@ class DocumentService:
             The updated document entity.
 
         Raises:
-            ValueError: If the document is not found or file validation fails.
+            InvalidKnowledgeBaseTypeError: If kb_type is not 'hr' or 'employee'.
+            DocumentNotFoundError: If the document is not found.
+            InvalidDocumentFileError: If file validation fails.
         """
         self._validate_kb_type(kb_type)
 
         # 1. Verify document exists
         doc = await self._repo.get_document(document_id, kb_type=kb_type)
         if doc is None:
-            raise ValueError("Không tìm thấy tài liệu.")
+            raise DocumentNotFoundError()
 
         old_storage_path = doc.storage_path
 
@@ -356,18 +366,18 @@ class DocumentService:
             kb_type: Knowledge base type.
 
         Returns:
-            The storage_path of the deleted file for logging, or None if
-            the document was not found.
+            The storage_path of the deleted file for logging.
 
         Raises:
-            ValueError: If the document is not found.
+            InvalidKnowledgeBaseTypeError: If kb_type is not 'hr' or 'employee'.
+            DocumentNotFoundError: If the document is not found.
         """
         self._validate_kb_type(kb_type)
 
         # 1. Verify document exists
         doc = await self._repo.get_document(document_id, kb_type=kb_type)
         if doc is None:
-            raise ValueError("Không tìm thấy tài liệu.")
+            raise DocumentNotFoundError()
 
         storage_path = doc.storage_path
 

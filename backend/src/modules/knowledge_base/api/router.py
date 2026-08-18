@@ -26,6 +26,7 @@ from src.modules.knowledge_base.api.schemas import (
 )
 from src.modules.knowledge_base.application.document_service import DocumentService
 from src.modules.knowledge_base.container import get_document_service
+from src.modules.knowledge_base.domain.exceptions import KnowledgeBaseError
 
 # ---------------------------------------------------------------------------
 # Type aliases
@@ -77,8 +78,8 @@ async def upload_document(
             category=category,
             kb_type=kb_type,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KnowledgeBaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     return DocumentUploadResponse(
         document_id=doc.id,
@@ -266,11 +267,8 @@ async def replace_document_file(
             mime_type=mime_type,
             kb_type=kb_type,
         )
-    except ValueError as exc:
-        msg = str(exc)
-        if "Không tìm thấy" in msg:
-            raise HTTPException(status_code=404, detail=msg) from exc
-        raise HTTPException(status_code=400, detail=msg) from exc
+    except KnowledgeBaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     return DocumentReplaceResponse(
         document_id=doc.id,
@@ -310,8 +308,8 @@ async def delete_document(
     """
     try:
         await service.delete_document(document_id, kb_type=kb_type)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KnowledgeBaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     return MessageResponse(
         message="Đã xóa tài liệu thành công.",

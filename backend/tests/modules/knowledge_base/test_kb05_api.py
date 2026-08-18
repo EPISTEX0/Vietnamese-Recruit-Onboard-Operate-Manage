@@ -307,6 +307,25 @@ class TestDeleteDocument:
         assert response.status_code == 404
         assert "Không tìm thấy" in response.json()["detail"]
 
+    def test_delete_document_invalid_kb_type_returns_400(self, kb_client: TestClient):
+        """AC: DELETE with an invalid kb_type returns 400 about kb_type, not 404 (#398).
+
+        ``delete_document`` validates kb_type before looking up the document, so an
+        invalid kb_type must surface as a 400 input error regardless of whether the
+        document exists. Previously the router mapped every ValueError from this
+        endpoint to 404, so this returned 404 with a message about kb_type.
+        """
+        doc = _create_test_document(kb_client, display_name="Bad kb_type target")
+        doc_id = doc["document_id"]
+
+        response = kb_client.delete(
+            f"/api/knowledge-base/documents/{doc_id}?kb_type=bogus",
+        )
+        assert response.status_code == 400, response.json()
+        detail = response.json()["detail"]
+        assert "knowledge base" in detail.lower()
+        assert "Không tìm thấy" not in detail
+
     def test_delete_employee_kb_document(self, kb_client: TestClient):
         """AC: DELETE works on employee KB documents."""
         doc = _create_test_document(kb_client, kb_type="employee", display_name="Emp Del")
