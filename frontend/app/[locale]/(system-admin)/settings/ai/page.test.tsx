@@ -12,7 +12,7 @@
  * `fetch` → React Query — with only `fetch` faked, matching `../oauth/page.test.tsx`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -74,6 +74,19 @@ const KEY_DECRYPT_FAILED = {
   api_key_decrypt_failed: true,
   configured: true,
   credential_source: 'org_api_key',
+};
+
+/** State 4 — a capability toggle is on but its credential can't be resolved
+ *  (e.g. the same undecryptable key as `KEY_DECRYPT_FAILED`), the case
+ *  `_compute_state` reports as `unavailable`. */
+const AUTOMATION_UNAVAILABLE = {
+  ...BASE_CONFIG,
+  api_key_masked: null,
+  api_key_decrypt_failed: true,
+  configured: true,
+  credential_source: 'org_api_key',
+  automation_enabled: true,
+  automation_state: 'unavailable',
 };
 
 const json = (payload: unknown) =>
@@ -184,5 +197,30 @@ describe('connection badge reflects real state (#411)', () => {
     // Both call sites of CONNECTION_STATUS.label in page.tsx: the Section 1
     // header badge, and the "Trạng thái: …" line below it.
     expect(screen.getAllByText(t.connectionUnavailable)).toHaveLength(2);
+  });
+});
+
+/**
+ * `stateLabel()` maps `automation_state`/`assistant_state` — sourced from
+ * backend `AICapabilityState` (`not_configured`, `disabled`, `ready`,
+ * `unavailable`) — to a pill label. It used to have a case for `enabled`,
+ * a value the backend never returns, and no case for `unavailable`, so that
+ * state fell through to a `default` rendering the raw, untranslated state
+ * string (#414).
+ */
+describe('capability state pill covers every backend AICapabilityState (#414)', () => {
+  it('shows the translated label, not the raw state string, when a capability is unavailable', async () => {
+    stubFetch(AUTOMATION_UNAVAILABLE);
+    renderPage();
+
+    await screen.findByText(t.apiKeyDecryptFailedTitle);
+    // Scope to the automation feature row itself — the title and its state
+    // pill are siblings under the same parent div in ToggleFeature — so this
+    // doesn't also count the unrelated #411 connection badge, which shares
+    // the same Vietnamese wording for `connectionUnavailable`.
+    const titleEl = screen.getByText(t.featureEmailClassify);
+    const pillContainer = titleEl.parentElement as HTMLElement;
+    expect(within(pillContainer).getByText(t.unavailable)).toBeTruthy();
+    expect(screen.queryByText('unavailable')).toBeNull();
   });
 });

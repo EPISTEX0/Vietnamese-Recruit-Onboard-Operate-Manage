@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import * as admin from '@/lib/api/admin';
-import type { OrganizationAIConfiguration } from '@/lib/api/admin';
+import type { AICapabilityState, OrganizationAIConfiguration } from '@/lib/api/admin';
 import { PageHeader } from '@/components/shared-ui';
 import { ErrorBox } from '../_components/console-ui';
 import { apiErrorText } from '../_components/api-error-text';
@@ -417,13 +417,22 @@ function AIConfigSections() {
   );
 }
 
-function stateLabel(t: (key: string) => string, s: string) {
+function stateLabel(t: (key: string) => string, s: AICapabilityState) {
       switch (s) {
-        case 'enabled': return { text: t('enabled'), color: 'bg-emerald-100 text-emerald-700' };
         case 'disabled': return { text: t('disabled'), color: 'bg-slate-100 text-slate-500' };
         case 'not_configured': return { text: t('notConfigured'), color: 'bg-slate-100 text-slate-400' };
         case 'ready': return { text: t('ready'), color: 'bg-blue-100 text-blue-700' };
-        default: return { text: s, color: 'bg-slate-100 text-slate-500' };
+        case 'unavailable': return { text: t('unavailable'), color: 'bg-amber-100 text-amber-700' };
+        default: {
+          // Exhaustive at compile time: adding a member to AICapabilityState
+          // without a case here is a tsc error. At runtime, degrade rather
+          // than throw — this union is hand-copied from the Python enum with
+          // nothing guarding drift, and this is the admin page you come to
+          // *fix* a broken config from: a pill with an odd label beats a
+          // blank page (this route segment has no error.tsx).
+          const unhandled: never = s;
+          return { text: unhandled, color: 'bg-slate-100 text-slate-500' };
+        }
       }
     }
 
