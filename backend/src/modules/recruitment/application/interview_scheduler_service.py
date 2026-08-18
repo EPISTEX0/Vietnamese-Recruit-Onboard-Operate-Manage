@@ -1813,6 +1813,19 @@ class InterviewSchedulerService:
         Creates the Interview record with the Calendar event reference and
         adds the candidate and interviewer participants.
 
+        The ``flush()`` after ``add(interview)`` is deliberately unguarded by a
+        try/except, unlike ``_commit_audit``. There, swallowing is correct
+        because the real work already committed successfully further up, so an
+        audit-only failure must not fail an action that already succeeded. Here
+        nothing has committed yet: swallowing a flush failure would not avoid an
+        error, it would only replace the real one (a constraint violation, a bad
+        value) with ``PendingRollbackError`` at the next statement on this
+        session -- the ``_get_employee`` select below reuses the same session and
+        dies first, before this method's own ``commit()`` is ever reached. The
+        FastAPI ``get_db_session`` dependency that owns this session already
+        rolls back on any exception that reaches it, so there is nothing local
+        left to clean up.
+
         Args:
             candidate: The Candidate entity.
             event_id: Google Calendar event ID.
@@ -1841,11 +1854,9 @@ class InterviewSchedulerService:
                 needs_relink=False,
             )
             self._session.add(interview)
-            if hasattr(self._session, "flush"):
-                try:
-                    await self._session.flush()
-                except Exception:
-                    pass
+            # See the docstring above for why this is intentionally unguarded.
+            if self._session is not None:
+                await self._session.flush()
 
             cand_part = InterviewParticipant(
                 interview_id=interview.id,
