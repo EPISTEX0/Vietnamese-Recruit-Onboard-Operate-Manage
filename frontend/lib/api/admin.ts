@@ -286,34 +286,33 @@ export async function updateProviderConfig(data: {
 
 // --- Classification rollout ---
 
-export interface ClassificationReleaseMetrics {
-  job_application_recall: number;
-  baseline_recall: number;
-  needs_classification_rate: number;
-  no_cv_recall: number | null;
+/**
+ * Mirrors backend `ClassificationRolloutTelemetryResponse`
+ * (`admin_schemas.py`). Every rate/proxy field here is measured from recent
+ * durable rollout events, not from an eval set — see `job_application_recall_proxy`.
+ */
+export interface ClassificationRolloutTelemetryResponse {
+  sample_size: number;
+  /** Proxy for recall against ADR-0005's 98% guardrail — NOT the real recall. */
+  job_application_recall_proxy: number;
+  stable_recall_proxy: number;
+  /** Null when no no-CV email fell in the window; never treat as 0. */
+  no_cv_recall_proxy: number | null;
   correction_rate: number;
   review_rate: number;
+  needs_classification_rate: number;
   p95_latency_ms: number;
   provider_error_rate: number;
   duplicate_count: number;
+  retry_failure_rate: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  estimated_cost_usd: number;
 }
 
-export interface ClassificationRolloutInput {
-  mode: 'shadow' | 'canary' | 'full';
-  business_policy: 'recall_first';
-  policy_version: string;
-  classifier_version: string;
-  canary_percentage: number;
-  release_metrics?: ClassificationReleaseMetrics;
-}
-
-export async function configureClassificationRollout(data: ClassificationRolloutInput): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/classification-rollout`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleResponse<OrganizationAIConfiguration>(res);
+export async function getClassificationRolloutTelemetry(hours = 24): Promise<ClassificationRolloutTelemetryResponse> {
+  const res = await adminFetch(`${BASE}/organization/ai-config/classification-rollout/telemetry?hours=${hours}`);
+  return handleResponse<ClassificationRolloutTelemetryResponse>(res);
 }
 
 export async function rollbackClassificationRollout(): Promise<OrganizationAIConfiguration> {
