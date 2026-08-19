@@ -171,6 +171,58 @@ describe('classification rollout telemetry (#422)', () => {
     expect(screen.getByText(t.rolloutNoCvRecallProxyNoData)).toBeTruthy();
     expect(screen.queryByText('0.0%')).toBeNull();
   });
+
+  /**
+   * The gap the earlier version of this file had: assertions proved the
+   * *label* was right ("Recall ước lượng (proxy)", sample_size present) but
+   * never proved the *value* under it belonged to that field. Swapping
+   * `job_application_recall_proxy` for `stable_recall_proxy` in the component
+   * — same type, same formatter, both already distinct in the fixture below
+   * (0.974 vs 0.991) — passed every test above. On this ticket that swap is
+   * not cosmetic: ADR-0005's 98% guardrail is judged against
+   * `job_application_recall_proxy` specifically, so an operator reading the
+   * stable build's 99.1% in that slot would see "above threshold" and skip a
+   * rollback the real 97.4% proxy calls for.
+   *
+   * `TELEMETRY_WITH_NO_CV_DATA` already gives every displayed field a
+   * distinct formatted value (verified below: none is a substring of
+   * another), so one swap anywhere among these six is enough to make a card
+   * show a value that isn't its own — this test is written to catch exactly
+   * that, for every field currently rendered, not just the one Lead found.
+   */
+  it('binds each metric card to its own field value — a same-typed field swap must not survive', async () => {
+    stubFetch(TELEMETRY_WITH_NO_CV_DATA);
+    renderPage();
+
+    const fields: { label: string; value: string }[] = [
+      { label: t.rolloutRecallProxy, value: '97.4%' },
+      { label: t.rolloutStableRecallProxy, value: '99.1%' },
+      { label: t.rolloutNoCvRecallProxy, value: '87.0%' },
+      { label: t.rolloutProviderErrorRate, value: '0.1%' },
+      { label: t.rolloutP95Latency, value: '820 ms' },
+      { label: t.rolloutReviewRate, value: '5.0%' },
+    ];
+
+    // Guards the test itself: if two fields ever share a formatted value, or
+    // one value is a substring of another, the cross-checks below stop being
+    // able to tell a swap from a coincidence.
+    fields.forEach(({ value }, i) => {
+      fields.forEach(({ value: otherValue }, j) => {
+        if (i !== j) expect(value.includes(otherValue) || otherValue.includes(value)).toBe(false);
+      });
+    });
+
+    const cards = await Promise.all(
+      fields.map(async ({ label }) => (await screen.findByText(label)).closest('.rounded-xl')),
+    );
+
+    fields.forEach(({ value }, i) => {
+      expect(cards[i]?.textContent).toContain(value);
+      fields.forEach(({ value: otherValue }, j) => {
+        if (i !== j) expect(cards[i]?.textContent).not.toContain(otherValue);
+      });
+    });
+  });
 });
 
 describe('rollback button (#422)', () => {
