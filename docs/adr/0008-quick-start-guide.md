@@ -22,3 +22,5 @@ proposed
 - Guide tự động ẩn khi 4/4 task completed; HR có thể dismiss tạm thời và xem lại sau.
 
 KHÔNG phát triển tour dạng slideshow nữa. Nếu cần hướng dẫn chi tiết trên từng trang, làm hint/tooltip nhúng trong trang đó — không phải tour riêng.
+
+> **Đã thay đổi.** "4/4 task" ở trên mô tả một danh sách task duy nhất, trước khi [ADR 0009](./0009-system-admin-hr-role-separation.md) §4 tách Quick-Start Guide theo vai trò (System Admin ba, HR ba). Sau [ADR 0018](./0018-organization-ai-configuration-ownership-split.md), tập của HR lên bốn — tổng hai vai trò là ba cộng bốn, không còn một con số "N/N" duy nhất. Nguyên tắc auto-detect completion và Guide Widget persistent vẫn nguyên giá trị, chỉ áp dụng độc lập cho từng vai trò.

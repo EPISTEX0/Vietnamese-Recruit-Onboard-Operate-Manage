@@ -8,12 +8,8 @@ Vroom HR (Vietnamese Recruit-Onboard-Operate-Manage) là nền tảng quản lý
 Công ty duy nhất sở hữu một deployment. Đây là singleton — mỗi instance đang chạy chỉ có đúng một Organization. Organization lưu các cài đặt cấp công ty (tên, mã số thuế, timezone, ngày nghỉ, allowed email domains). Organization KHÔNG phải boundary để cách ly dữ liệu vì một deployment không chứa nhiều công ty.
 _Avoid_: Company, Tenant, Account, Client
 
-**Tenant**:
-Thuật ngữ legacy từ Policy Engine, nơi `tenant_id` được thiết kế làm khóa cách ly nhiều công ty. Trong mô hình self-hosted, mỗi deployment chỉ có một công ty nên `tenant_id` thực tế là hằng số. Xem mọi `tenant_id` hiện có là implementation detail cần đóng băng hoặc loại bỏ, không phải khái niệm multi-tenancy đang hoạt động.
-_Avoid_: dùng Tenant như thể nhiều công ty cùng chia sẻ một deployment
-
 **System Admin** (Deployer / Quản trị hệ thống):
-Vai trò quản trị kỹ thuật và triển khai hệ thống (`UserRole.SYSTEM_ADMIN`). Chịu trách nhiệm thực hiện First-Run Setup, cấu hình Google Workspace OAuth Client ID/Secret, LLM Provider/API Keys, Email Whitelist, Organization Domains và xem System Audit Logs. System Admin bị cấm hoàn toàn (Strict Block) khỏi việc truy cập hoặc thao tác trên dữ liệu nghiệp vụ HR.
+Vai trò quản trị kỹ thuật và triển khai hệ thống (`UserRole.SYSTEM_ADMIN`). Chịu trách nhiệm thực hiện First-Run Setup, cấu hình Google Workspace OAuth Client ID/Secret, LLM Provider/API Keys, Organization Domains và xem System Audit Logs. System Admin bị cấm hoàn toàn (Strict Block) khỏi việc truy cập hoặc thao tác trên dữ liệu nghiệp vụ HR.
 _Avoid_: Super Admin, System Administrator, Deployer (dùng System Admin thống nhất trong spec/code)
 
 **System Admin Console** (Quản trị hệ thống):
@@ -92,8 +88,8 @@ Khả năng tương lai giả định, trong đó AI tự quyết định và t�
 _Avoid_: dùng “Agent” để gọi Assistant hiện tại vì Assistant không autonomous
 
 **Organization AI Configuration**:
-Cấu hình AI cấp Organization do HR quản lý, xác định provider/model mặc định, nguồn credential và trạng thái bật/tắt độc lập của AI Automation và AI Assistant. Cấu hình này không thuộc Employee hoặc Employee Account.
-_Avoid_: User AI Settings, Employee AI Configuration, AI Agent Configuration
+Cấu hình AI cấp Organization, quyền sở hữu tách theo lớp trách nhiệm: **System Admin** cấu hình phần credential (provider, model mặc định, nguồn credential); **HR** sở hữu phần nghiệp vụ (xác nhận chính sách dữ liệu và trạng thái bật/tắt độc lập của AI Automation và AI Assistant). Cấu hình này không thuộc Employee hoặc Employee Account.
+_Avoid_: User AI Settings, Employee AI Configuration, AI Agent Configuration, coi toàn bộ cấu hình này là trách nhiệm của một vai trò duy nhất
 
 ## Recruitment & Onboarding
 
@@ -194,8 +190,8 @@ Danh sách tác vụ có trạng thái hiển thị sau First-Run Setup cho đ�
 _Avoid_: Feature tour, Walkthrough, Onboarding wizard, coi Quick-Start Guide là khái niệm chỉ của HR
 
 **Essential Setup Task**:
-Một tác vụ cần hoàn thành sau First-Run Setup trước khi Backbone Flow hoạt động. Tập task tách theo vai trò: **System Admin** có ba (cấu hình Google OAuth, cấu hình AI, tạo tài khoản HR đầu tiên); **HR** có ba (kết nối Organization Shared Google Account, tạo Job Opening đầu tiên, upload tài liệu đầu tiên vào Employee Knowledge Base). Cấu hình AI thuộc System Admin, không thuộc HR.
-_Avoid_: Step, Checklist item (generic), gộp hai tập task thành một danh sách bốn task
+Một tác vụ cần hoàn thành sau First-Run Setup trước khi Backbone Flow hoạt động. Tập task tách theo vai trò và không đối xứng về số lượng: **System Admin** có ba (cấu hình Google OAuth, cấu hình nhà cung cấp AI — chỉ credential, tạo tài khoản HR đầu tiên); **HR** có bốn (kết nối Organization Shared Google Account, tạo Job Opening đầu tiên, upload tài liệu đầu tiên vào Employee Knowledge Base, đồng ý chính sách dữ liệu và bật AI). Task thứ tư của HR đứng cuối danh sách vì phụ thuộc System Admin hoàn tất cấu hình nhà cung cấp AI trước.
+_Avoid_: Step, Checklist item (generic), coi hai tập task là "3+3" đối xứng — từ #420 là ba của System Admin cộng bốn của HR
 
 **Guide Widget**:
 Widget hiển thị progress bar và danh sách Essential Setup Task của vai trò đang đăng nhập, trên Dashboard HR hoặc Tổng quan hệ thống tương ứng. Click vào task → navigate đến trang cấu hình tương ứng.

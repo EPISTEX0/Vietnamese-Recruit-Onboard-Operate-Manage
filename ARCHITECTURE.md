@@ -231,7 +231,7 @@ Python ≥ 3.11 FastAPI application (`backend/src/main.py`) that wires module ro
 
 | Module | Responsibility |
 | --- | --- |
-| `identity` | Auth (Google OAuth2 + JWT), roles (`SYSTEM_ADMIN`/`HR`/`Employee`), domain whitelist, audit logs, first-run setup. |
+| `identity` | Auth (Google OAuth2 + JWT), roles (`SYSTEM_ADMIN`/`HR`/`Employee`), Organization allowed login domains, audit logs, first-run setup. |
 | `recruitment` | Candidate pipeline, Job Openings, CV parsing + intent classification, Recruitment Inbox, runtime & evaluation. |
 | `gmail` | Organization Google Connection, email sync, audit, AI classification. |
 | `knowledge_base` | Dual-KB document/chunk storage, ingestion orchestration, retrieval. |
