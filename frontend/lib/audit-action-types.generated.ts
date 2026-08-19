@@ -36,6 +36,8 @@ export const AUDIT_ACTION_TYPES = [
   'outbound_email_sent',
   'outbound_email_failed',
   'outbound_email_retry',
+  'cli_create_admin',
+  'cli_reset_password',
 ] as const;
 
 export type AuditActionType = (typeof AUDIT_ACTION_TYPES)[number];

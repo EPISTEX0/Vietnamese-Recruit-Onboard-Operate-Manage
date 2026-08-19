@@ -319,6 +319,13 @@ class AuditActionType(str, Enum):
     OUTBOUND_EMAIL_FAILED = "outbound_email_failed"
     OUTBOUND_EMAIL_RETRY = "outbound_email_retry"
 
+    # Rescue CLI (#419): actor is a human with shell access to the deployment,
+    # not an authenticated User, so these rows point ``admin_user_id`` at the
+    # account the command itself created/reset and mark the origin via
+    # ``details={"actor": "cli"}`` -- see QD-02 in issue #423.
+    CLI_CREATE_ADMIN = "cli_create_admin"
+    CLI_RESET_PASSWORD = "cli_reset_password"
+
 
 class AuditLog(SQLModel, table=True):
     """Records admin actions for audit trail purposes.

@@ -1422,7 +1422,9 @@
     "outbound_email_created": "Create Outbound Email",
     "outbound_email_sent": "Sent Email",
     "outbound_email_failed": "Failed to Send Email",
-    "outbound_email_retry": "Retry Email"
+    "outbound_email_retry": "Retry Email",
+    "cli_create_admin": "Create Admin via Rescue CLI",
+    "cli_reset_password": "Reset Password via Rescue CLI"
   },
   "roles": {
     "hr": "HR",
