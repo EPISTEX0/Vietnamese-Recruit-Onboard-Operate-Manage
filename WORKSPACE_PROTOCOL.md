@@ -85,19 +85,19 @@ pnpm test
 pnpm run build
 ```
 
-### Baseline đã đo — 2026-08-17 @ `364dd62`
+### Baseline đã đo — 2026-08-19 @ `6a2af6d`
 
 | Gate | Kết quả |
 |---|---|
 | `ruff check src tests` | All checks passed! |
-| `ruff format --check src tests` | 526 files already formatted |
-| `pytest` | **2788 passed, 2 skipped** (~150s) |
+| `ruff format --check src tests` | 537 files already formatted |
+| `pytest` | **2867 passed, 2 skipped** (~175s) |
 | `pnpm run lint` | 0 error, **2 warning** — `inbox/page.tsx:57`, `AiChat.tsx:547` |
 | `pnpm exec tsc --noEmit` | sạch |
-| `pnpm test` | **270 passed** (23 file) |
+| `pnpm test` | **274 passed** (24 file) |
 | `pnpm run build` | xanh |
 
-Bảng trước đó đo tại `c16f1b1` (2767 passed / 254 frontend); #359–#367 đã nâng số. Đổi số gate thì
+Bảng trước đó đo tại `364dd62` (2788 passed / 270 frontend); #417–#419 đã nâng số. Đổi số gate thì
 sửa bảng này cùng lúc — bảng rot còn tệ hơn không có bảng, vì nó khiến một hồi quy trông như baseline.
 
 Hai warning lint là baseline có chủ ý. **Warning thứ ba là hồi quy.**
