@@ -361,6 +361,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   outbound_email_sent: 'Đã gửi email',
   outbound_email_failed: 'Gửi email thất bại',
   outbound_email_retry: 'Thử lại gửi email',
+  cli_create_admin: 'Tạo admin qua CLI cứu hộ',
+  cli_reset_password: 'Reset mật khẩu qua CLI cứu hộ',
   ...LEGACY_AUDIT_ACTION_LABELS,
 };
 
@@ -438,6 +440,8 @@ export const AUDIT_ACTION_GROUPS: { label: string; items: { value: string; label
       { value: 'whitelist_remove', label: 'Xóa whitelist' },
       { value: 'oauth_update', label: 'Cập nhật OAuth' },
       { value: 'org_domain_update', label: 'Cập nhật domain' },
+      { value: 'cli_create_admin', label: 'Tạo admin qua CLI cứu hộ' },
+      { value: 'cli_reset_password', label: 'Reset mật khẩu qua CLI cứu hộ' },
     ],
   },
 ];

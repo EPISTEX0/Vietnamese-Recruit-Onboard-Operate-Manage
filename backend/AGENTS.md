@@ -46,6 +46,38 @@ hơn bảng tra tay.
 
 ---
 
+## Khôi phục / Reset database
+
+Deployment self-hosted mất tài khoản `system_admin` (người dựng hệ thống nghỉ việc, quên mật khẩu, ...)
+không cần `psql` tay nữa. `src/cli.py` (`python -m src.cli`) là CLI cứu hộ chạy trong container backend:
+
+```bash
+# Tạo system_admin mới -- CHỈ chạy được khi deployment chưa có system_admin nào đang active
+docker compose exec backend uv run python -m src.cli create-admin --email admin@example.com --name "Admin"
+
+# Reset mật khẩu một tài khoản đã tồn tại (còn tài khoản nhưng mất mật khẩu)
+docker compose exec backend uv run python -m src.cli reset-password --email admin@example.com
+```
+
+Cả hai lệnh in mật khẩu tạm ra stdout đúng một lần (không lưu ở đâu khác) và đặt
+`must_change_password=True` trên tài khoản. Không có `--password`: mật khẩu qua tham số dòng lệnh nằm
+lại trong `ps`/shell history, mật khẩu tạm thì không.
+
+`create-admin` **từ chối** (exit code khác 0) khi deployment còn ít nhất một `system_admin` đang
+`is_active=true` -- đây là lệnh cứu hộ, không phải lệnh cấp phát. Muốn tạo thêm admin khi deployment
+vẫn còn admin sống thì dùng `/api/system-admin` qua tài khoản đang có, không dùng CLI này. `reset-password`
+mới là lệnh phục vụ đúng khoảng trống đó (còn tài khoản, mất mật khẩu).
+
+Cả hai ghi `audit_logs` với `admin_user_id`/`admin_email` là **chính tài khoản bị tác động** (tạo mới
+hoặc bị reset) và đánh dấu nguồn gốc bằng `details = {"actor": "cli"}` -- `AuditLog.admin_user_id` là FK
+NOT NULL nên không có actor "ẩn danh" nào biểu diễn được (QĐ-02, issue #423).
+
+Không bind-mount `src/` trong container (xem §Database Session ở dưới) -- sửa `src/cli.py` rồi verify
+phải **rebuild** image (`docker compose build backend && docker compose up -d backend`), `restart`
+không đổi gì.
+
+---
+
 ## Modules
 
 `src/modules/` có đúng 10 module:

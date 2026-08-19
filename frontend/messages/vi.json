@@ -1422,7 +1422,9 @@
     "outbound_email_created": "Tạo email gửi đi",
     "outbound_email_sent": "Đã gửi email",
     "outbound_email_failed": "Gửi email thất bại",
-    "outbound_email_retry": "Thử lại gửi email"
+    "outbound_email_retry": "Thử lại gửi email",
+    "cli_create_admin": "Tạo admin qua CLI cứu hộ",
+    "cli_reset_password": "Reset mật khẩu qua CLI cứu hộ"
   },
   "roles": {
     "hr": "Nhân sự (HR)",

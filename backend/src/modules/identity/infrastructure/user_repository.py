@@ -111,6 +111,22 @@ class UserRepository:
         result = await self.session.execute(statement)
         return int(result.scalar_one())
 
+    async def count_active_system_admins(self) -> int:
+        """Count SYSTEM_ADMIN accounts that can actually log in.
+
+        Distinct from :meth:`count_system_admins`: a deactivated system_admin
+        still holds the role but cannot authenticate, so it must not satisfy
+        the rescue CLI's ``create-admin`` guard (#419) -- that guard exists to
+        refuse minting a new administrator while a working one still exists.
+        """
+        statement = (
+            select(func.count())
+            .select_from(User)
+            .where(User.role == UserRole.SYSTEM_ADMIN, User.is_active == True)  # noqa: E712
+        )
+        result = await self.session.execute(statement)
+        return int(result.scalar_one())
+
     async def create_local_account(
         self,
         *,
