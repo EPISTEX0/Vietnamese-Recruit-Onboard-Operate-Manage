@@ -50,7 +50,7 @@ if TYPE_CHECKING:
         OrganizationSettingsRepository,
     )
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -69,7 +69,6 @@ from src.modules.identity.api.admin_schemas import (
     ClassificationReleaseMetricsRequest,
     ClassificationRolloutRequest,
     ClassificationRolloutTelemetryResponse,
-    DataPolicyResponse,
     DomainAddRequest,
     DomainListResponse,
     DomainRemoveResponse,
@@ -98,7 +97,6 @@ from src.modules.identity.application.oauth_config_manager import (
 )
 from src.modules.identity.application.organization_ai_config_service import (
     AIConfigurationCandidate,
-    AIPolicyPreset,
     ClassificationRolloutCandidate,
     OrganizationAIConfigService,
     OrganizationAIConfigTestError,
@@ -554,241 +552,6 @@ async def update_provider_config(
             status_code=422,
             detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
         ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-# --- Data Policy & Consent ---
-
-
-@admin_router.get(
-    "/organization/ai-config/data-policy",
-    response_model=DataPolicyResponse,
-)
-async def get_data_policy(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-) -> DataPolicyResponse:
-    """Return the Organization AI data policy describing data sent to the provider."""
-    policy = service.get_data_policy()
-    return DataPolicyResponse(
-        version=str(policy["version"]),
-        items=policy["items"],  # type: ignore[arg-type]
-    )
-
-
-@admin_router.post(
-    "/organization/ai-config/accept-data-policy",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def accept_data_policy(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    """Accept the data policy before enabling AI capabilities for the first time."""
-    try:
-        result = await service.accept_data_policy(system_admin_user)
-    except OrganizationAIConfigValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_CONSENT,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-# --- Independent capability consent ---
-
-
-@admin_router.post(
-    "/organization/ai-config/automation/consent",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def accept_automation_consent(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    result = await service.accept_automation_consent(system_admin_user)
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_CONSENT,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-@admin_router.post(
-    "/organization/ai-config/assistant/consent",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def accept_assistant_consent(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    result = await service.accept_assistant_consent(system_admin_user)
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_CONSENT,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-    # --- Capability toggles: AI Automation ---
-
-
-@admin_router.post(
-    "/organization/ai-config/automation/enable",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def enable_ai_automation(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    """Enable AI Automation after validating preconditions."""
-    try:
-        result = await service.enable_automation(system_admin_user)
-    except OrganizationAIConfigValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    except OrganizationAIConfigTestError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
-        ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-@admin_router.post(
-    "/organization/ai-config/automation/disable",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def disable_ai_automation(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    """Disable AI Automation."""
-    try:
-        result = await service.disable_automation(system_admin_user)
-    except OrganizationAIConfigValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_TOGGLE_AUTOMATION,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-# --- Capability toggles: AI Assistant ---
-
-
-@admin_router.post(
-    "/organization/ai-config/assistant/enable",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def enable_ai_assistant(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    """Enable AI Assistant after validating preconditions."""
-    try:
-        result = await service.enable_assistant(system_admin_user)
-    except OrganizationAIConfigValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    except OrganizationAIConfigTestError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "AI_CONNECTION_FAILED", "message": str(exc)},
-        ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-@admin_router.post(
-    "/organization/ai-config/assistant/disable",
-    response_model=OrganizationAIConfigurationResponse,
-)
-async def disable_ai_assistant(
-    system_admin_user: SystemAdminUserDep,
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    """Disable AI Assistant."""
-    try:
-        result = await service.disable_assistant(system_admin_user)
-    except OrganizationAIConfigValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "AI_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.ORG_AI_TOGGLE_ASSISTANT,
-        details=result.audit_details,
-    )
-    await session.commit()
-    return _ai_view_response(result.view)
-
-
-# --- Versioned AI policy preset ---
-
-
-@admin_router.put(
-    "/organization/ai-config/policy-preset", response_model=OrganizationAIConfigurationResponse
-)
-async def set_ai_policy_preset(
-    system_admin_user: SystemAdminUserDep,
-    preset: AIPolicyPreset = Body(...),
-    service: OrganizationAIConfigService = Depends(get_organization_ai_config_service),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> OrganizationAIConfigurationResponse:
-    result = await service.set_policy_preset(preset, system_admin_user)
     await audit_service.log_action(
         admin=system_admin_user,
         action_type=AuditActionType.ORG_AI_CONFIG_UPDATE,

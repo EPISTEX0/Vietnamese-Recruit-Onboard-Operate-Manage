@@ -33,6 +33,10 @@ export type { AuditActionType };
  * `*State`). What this union does buy: `stateLabel`'s switch below becomes
  * exhaustive-checked by tsc, so a case going missing from *this* file is a
  * compile error instead of a silent raw-string fallback (#414).
+ *
+ * `lib/api/hr-ai-config.ts` keeps its own copy of this same union (#420) —
+ * that file must not import from this system-admin-scoped one, so update
+ * both together.
  */
 export type AICapabilityState = 'not_configured' | 'disabled' | 'ready' | 'unavailable';
 
@@ -65,11 +69,6 @@ export interface OrganizationAIConfiguration {
   ai_assistant_consent: boolean;
   ai_policy_preset: string;
   ai_policy_preset_version: string;
-}
-
-export interface DataPolicyResponse {
-  version: string;
-  items: Array<{ category: string; data_types: string; purpose: string; retention: string }>;
 }
 
 export interface AIConnectionTestResponse {
@@ -282,61 +281,6 @@ export async function updateProviderConfig(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-// --- Data Policy & Consent ---
-
-export async function getDataPolicy(): Promise<DataPolicyResponse> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/data-policy`);
-  return handleResponse<DataPolicyResponse>(res);
-}
-
-export async function acceptDataPolicy(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/accept-data-policy`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-export async function acceptAutomationConsent(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/automation/consent`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-export async function acceptAssistantConsent(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/assistant/consent`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-export async function setAIPolicyPreset(preset: 'conservative' | 'balanced' | 'high_recall'): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/policy-preset`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(preset),
-  });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-// --- Capability toggles: AI Automation ---
-
-export async function enableAutomation(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/automation/enable`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-export async function disableAutomation(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/automation/disable`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-// --- Capability toggles: AI Assistant ---
-
-export async function enableAssistant(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/assistant/enable`, { method: "POST" });
-  return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-export async function disableAssistant(): Promise<OrganizationAIConfiguration> {
-  const res = await adminFetch(`${BASE}/organization/ai-config/assistant/disable`, { method: "POST" });
   return handleResponse<OrganizationAIConfiguration>(res);
 }
 

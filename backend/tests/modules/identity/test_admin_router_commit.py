@@ -38,25 +38,17 @@ from src.modules.gmail.application.classification_rollout import (
 )
 from src.modules.identity.api import admin_router as admin_router_module
 from src.modules.identity.api.admin_router import (
-    accept_assistant_consent,
-    accept_automation_consent,
-    accept_data_policy,
     activate_org_api_key,
     add_domains,
     admin_router,
     change_user_role,
     configure_classification_rollout,
     create_staff_account,
-    disable_ai_assistant,
-    disable_ai_automation,
-    enable_ai_assistant,
-    enable_ai_automation,
     enforce_classification_guardrails,
     remove_domain,
     replace_domains,
     revoke_org_api_key,
     rollback_classification_rollout,
-    set_ai_policy_preset,
     set_credential_source,
     update_assistant_tools,
     update_oauth_config,
@@ -82,7 +74,6 @@ from src.modules.identity.api.schemas import (
     OAuthConfigUpdateRequest,
 )
 from src.modules.identity.application.audit_service import AuditService
-from src.modules.identity.application.organization_ai_config_service import AIPolicyPreset
 from src.modules.identity.container import get_db_session
 from src.modules.identity.domain.entities import (
     User,
@@ -166,11 +157,15 @@ _Case = Callable[[_Timeline], Awaitable[object]]
 def _ai_case(handler: Any, method: str, *body: Any, **kwargs: Any) -> _Case:
     """Build the case for one AI-configuration handler.
 
-    These sixteen handlers are variations on a single shape: an optional
+    These eight handlers are variations on a single shape: an optional
     request body, an ``OrganizationAIConfigService`` whose one method returns a
     view plus audit details, then the audit call and the commit. Spelling each
-    out as its own closure duplicated that shape sixteen times and buried the
+    out as its own closure duplicated that shape eight times and buried the
     only part that differs -- which service method the handler drives.
+
+    (The eight HR-owned consent/toggle handlers on the same shape moved to
+    ``hr_ai_config_router`` in #420; see
+    ``test_hr_ai_config_router_commit.py`` for their coverage.)
     """
 
     async def case(t: _Timeline) -> object:
@@ -349,16 +344,6 @@ WRITE_CASES: dict[str, _Case] = {
             model="gpt-4o-mini",
         ),
     ),
-    "accept_data_policy": _ai_case(accept_data_policy, "accept_data_policy"),
-    "accept_automation_consent": _ai_case(accept_automation_consent, "accept_automation_consent"),
-    "accept_assistant_consent": _ai_case(accept_assistant_consent, "accept_assistant_consent"),
-    "enable_ai_automation": _ai_case(enable_ai_automation, "enable_automation"),
-    "disable_ai_automation": _ai_case(disable_ai_automation, "disable_automation"),
-    "enable_ai_assistant": _ai_case(enable_ai_assistant, "enable_assistant"),
-    "disable_ai_assistant": _ai_case(disable_ai_assistant, "disable_assistant"),
-    "set_ai_policy_preset": _ai_case(
-        set_ai_policy_preset, "set_policy_preset", preset=AIPolicyPreset.BALANCED
-    ),
     "create_staff_account": _create_staff_account,
     "change_user_role": _change_user_role,
     "update_oauth_config": _update_oauth_config,
@@ -414,7 +399,7 @@ def test_every_mutating_endpoint_is_accounted_for() -> None:
     names = _mutating_endpoint_names()
 
     assert names == set(WRITE_CASES) | PROBE_ONLY_ENDPOINTS
-    assert len(names) == 25
+    assert len(names) == 17
 
 
 @pytest.mark.parametrize("name", sorted(WRITE_CASES))

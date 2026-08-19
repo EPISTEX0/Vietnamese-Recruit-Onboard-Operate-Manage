@@ -26,6 +26,7 @@ import inspect
 import re
 from dataclasses import dataclass
 from enum import Enum
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -33,14 +34,25 @@ from fastapi import HTTPException
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.main import app
 from src.modules.attendance.api.router import _require_hr as attendance_require_hr
 from src.modules.employee.api.dependencies import get_current_employee
 from src.modules.gmail.api.outbound_router import require_hr as outbound_require_hr
 from src.modules.gmail.api.router import require_hr as gmail_require_hr
-from src.modules.identity.api.admin_router import require_hr, require_system_admin
-from src.modules.identity.container import get_current_user
+from src.modules.identity.api.admin_router import (
+    get_organization_ai_config_service,
+    require_hr,
+    require_system_admin,
+)
+from src.modules.identity.application.audit_service import AuditService
+from src.modules.identity.application.organization_ai_config_service import (
+    AIConfigurationUpdateResult,
+    AIConfigurationView,
+)
+from src.modules.identity.container import get_audit_service as container_get_audit_service
+from src.modules.identity.container import get_current_user, get_db_session
 from src.modules.identity.domain.entities import User, UserRole
 from src.modules.identity.domain.exceptions import AccessDeniedError
 from src.modules.recruitment.api.candidate_router import require_hr as candidate_require_hr
@@ -527,3 +539,151 @@ def test_strict_isolation_plain_user_blocked_from_both(client_as) -> None:
 
     assert client.get("/api/hr/employee-requests").status_code == 403
     assert client.get("/api/system-admin/users").status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Organization AI Configuration -- moved off /api/system-admin/* to HR (#420).
+#
+# The structural layers above (``test_route_access_matrix``,
+# ``test_hr_namespace_is_fully_gated``, ``test_no_hr_route_is_gated_by_system_
+# admin``) already prove these routes resolve to ``Access.HR`` purely from
+# being registered under ``/api/hr/*``. What they cannot show is the HTTP
+# behaviour end to end, and that the old system-admin paths are gone -- that
+# is what this section adds.
+# ---------------------------------------------------------------------------
+
+#: The 9 routes #420 moved, plus the two new HR-only reads (root state and
+#: provider-status).
+HR_AI_CONFIG_ROUTES: tuple[tuple[str, str], ...] = (
+    ("GET", "/api/hr/organization/ai-config"),
+    ("GET", "/api/hr/organization/ai-config/data-policy"),
+    ("GET", "/api/hr/organization/ai-config/provider-status"),
+    ("POST", "/api/hr/organization/ai-config/accept-data-policy"),
+    ("POST", "/api/hr/organization/ai-config/automation/consent"),
+    ("POST", "/api/hr/organization/ai-config/assistant/consent"),
+    ("POST", "/api/hr/organization/ai-config/automation/enable"),
+    ("POST", "/api/hr/organization/ai-config/automation/disable"),
+    ("POST", "/api/hr/organization/ai-config/assistant/enable"),
+    ("POST", "/api/hr/organization/ai-config/assistant/disable"),
+    ("PUT", "/api/hr/organization/ai-config/policy-preset"),
+)
+
+#: Every one of the 9 routes as they used to be reachable, pre-#420.
+FORMER_SYSTEM_ADMIN_AI_CONFIG_PATHS: frozenset[str] = frozenset(
+    {
+        "GET /api/system-admin/organization/ai-config/data-policy",
+        "POST /api/system-admin/organization/ai-config/accept-data-policy",
+        "POST /api/system-admin/organization/ai-config/automation/consent",
+        "POST /api/system-admin/organization/ai-config/assistant/consent",
+        "POST /api/system-admin/organization/ai-config/automation/enable",
+        "POST /api/system-admin/organization/ai-config/automation/disable",
+        "POST /api/system-admin/organization/ai-config/assistant/enable",
+        "POST /api/system-admin/organization/ai-config/assistant/disable",
+        "PUT /api/system-admin/organization/ai-config/policy-preset",
+    }
+)
+
+
+class _StubAIConfigService:
+    """No-DB stand-in: every business method succeeds without a repository.
+
+    These tests are about routing and guard wiring, not the service's
+    business rules -- those are covered in
+    ``test_organization_ai_config_service.py`` and
+    ``test_hr_ai_config_router_commit.py``.
+    """
+
+    @staticmethod
+    def get_data_policy() -> dict[str, object]:
+        return {"version": "1.0", "items": []}
+
+    async def is_provider_connected(self) -> bool:
+        return True
+
+    async def get_view(self) -> AIConfigurationView:
+        return (await self._result()).view
+
+    async def _result(self) -> AIConfigurationUpdateResult:
+        return AIConfigurationUpdateResult(
+            view=AIConfigurationView(
+                provider="openai",
+                base_url="https://api.example.com/v1",
+                model="gpt-4o-mini",
+                api_key_masked=None,
+                configured=True,
+                updated_at=None,
+            ),
+            audit_details={},
+        )
+
+    async def accept_data_policy(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def accept_automation_consent(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def accept_assistant_consent(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def enable_automation(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def disable_automation(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def enable_assistant(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def disable_assistant(self, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+    async def set_policy_preset(self, preset: object, admin: User) -> AIConfigurationUpdateResult:
+        return await self._result()
+
+
+@pytest.fixture
+def hr_ai_config_stub():
+    """Override the AI-config service/session so HR requests never touch a DB.
+
+    Scoped to this fixture, not applied globally: every other test in this
+    file deliberately exercises the real dependency graph up to the guard.
+    """
+    app.dependency_overrides[get_organization_ai_config_service] = _StubAIConfigService
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock(spec=AsyncSession)
+    app.dependency_overrides[container_get_audit_service] = lambda: AsyncMock(spec=AuditService)
+
+    yield
+
+    app.dependency_overrides.pop(get_organization_ai_config_service, None)
+    app.dependency_overrides.pop(get_db_session, None)
+    app.dependency_overrides.pop(container_get_audit_service, None)
+
+
+@pytest.mark.parametrize(("method", "path"), HR_AI_CONFIG_ROUTES)
+def test_hr_ai_config_routes_reachable_by_hr(client_as, hr_ai_config_stub, method, path) -> None:
+    """HR reaches every route #420 moved off /api/system-admin/* -- no 403."""
+    body = {"preset": "balanced"} if path.endswith("/policy-preset") else None
+    response = client_as(UserRole.HR).request(method, path, json=body)
+
+    assert response.status_code != 403, response.json()
+
+
+@pytest.mark.parametrize(("method", "path"), HR_AI_CONFIG_ROUTES)
+def test_hr_ai_config_routes_blocked_for_system_admin(client_as, method, path) -> None:
+    """SYSTEM_ADMIN gets 403 HR_ACCESS_DENIED on every route #420 moved to HR.
+
+    The guard rejects before any dependency touches the database (it is the
+    first parameter on every handler), so this needs no stub -- same as
+    ``test_strict_isolation_hr_blocked_from_system_admin_api``.
+    """
+    response = client_as(UserRole.SYSTEM_ADMIN).request(method, path)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "HR_ACCESS_DENIED"
+
+
+def test_no_ai_config_business_route_survives_under_system_admin() -> None:
+    """None of the 9 routes #420 moved remain reachable at /api/system-admin/*."""
+    live = {f"{m} {p}" for m, p, _ in ALL_ROUTES}
+    resurrected = FORMER_SYSTEM_ADMIN_AI_CONFIG_PATHS & live
+    assert not resurrected, f"AI-config routes still live under system-admin: {resurrected}"
