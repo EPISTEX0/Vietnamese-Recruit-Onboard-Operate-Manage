@@ -208,23 +208,6 @@ async def get_oauth_service(
     )
 
 
-async def get_auth_service(
-    user_repo: UserRepository = Depends(get_user_repository),
-    refresh_token_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
-    token_service: TokenService = Depends(get_token_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> AuthService:
-    """Provide local AuthService instance."""
-    return AuthService(
-        settings=get_settings(),
-        token_service=token_service,
-        user_repository=user_repo,
-        refresh_token_repository=refresh_token_repo,
-        organization_repository=OrganizationSettingsRepository(session),
-        session=session,
-    )
-
-
 async def get_password_reset_token_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> PasswordResetTokenRepository:
@@ -237,6 +220,27 @@ async def get_password_reset_token_repository(
         A PasswordResetTokenRepository bound to the current session.
     """
     return PasswordResetTokenRepository(session)
+
+
+async def get_auth_service(
+    user_repo: UserRepository = Depends(get_user_repository),
+    refresh_token_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
+    token_service: TokenService = Depends(get_token_service),
+    password_reset_token_repo: PasswordResetTokenRepository = Depends(
+        get_password_reset_token_repository
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> AuthService:
+    """Provide local AuthService instance."""
+    return AuthService(
+        settings=get_settings(),
+        token_service=token_service,
+        user_repository=user_repo,
+        refresh_token_repository=refresh_token_repo,
+        organization_repository=OrganizationSettingsRepository(session),
+        password_reset_token_repository=password_reset_token_repo,
+        session=session,
+    )
 
 
 async def get_password_reset_service(

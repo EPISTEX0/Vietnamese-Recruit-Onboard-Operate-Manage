@@ -20,6 +20,7 @@ from src.modules.identity.api.admin_router import (
     get_role_service,
     require_system_admin,
 )
+from src.modules.identity.api.admin_schemas import StaffAccountCreateResponse
 from src.modules.identity.application.audit_service import AuditService, PaginatedAuditLogs
 from src.modules.identity.application.auth_service import AccountAlreadyExistsError
 from src.modules.identity.application.role_service import (
@@ -505,12 +506,24 @@ class TestCreateStaffAccount:
         app.dependency_overrides[get_audit_service] = _override_audit_service
         return app
 
-    def test_creates_hr_account_and_returns_temporary_password(self) -> None:
+    def test_response_schema_carries_no_password_in_any_form(self) -> None:
+        """Guards #421: a temporary password must never come back in the body.
+
+        Field-set equality (not just "no field named password") also catches
+        a password sneaking back in under a different name.
+        """
+        fields = set(StaffAccountCreateResponse.model_fields)
+        assert fields == {"user", "invite_link"}
+        assert all("password" not in name.lower() for name in fields)
+
+    def test_creates_hr_account_and_returns_invite_link(self) -> None:
         admin = _make_user(email="sysadmin@example.com", role=UserRole.SYSTEM_ADMIN)
         created = _make_user(email="hr@example.com", role=UserRole.HR, name="HR One")
 
         auth_service = AsyncMock()
-        auth_service.create_staff_account = AsyncMock(return_value=(created, "Tmp-Passw0rd"))
+        auth_service.create_staff_account = AsyncMock(
+            return_value=(created, "http://localhost:3000/reset-password?token=abc123")
+        )
 
         app = self._app_with_auth_service(admin, auth_service)
         client = TestClient(app)
@@ -523,7 +536,9 @@ class TestCreateStaffAccount:
         body = response.json()
         assert body["user"]["email"] == "hr@example.com"
         assert body["user"]["role"] == "hr"
-        assert body["temporary_password"] == "Tmp-Passw0rd"
+        assert body["invite_link"] == "http://localhost:3000/reset-password?token=abc123"
+        assert "temporary_password" not in body
+        assert set(body.keys()) == {"user", "invite_link"}
 
     def test_can_create_a_second_system_admin(self) -> None:
         """Provisioning a co-administrator must not require an HR detour."""
@@ -531,7 +546,9 @@ class TestCreateStaffAccount:
         created = _make_user(email="ops@example.com", role=UserRole.SYSTEM_ADMIN)
 
         auth_service = AsyncMock()
-        auth_service.create_staff_account = AsyncMock(return_value=(created, "Tmp-Passw0rd"))
+        auth_service.create_staff_account = AsyncMock(
+            return_value=(created, "http://localhost:3000/reset-password?token=abc123")
+        )
 
         app = self._app_with_auth_service(admin, auth_service)
         client = TestClient(app)
@@ -578,7 +595,9 @@ class TestCreateStaffAccount:
         created = _make_user(email="hr@example.com", role=UserRole.HR)
 
         auth_service = AsyncMock()
-        auth_service.create_staff_account = AsyncMock(return_value=(created, "Tmp-Passw0rd"))
+        auth_service.create_staff_account = AsyncMock(
+            return_value=(created, "http://localhost:3000/reset-password?token=abc123")
+        )
 
         mock_audit_service = AsyncMock(spec=AuditService)
         mock_audit_service.log_action = AsyncMock(return_value=_make_audit_log())

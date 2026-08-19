@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.modules.identity.application.password_reset_service import _RESET_LINK_PATH
 from src.modules.identity.domain.entities import UserRole
 from src.modules.identity.domain.exceptions import (
     AccessDeniedError,
@@ -31,6 +33,9 @@ if TYPE_CHECKING:
         RefreshTokenRepository,
         TokenService,
     )
+    from src.modules.identity.infrastructure.password_reset_token_repository import (
+        PasswordResetTokenRepository,
+    )
     from src.modules.identity.infrastructure.user_repository import UserRepository
     from src.modules.recruitment.infrastructure.org_settings_repository import (
         OrganizationSettingsRepository,
@@ -38,6 +43,15 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+#: Invite-link lifetime for staff account provisioning (QĐ-04, issue #423).
+#: Deliberately its own constant, not password_reset_service's
+#: ``_RESET_TOKEN_EXPIRE_MINUTES``: that 15-minute window fits someone who
+#: clicks "forgot password" and opens their inbox immediately, but an invite
+#: link is copied by a System Admin and relayed over Zalo/chat, often hours
+#: later, during a deployment's first handover before Google Workspace mail
+#: is confirmed wired up.
+_INVITE_TOKEN_EXPIRE_HOURS = 72
 
 
 class AccountAlreadyExistsError(AuthError):
@@ -68,6 +82,7 @@ class AuthService:
         user_repository: UserRepository,
         refresh_token_repository: RefreshTokenRepository,
         organization_repository: OrganizationSettingsRepository | None = None,
+        password_reset_token_repository: PasswordResetTokenRepository | None = None,
         session: AsyncSession | None = None,
     ) -> None:
         """Initialize AuthService with local auth dependencies."""
@@ -76,6 +91,7 @@ class AuthService:
         self._user_repository = user_repository
         self._refresh_token_repository = refresh_token_repository
         self._organization_repository = organization_repository
+        self._password_reset_token_repository = password_reset_token_repository
         self._session = session
 
     async def get_setup_status(self) -> bool:
@@ -214,12 +230,19 @@ class AuthService:
         name: str,
         role: UserRole,
     ) -> tuple[Any, str]:
-        """Create an HR or SYSTEM_ADMIN account with a temporary password.
+        """Create an HR or SYSTEM_ADMIN account with a one-time invite link.
 
         This is the system admin's provisioning path (ADR-0009 section 3).
         First-run setup mints a single SYSTEM_ADMIN and every other
         account-creation route sits behind ``require_hr``, so without this the
         deployment can never produce its first HR account.
+
+        The account's password hash is a random value nobody is ever shown;
+        it is unreachable except through the invite link below, which the
+        recipient redeems through the same ``PasswordResetToken`` flow as
+        forgot-password (single-use, hashed at rest). Combined with
+        ``must_change_password=True``, the account cannot be used until the
+        recipient sets a password of their own.
 
         Args:
             email: The new account's email address.
@@ -228,30 +251,45 @@ class AuthService:
                 HR against an Employee record via ``create_employee_account``.
 
         Returns:
-            A tuple of (created user, the generated temporary password).
+            A tuple of (created user, the one-time invite link). The link
+            expires after ``_INVITE_TOKEN_EXPIRE_HOURS`` hours and is never
+            persisted anywhere in cleartext.
 
         Raises:
             AccountAlreadyExistsError: An account already uses this email.
             ValueError: ``role`` is not a staff role.
+            RuntimeError: The password reset token repository is not wired.
         """
         if role not in (UserRole.HR, UserRole.SYSTEM_ADMIN):
             raise ValueError(f"create_staff_account does not provision {role.value} accounts")
+        if self._password_reset_token_repository is None:
+            raise RuntimeError("Password reset token repository is not configured")
 
         normalized_email = email.lower()
         if await self._user_repository.get_by_email(normalized_email) is not None:
             raise AccountAlreadyExistsError(f"Account already exists for {normalized_email}")
 
-        temp_password = generate_temporary_password()
         user = await self._user_repository.create_local_account(
             email=normalized_email,
             name=name,
-            password_hash=hash_password(temp_password),
+            password_hash=hash_password(generate_temporary_password()),
             role=role,
             must_change_password=True,
         )
+
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        await self._password_reset_token_repository.create(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=datetime.now(UTC) + timedelta(hours=_INVITE_TOKEN_EXPIRE_HOURS),
+        )
+
         if self._session is not None:
             await self._session.commit()
-        return user, temp_password
+
+        invite_link = f"{self._settings.frontend_url}{_RESET_LINK_PATH.format(token=raw_token)}"
+        return user, invite_link
 
     async def create_employee_account(
         self,

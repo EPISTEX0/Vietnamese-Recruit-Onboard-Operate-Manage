@@ -313,9 +313,11 @@ class StaffAccountCreateResponse(BaseModel):
 
     Attributes:
         user: The created account.
-        temporary_password: One-time password; the account must change it at
-            first login. Returned only here and never persisted in clear text.
+        invite_link: One-time link, valid for 72 hours, the recipient opens
+            to set their own password (redeemed through the same
+            forgot-password flow). Never carries the account's password in
+            any form.
     """
 
     user: AdminUserResponse
-    temporary_password: str
+    invite_link: str

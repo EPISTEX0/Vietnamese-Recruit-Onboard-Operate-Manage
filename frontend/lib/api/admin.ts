@@ -349,8 +349,8 @@ export async function updateOAuthConfig(data: {
 
 export interface StaffAccountCreateResponse {
   user: AdminUser;
-  /** One-time password. Returned only here — never readable again. */
-  temporary_password: string;
+  /** One-time link, valid 72h. Returned only here — never readable again. */
+  invite_link: string;
 }
 
 export async function listUsers(): Promise<AdminUser[]> {
@@ -363,9 +363,10 @@ export async function listUsers(): Promise<AdminUser[]> {
  *
  * First-run setup mints exactly one system admin and every other
  * account-creation route sits behind HR, so this is the only way a deployment
- * gets its first HR account. The response carries a temporary password the
- * system admin must hand over out of band; the account lands with
- * `must_change_password` set.
+ * gets its first HR account. The response carries a one-time invite link
+ * (valid 72h) the system admin copies and hands over out of band; the
+ * account lands with `must_change_password` set and no password ever leaves
+ * the server.
  */
 export async function createStaffAccount(data: {
   email: string;

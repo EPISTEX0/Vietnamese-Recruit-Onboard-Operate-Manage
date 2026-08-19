@@ -595,7 +595,7 @@ async def create_staff_account(
     audit_service: AuditService = Depends(get_audit_service),
     session: AsyncSession = Depends(get_db_session),
 ) -> StaffAccountCreateResponse:
-    """Provision an HR or SYSTEM_ADMIN account with a temporary password.
+    """Provision an HR or SYSTEM_ADMIN account with a one-time invite link.
 
     ADR-0009 section 3 puts the first HR account in the system admin's hands.
     First-run setup mints exactly one SYSTEM_ADMIN and every other
@@ -609,13 +609,16 @@ async def create_staff_account(
         audit_service: The AuditService for audit logging.
 
     Returns:
-        The created account plus its one-time temporary password.
+        The created account plus a one-time invite link (72h) the recipient
+        uses to set their own password. The response never carries a
+        password in any form -- the system admin copies the link and hands
+        it over, instead of a credential travelling through chat or logs.
 
     Raises:
         HTTPException: 409 if an account already exists for that email.
     """
     try:
-        user, temporary_password = await auth_service.create_staff_account(
+        user, invite_link = await auth_service.create_staff_account(
             email=body.email,
             name=body.name,
             role=body.role,
@@ -641,7 +644,7 @@ async def create_staff_account(
 
     return StaffAccountCreateResponse(
         user=AdminUserResponse.model_validate(user),
-        temporary_password=temporary_password,
+        invite_link=invite_link,
     )
 
 

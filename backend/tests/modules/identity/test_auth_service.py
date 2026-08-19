@@ -1,13 +1,17 @@
 """Tests for local Identity authentication."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from src.modules.identity.application.auth_service import AuthService
+from src.modules.identity.application.auth_service import (
+    AccountAlreadyExistsError,
+    AuthService,
+)
+from src.modules.identity.domain.entities import UserRole
 from src.modules.identity.domain.exceptions import SetupAlreadyCompletedError
 
 
@@ -123,3 +127,78 @@ async def test_setup_race_rolls_back_and_returns_stable_error() -> None:
     assert error.value.error_code == "AUTH_SETUP_ALREADY_COMPLETED"
     session.rollback.assert_awaited_once_with()
     users.create_local_account.assert_not_called()
+
+
+def _make_staff_account_service() -> tuple[AuthService, MagicMock]:
+    """Build an AuthService with mocked repos for create_staff_account tests."""
+    user_repo = MagicMock()
+    user_repo.get_by_email = AsyncMock(return_value=None)
+    user_repo.create_local_account = AsyncMock(
+        return_value=MagicMock(id=uuid4(), email="hr@example.com")
+    )
+    token_repo = MagicMock()
+    token_repo.create = AsyncMock()
+    service = AuthService(
+        settings=MagicMock(frontend_url="http://localhost:3000"),
+        token_service=MagicMock(),
+        user_repository=user_repo,
+        refresh_token_repository=MagicMock(),
+        password_reset_token_repository=token_repo,
+    )
+    return service, token_repo
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_returns_invite_link_not_a_password() -> None:
+    service, token_repo = _make_staff_account_service()
+
+    _user, invite_link = await service.create_staff_account(
+        email="HR@Example.com", name="HR One", role=UserRole.HR
+    )
+
+    assert invite_link.startswith("http://localhost:3000/reset-password?token=")
+    token_repo.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_invite_expires_in_72_hours_not_15_minutes() -> None:
+    """Guards QĐ-04 (#421/#423): reusing password_reset_service's 15-minute
+    TTL would expire an invite before a System Admin has relayed it over
+    Zalo. This must fail if ``_INVITE_TOKEN_EXPIRE_HOURS`` drifts from 72,
+    including an accidental unit mix-up (e.g. using it as minutes).
+    """
+    service, token_repo = _make_staff_account_service()
+    before = datetime.now(UTC)
+
+    await service.create_staff_account(email="hr@example.com", name="HR One", role=UserRole.HR)
+
+    after = datetime.now(UTC)
+    expires_at = token_repo.create.await_args.kwargs["expires_at"]
+    ttl = expires_at - before
+    assert timedelta(hours=71) < ttl <= timedelta(hours=72) + (after - before)
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_rejects_duplicate_email() -> None:
+    service, token_repo = _make_staff_account_service()
+    service._user_repository.get_by_email = AsyncMock(return_value=MagicMock())
+
+    with pytest.raises(AccountAlreadyExistsError):
+        await service.create_staff_account(email="hr@example.com", name="HR One", role=UserRole.HR)
+
+    token_repo.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_requires_token_repository() -> None:
+    user_repo = MagicMock()
+    user_repo.get_by_email = AsyncMock(return_value=None)
+    service = AuthService(
+        settings=MagicMock(frontend_url="http://localhost:3000"),
+        token_service=MagicMock(),
+        user_repository=user_repo,
+        refresh_token_repository=MagicMock(),
+    )
+
+    with pytest.raises(RuntimeError):
+        await service.create_staff_account(email="hr@example.com", name="HR One", role=UserRole.HR)
