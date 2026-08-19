@@ -132,8 +132,8 @@ ACCESS_RULES: tuple[Rule, ...] = (
     Rule("*", "/redoc", Access.PUBLIC),
     Rule("*", "/openapi.json", Access.PUBLIC),
     # --- System administration ---------------------------------------------
-    # OAuth Client ID/Secret, LLM keys, whitelist, audit log, user management,
-    # runtime health. ADR-0009 section 2.
+    # OAuth Client ID/Secret, LLM keys, allowed domains, audit log, user
+    # management, runtime health. ADR-0009 section 2.
     Rule("*", "/api/system-admin/*", Access.SYSTEM_ADMIN),
     # --- Auth ---------------------------------------------------------------
     Rule("*", "/api/auth/login", Access.PUBLIC),
@@ -515,7 +515,7 @@ def test_strict_isolation_system_admin_blocked_from_hr_api(client_as) -> None:
 
 def test_strict_isolation_hr_blocked_from_system_admin_api(client_as) -> None:
     """HR calling a system-admin endpoint gets 403 SYSTEM_ADMIN_ACCESS_DENIED."""
-    response = client_as(UserRole.HR).get("/api/system-admin/whitelist")
+    response = client_as(UserRole.HR).get("/api/system-admin/users")
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "SYSTEM_ADMIN_ACCESS_DENIED"
@@ -526,4 +526,4 @@ def test_strict_isolation_plain_user_blocked_from_both(client_as) -> None:
     client = client_as(UserRole.USER)
 
     assert client.get("/api/hr/employee-requests").status_code == 403
-    assert client.get("/api/system-admin/whitelist").status_code == 403
+    assert client.get("/api/system-admin/users").status_code == 403

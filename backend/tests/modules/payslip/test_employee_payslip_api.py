@@ -54,7 +54,6 @@ class FakeUser:
         self.email = "employee@example.com"
         self.name = "Employee"
         self.avatar_url = None
-        self.google_sub = "google-sub-123"
         self.created_at = datetime.now(UTC)
         self.last_login = datetime.now(UTC)
         self.is_active = True
@@ -129,7 +128,6 @@ def _build_app(
             email=user.email,
             name=user.name,
             avatar_url=user.avatar_url,
-            google_sub=user.google_sub,
             created_at=user.created_at,
             last_login=user.last_login,
             is_active=user.is_active,

@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from src.modules.identity.domain.entities import UserRole, WhitelistEntryType
+from src.modules.identity.domain.entities import UserRole
 
 
 class TokenPayload(BaseModel):
@@ -154,40 +154,6 @@ class GoogleWorkspaceConnectionResponse(BaseModel):
 class GoogleWorkspaceCallbackRequest(BaseModel):
     code: str
     state: str
-
-
-class WhitelistAddRequest(BaseModel):
-    value: str = Field(
-        ...,
-        max_length=255,
-        description="Email address or domain pattern (@domain.com) to whitelist",
-    )
-
-
-class WhitelistEntrySchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID | None
-    value: str
-    entry_type: WhitelistEntryType
-    added_by_email: str
-    created_at: datetime | None
-    source: str
-    is_readonly: bool
-
-
-class WhitelistListResponse(BaseModel):
-    items: list[WhitelistEntrySchema]
-    total: int
-
-
-class WhitelistEntryCreatedResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    value: str
-    entry_type: WhitelistEntryType
-    created_at: datetime
 
 
 class OAuthConfigResponse(BaseModel):

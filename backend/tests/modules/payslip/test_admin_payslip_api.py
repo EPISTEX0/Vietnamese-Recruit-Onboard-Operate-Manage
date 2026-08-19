@@ -49,7 +49,6 @@ _ADMIN_USER = User(
     name="Admin",
     role=UserRole.HR,
     avatar_url=None,
-    google_sub="admin-sub-123",
     created_at=datetime.now(UTC),
     last_login=datetime.now(UTC),
     is_active=True,

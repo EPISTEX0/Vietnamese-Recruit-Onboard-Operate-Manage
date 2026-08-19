@@ -23,7 +23,6 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import uuid4
@@ -44,7 +43,6 @@ from src.modules.identity.api.admin_router import (
     accept_data_policy,
     activate_org_api_key,
     add_domains,
-    add_whitelist_entry,
     admin_router,
     change_user_role,
     configure_classification_rollout,
@@ -55,7 +53,6 @@ from src.modules.identity.api.admin_router import (
     enable_ai_automation,
     enforce_classification_guardrails,
     remove_domain,
-    remove_whitelist_entry,
     replace_domains,
     revoke_org_api_key,
     rollback_classification_rollout,
@@ -83,7 +80,6 @@ from src.modules.identity.api.admin_schemas import (
 from src.modules.identity.api.schemas import (
     OAuthConfigResponse,
     OAuthConfigUpdateRequest,
-    WhitelistAddRequest,
 )
 from src.modules.identity.application.audit_service import AuditService
 from src.modules.identity.application.organization_ai_config_service import AIPolicyPreset
@@ -91,8 +87,6 @@ from src.modules.identity.container import get_db_session
 from src.modules.identity.domain.entities import (
     User,
     UserRole,
-    WhitelistEntry,
-    WhitelistEntryType,
 )
 
 pytestmark = pytest.mark.unit
@@ -190,36 +184,6 @@ def _ai_case(handler: Any, method: str, *body: Any, **kwargs: Any) -> _Case:
         )
 
     return case
-
-
-async def _add_whitelist_entry(t: _Timeline) -> object:
-    manager = AsyncMock()
-    manager.add_entry = AsyncMock(
-        return_value=WhitelistEntry(
-            id=uuid4(),
-            value="new@example.com",
-            entry_type=WhitelistEntryType.EXACT_EMAIL,
-            added_by_user_id=_ADMIN.id,
-            created_at=datetime.now(UTC),
-        )
-    )
-    return await add_whitelist_entry(
-        WhitelistAddRequest(value="new@example.com"),
-        _ADMIN,
-        whitelist_manager=manager,
-        audit_service=t.audit,
-        session=t.session,
-    )
-
-
-async def _remove_whitelist_entry(t: _Timeline) -> object:
-    return await remove_whitelist_entry(
-        uuid4(),
-        _ADMIN,
-        whitelist_manager=AsyncMock(),
-        audit_service=t.audit,
-        session=t.session,
-    )
 
 
 async def _create_staff_account(t: _Timeline) -> object:
@@ -395,8 +359,6 @@ WRITE_CASES: dict[str, _Case] = {
     "set_ai_policy_preset": _ai_case(
         set_ai_policy_preset, "set_policy_preset", preset=AIPolicyPreset.BALANCED
     ),
-    "add_whitelist_entry": _add_whitelist_entry,
-    "remove_whitelist_entry": _remove_whitelist_entry,
     "create_staff_account": _create_staff_account,
     "change_user_role": _change_user_role,
     "update_oauth_config": _update_oauth_config,
@@ -452,7 +414,7 @@ def test_every_mutating_endpoint_is_accounted_for() -> None:
     names = _mutating_endpoint_names()
 
     assert names == set(WRITE_CASES) | PROBE_ONLY_ENDPOINTS
-    assert len(names) == 27
+    assert len(names) == 25
 
 
 @pytest.mark.parametrize("name", sorted(WRITE_CASES))

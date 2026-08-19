@@ -51,7 +51,6 @@ async def _insert_user(db_session: AsyncSession, role: UserRole) -> User:
     user = User(
         email=f"role-roundtrip-{suffix}@example.com",
         name="Role Round-trip User",
-        google_sub=f"google-sub-{suffix}",
         role=role,
     )
     db_session.add(user)

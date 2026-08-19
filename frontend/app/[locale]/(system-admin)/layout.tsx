@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { Bot, Cpu, Activity, FileText, Users, ShieldCheck, Mail, KeyRound, LayoutDashboard } from 'lucide-react';
+import { Bot, Cpu, Activity, FileText, Users, Mail, KeyRound, LayoutDashboard } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import AppShell from '@/components/app-shell';
 import type { NavGroup, NavItem } from '@/components/app-shell';
@@ -35,13 +35,20 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
   ];
 
   /**
-   * Three groups, one per kind of responsibility, mirroring the HR shell. A
-   * flat run of eight labels would make the admin read all eight to find one.
+   * Four groups, one per kind of responsibility, mirroring the HR shell. A
+   * flat run of seven labels would make the admin read all seven to find one.
    *
-   * Google OAuth opens "Người dùng & Truy cập" and sits above the other three:
-   * it decides who can sign in at all, while the accounts, the allowlist and
-   * the email domains below it only matter once someone can. That is also the
-   * order the Quick-Start Guide walks a fresh deployment through.
+   * "Tích hợp Google" opens and sits above the other three: it decides who
+   * can sign in at all (Google OAuth) and which Workspace domain the shared
+   * account may be, while "Người dùng" and the system group below it only
+   * matter once someone can. That is also the order the Quick-Start Guide
+   * walks a fresh deployment through.
+   *
+   * "Tên miền Workspace được phép nối" sits in this group, not "Người dùng",
+   * on purpose: #418 found it does not gate login (`allowed_domains` only
+   * gates which Workspace domain the Organization Google Connection may use,
+   * `organization_google_connection_service.py:291-294`) -- the account-list
+   * grouping was the source of that misreading.
    */
   const navGroups: NavGroup[] = [
     {
@@ -52,12 +59,16 @@ export default function SystemAdminLayout({ children }: { children: React.ReactN
       ],
     },
     {
-      label: t('settings.navGroups.usersAccess'),
+      label: t('settings.navGroups.googleIntegration'),
       items: [
         { href: '/settings/oauth', label: t('settings.oauth.nav'), icon: KeyRound },
-        { href: '/settings/users', label: t('settings.usersRoles'), icon: Users },
-        { href: '/settings/whitelist', label: t('settings.accessWhitelist'), icon: ShieldCheck },
         { href: '/settings/domains', label: t('settings.emailDomains'), icon: Mail },
+      ],
+    },
+    {
+      label: t('settings.navGroups.users'),
+      items: [
+        { href: '/settings/users', label: t('settings.usersRoles'), icon: Users },
       ],
     },
     {

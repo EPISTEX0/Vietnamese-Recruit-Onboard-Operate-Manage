@@ -121,7 +121,6 @@ def _make_user() -> User:
     return User(
         email=f"hr.admin-{suffix}@example.com",
         name="HR Admin",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
 

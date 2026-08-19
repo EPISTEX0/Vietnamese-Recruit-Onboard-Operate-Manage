@@ -158,7 +158,6 @@ def _build_non_admin_actor(role: UserRole, email_suffix: str) -> User:
     return User(
         email=f"user-{email_suffix}@example.com",
         name="Non Admin Actor",
-        google_sub=f"sub-{email_suffix}",
         role=role,
     )
 

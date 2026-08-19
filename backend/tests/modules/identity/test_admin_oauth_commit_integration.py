@@ -12,9 +12,8 @@ is the one where the stale read was observed on this deployment (#307: a POST
 answered ``updated_at=10:43:46`` while the very next GET still read
 ``10:41:36``), and because ``OAuthConfigRepository.upsert`` only ``flush()``es
 -- nothing below the handler commits, so the assertion has exactly one thing
-holding it up. Endpoints backed by ``WhitelistRepository`` or
-``OrganizationSettingsRepository`` would have passed either way: those
-repositories already commit for themselves.
+holding it up. Endpoints backed by ``OrganizationSettingsRepository`` would
+have passed either way: that repository already commits for itself.
 
 The check has to happen *while the response is being sent*, not after
 ``client.post`` returns: by then FastAPI has drained its dependency stack and

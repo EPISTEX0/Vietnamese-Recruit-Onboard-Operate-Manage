@@ -11,10 +11,6 @@ from .schemas import (
     OAuthConfigUpdateRequest,
     TokenPayload,
     UserResponse,
-    WhitelistAddRequest,
-    WhitelistEntryCreatedResponse,
-    WhitelistEntrySchema,
-    WhitelistListResponse,
 )
 
 __all__ = [
@@ -25,8 +21,4 @@ __all__ = [
     "OAuthConfigUpdateRequest",
     "TokenPayload",
     "UserResponse",
-    "WhitelistAddRequest",
-    "WhitelistEntryCreatedResponse",
-    "WhitelistEntrySchema",
-    "WhitelistListResponse",
 ]

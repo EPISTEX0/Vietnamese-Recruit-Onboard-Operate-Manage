@@ -172,7 +172,6 @@ async def _insert_admin_user(maker: async_sessionmaker[AsyncSession]) -> User:
     user = User(
         email=f"hr-admin-{suffix}@example.com",
         name="HR Admin",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
     async with maker() as db_session:
@@ -187,7 +186,6 @@ async def _insert_admin_user(maker: async_sessionmaker[AsyncSession]) -> User:
         id=admin_id,
         email=admin_email,
         name="HR Admin",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
 

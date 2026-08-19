@@ -877,7 +877,8 @@
   "settings": {
     "navGroups": {
       "ai": "AI",
-      "usersAccess": "Người dùng & Truy cập",
+      "googleIntegration": "Tích hợp Google",
+      "users": "Người dùng",
       "system": "Hệ thống"
     },
     "systemOverview": {
@@ -941,8 +942,7 @@
     "systemHealth": "Tình trạng hệ thống",
     "auditLog": "Nhật ký hoạt động",
     "usersRoles": "Người dùng & Vai trò",
-    "accessWhitelist": "Danh sách truy cập",
-    "emailDomains": "Tên miền email",
+    "emailDomains": "Tên miền Workspace được phép nối",
     "unknownError": "Lỗi không xác định",
     "configSaved": "Đã lưu cấu hình nhà cung cấp AI.",
     "policyAccepted": "Đã đồng ý toàn bộ chính sách. Bạn có thể bật tính năng AI ngay bây giờ.",
@@ -1037,17 +1037,9 @@
     "created": "Tạo",
     "cannotSelfChange": "Bạn không thể tự thay đổi quyền của mình",
     "noUsers": "Chưa có người dùng nào.",
-    "whitelistDesc": "Quản lý email và tên miền được phép đăng nhập",
-    "whitelistPlaceholder": "email@congty.com hoặc @congty.com",
     "adding": "Đang thêm...",
     "add": "Thêm",
-    "emptyWhitelist": "Danh sách trống. Thêm email hoặc tên miền để bắt đầu.",
-    "domain": "Tên miền",
-    "emailType": "Email",
-    "readOnlySource": "File cấu hình · chỉ đọc",
-    "manualAdd": "Thêm thủ công",
-    "confirmDeleteEntry": "Xóa \"{value}\" khỏi danh sách truy cập?",
-    "domainsDesc": "Quản lý tên miền email được phép trong tổ chức",
+    "domainsDesc": "Tên miền Workspace được phép nối làm tài khoản Google dùng chung của tổ chức. Không giới hạn ai được đăng nhập vào deployment này.",
     "domainsPlaceholder": "congty.com, congty.vn",
     "noDomains": "Chưa có tên miền nào. Thêm tên miền để bắt đầu.",
     "confirmRemoveDomain": "Xóa tên miền \"@{domain}\" khỏi danh sách?",

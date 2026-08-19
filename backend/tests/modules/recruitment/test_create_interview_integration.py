@@ -329,7 +329,6 @@ async def _seed_data(
     user = User(
         email=f"hr-{suffix}@example.com",
         name="HR Admin",
-        google_sub=f"gs-{suffix}",
         role=UserRole.HR,
     )
     interviewer = Employee(

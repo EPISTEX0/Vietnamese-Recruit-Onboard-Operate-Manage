@@ -24,30 +24,6 @@ export type { AuditActionType };
 // Types
 // ---------------------------------------------------------------------------
 
-export type WhitelistEntryType = 'exact_email' | 'domain_pattern';
-
-export interface WhitelistEntry {
-  id: string | null;
-  value: string;
-  entry_type: WhitelistEntryType;
-  added_by_email: string;
-  created_at: string | null;
-  source: 'database' | 'file';
-  is_readonly: boolean;
-}
-
-export interface WhitelistListResponse {
-  items: WhitelistEntry[];
-  total: number;
-}
-
-export interface WhitelistEntryCreated {
-  id: string;
-  value: string;
-  entry_type: WhitelistEntryType;
-  created_at: string;
-}
-
 /**
  * Mirrors backend `AICapabilityState` (`organization_ai_config_service.py`).
  * Hand-copied, not generated — a backend member added without updating this
@@ -399,29 +375,6 @@ export async function configureClassificationRollout(data: ClassificationRollout
 export async function rollbackClassificationRollout(): Promise<OrganizationAIConfiguration> {
   const res = await adminFetch(`${BASE}/organization/ai-config/classification-rollout/rollback`, { method: "POST" });
   return handleResponse<OrganizationAIConfiguration>(res);
-}
-
-// ---------------------------------------------------------------------------
-// Whitelist Endpoints
-// ---------------------------------------------------------------------------
-
-export async function listWhitelist(): Promise<WhitelistListResponse> {
-  const res = await adminFetch(`${BASE}/whitelist`);
-  return handleResponse<WhitelistListResponse>(res);
-}
-
-export async function addWhitelistEntry(value: string): Promise<WhitelistEntryCreated> {
-  const res = await adminFetch(`${BASE}/whitelist`, jsonBody({ value }));
-  return handleResponse<WhitelistEntryCreated>(res);
-}
-
-export async function removeWhitelistEntry(id: string): Promise<void> {
-  const res = await adminFetch(`${BASE}/whitelist/${id}`, { method: "DELETE" });
-  if (!res.ok && res.status !== 204) {
-    const error = await res.json().catch(() => ({ detail: { message: 'Delete failed' } }));
-    const message = error?.detail?.message ?? error?.detail ?? 'Delete failed';
-    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
-  }
 }
 
 // ---------------------------------------------------------------------------

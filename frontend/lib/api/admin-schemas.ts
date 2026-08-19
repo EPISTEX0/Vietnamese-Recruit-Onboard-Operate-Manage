@@ -10,35 +10,6 @@ import { z } from "zod";
 import { STAFF_ROLES, USER_ROLES } from "@/lib/auth/roles";
 
 // ---------------------------------------------------------------------------
-// Whitelist Add Schema
-// ---------------------------------------------------------------------------
-
-/**
- * Validates a whitelist entry value — either a full email address
- * (user@domain.com) or a domain pattern (@domain.com).
- */
-export const whitelistAddSchema = z.object({
-  value: z
-    .string()
-    .min(3, "Giá trị phải có ít nhất 3 ký tự")
-    .max(255, "Giá trị không được vượt quá 255 ký tự")
-    .refine(
-      (val) => {
-        // Domain pattern: starts with @ followed by a valid domain
-        const domainPatternRegex = /^@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
-        // Email: standard email format
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
-        return domainPatternRegex.test(val) || emailRegex.test(val);
-      },
-      {
-        message: "Phải là email hợp lệ (user@domain.com) hoặc domain (@domain.com)",
-      }
-    ),
-});
-
-export type WhitelistAddFormData = z.infer<typeof whitelistAddSchema>;
-
-// ---------------------------------------------------------------------------
 // OAuth Config Update Schema
 // ---------------------------------------------------------------------------
 

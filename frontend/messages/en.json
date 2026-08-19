@@ -877,7 +877,8 @@
   "settings": {
     "navGroups": {
       "ai": "AI",
-      "usersAccess": "Users & Access",
+      "googleIntegration": "Google Integration",
+      "users": "Users",
       "system": "System"
     },
     "systemOverview": {
@@ -941,8 +942,7 @@
     "systemHealth": "System Health",
     "auditLog": "Activity Log",
     "usersRoles": "Users & Roles",
-    "accessWhitelist": "Access Whitelist",
-    "emailDomains": "Email Domains",
+    "emailDomains": "Allowed Workspace Domain",
     "unknownError": "Unknown error",
     "configSaved": "AI provider configuration saved.",
     "policyAccepted": "All policies accepted. You can enable AI features now.",
@@ -1037,17 +1037,9 @@
     "created": "Created",
     "cannotSelfChange": "You cannot change your own role",
     "noUsers": "No users yet.",
-    "whitelistDesc": "Manage the emails and domains allowed to sign in",
-    "whitelistPlaceholder": "email@company.com or @company.com",
     "adding": "Adding...",
     "add": "Add",
-    "emptyWhitelist": "The list is empty. Add an email or a domain to get started.",
-    "domain": "Domain",
-    "emailType": "Email",
-    "readOnlySource": "Config file · read-only",
-    "manualAdd": "Added manually",
-    "confirmDeleteEntry": "Remove \"{value}\" from the access whitelist?",
-    "domainsDesc": "Manage the email domains allowed in the organization",
+    "domainsDesc": "The Workspace domains allowed to connect as the organization's shared Google account. This does not restrict who can sign in to this deployment.",
     "domainsPlaceholder": "company.com, company.vn",
     "noDomains": "No domains yet. Add a domain to get started.",
     "confirmRemoveDomain": "Remove the domain \"@{domain}\" from the list?",

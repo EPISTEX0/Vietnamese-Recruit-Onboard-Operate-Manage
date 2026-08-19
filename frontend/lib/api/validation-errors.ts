@@ -203,8 +203,7 @@ const FIELD_LABELS: Record<string, string> = {
   reply_to_message_id: "ID thư trả lời",
   label_name: "Tên nhãn",
 
-  // ── Whitelist / Domains ──
-  value: "Giá trị",
+  // ── Domains ──
   domain: "Domain",
 
   // ── OAuth ──

@@ -1,8 +1,8 @@
 """FastAPI router for system-administration endpoints.
 
-Defines the /api/system-admin/* endpoints for managing whitelist entries,
-OAuth configuration, LLM provider credentials, user roles, and audit logs.
-Every endpoint here requires the SYSTEM_ADMIN role (ADR-0009).
+Defines the /api/system-admin/* endpoints for managing OAuth configuration,
+LLM provider credentials, user roles, and audit logs. Every endpoint here
+requires the SYSTEM_ADMIN role (ADR-0009).
 
 This module also owns the two shared role guards, ``require_system_admin``
 and ``require_hr``. There is deliberately no generic ``require_admin``: an
@@ -25,11 +25,10 @@ here too. Anything that grows a service layer should move its commit with it.
 
 Each commit sits *after* the audit call, so the audit row is durable before
 the response goes out and not just the action it describes. Note that this is
-an ordering guarantee, not an atomicity one: the whitelist endpoints, the
-three domain endpoints and ``create_staff_account`` reach code that already
-commits its own work, so for those six the audit row lands in a later
-transaction of its own. Precisely: ``WhitelistRepository.add``/``.remove``
-commit; the three domain endpoints all land in
+an ordering guarantee, not an atomicity one: the three domain endpoints and
+``create_staff_account`` reach code that already commits its own work, so for
+those four the audit row lands in a later transaction of its own. Precisely:
+the three domain endpoints all land in
 ``OrganizationSettingsRepository.set_allowed_domains``, ``add_domains`` and
 ``remove_domain`` by delegating to it and ``replace_domains`` directly; and
 ``AuthService.create_staff_account`` commits when it holds a session, which
@@ -87,10 +86,6 @@ from src.modules.identity.api.admin_schemas import (
 from src.modules.identity.api.schemas import (
     OAuthConfigResponse,
     OAuthConfigUpdateRequest,
-    WhitelistAddRequest,
-    WhitelistEntryCreatedResponse,
-    WhitelistEntrySchema,
-    WhitelistListResponse,
 )
 from src.modules.identity.application.audit_service import AuditService
 from src.modules.identity.application.auth_service import (
@@ -116,7 +111,6 @@ from src.modules.identity.application.role_service import (
     SuperAdminProtectedError,
     UserNotFoundError,
 )
-from src.modules.identity.application.whitelist_manager import WhitelistManager
 from src.modules.identity.container import (
     get_auth_service,
     get_crypto_utils,
@@ -124,7 +118,6 @@ from src.modules.identity.container import (
     get_db_session,
     get_oauth_config_manager,
     get_settings,
-    get_whitelist_manager,
 )
 from src.modules.identity.domain.entities import AuditActionType, User, UserRole
 from src.modules.identity.infrastructure.audit_log_repository import AuditLogRepository
@@ -803,118 +796,6 @@ async def set_ai_policy_preset(
     )
     await session.commit()
     return _ai_view_response(result.view)
-
-    # --- Whitelist Endpoints ---
-
-
-@admin_router.get("/whitelist", response_model=WhitelistListResponse)
-async def list_whitelist(
-    system_admin_user: SystemAdminUserDep,
-    whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
-) -> WhitelistListResponse:
-    """List all whitelist entries (merged file + database).
-
-    Returns all whitelist entries from both the file-based whitelist and
-    the database. File-based entries are marked as read-only.
-
-    Args:
-        system_admin_user: The authenticated system admin (enforced by require_system_admin).
-        whitelist_manager: The WhitelistManager for querying entries.
-
-    Returns:
-        A list of all whitelist entries with metadata.
-    """
-    entries = await whitelist_manager.list_entries()
-    items = [
-        WhitelistEntrySchema(
-            id=e.id,
-            value=e.value,
-            entry_type=e.entry_type,
-            added_by_email=e.added_by_email,
-            created_at=e.created_at,
-            source=e.source,
-            is_readonly=e.is_readonly,
-        )
-        for e in entries
-    ]
-    return WhitelistListResponse(items=items, total=len(items))
-
-
-@admin_router.post("/whitelist", response_model=WhitelistEntryCreatedResponse, status_code=201)
-async def add_whitelist_entry(
-    body: WhitelistAddRequest,
-    system_admin_user: SystemAdminUserDep,
-    whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> WhitelistEntryCreatedResponse:
-    """Add a new whitelist entry.
-
-    Validates the input format (email or domain pattern), checks for
-    duplicates, and persists the entry. Logs an audit trail entry.
-
-    Args:
-        body: The request body containing the value to whitelist.
-        system_admin_user: The authenticated admin user performing the action.
-        whitelist_manager: The WhitelistManager for entry management.
-        audit_service: The AuditService for audit logging.
-
-    Returns:
-        The newly created whitelist entry.
-
-    Raises:
-        HTTPException: 422 if format is invalid, 409 if duplicate.
-    """
-    entry = await whitelist_manager.add_entry(value=body.value, admin=system_admin_user)
-
-    # Log the whitelist addition in the audit trail.
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.WHITELIST_ADD,
-        details={
-            "entry_id": str(entry.id),
-            "value": entry.value,
-            "entry_type": entry.entry_type.value,
-        },
-    )
-    await session.commit()
-
-    return WhitelistEntryCreatedResponse.model_validate(entry)
-
-
-@admin_router.delete("/whitelist/{entry_id}", status_code=204)
-async def remove_whitelist_entry(
-    entry_id: UUID,
-    system_admin_user: SystemAdminUserDep,
-    whitelist_manager: WhitelistManager = Depends(get_whitelist_manager),
-    audit_service: AuditService = Depends(get_audit_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> None:
-    """Remove a whitelist entry by ID.
-
-    Only database-sourced entries can be removed. File-based entries
-    are read-only and cannot be deleted via the API.
-
-    Args:
-        entry_id: The UUID of the entry to remove.
-        system_admin_user: The authenticated admin user performing the action.
-        whitelist_manager: The WhitelistManager for entry management.
-        audit_service: The AuditService for audit logging.
-
-    Raises:
-        HTTPException: 404 if the entry does not exist.
-    """
-    await whitelist_manager.remove_entry(entry_id=entry_id, admin=system_admin_user)
-
-    # Log the whitelist removal in the audit trail.
-    await audit_service.log_action(
-        admin=system_admin_user,
-        action_type=AuditActionType.WHITELIST_REMOVE,
-        details={
-            "entry_id": str(entry_id),
-        },
-    )
-    await session.commit()
 
 
 # --- User Management Endpoints ---
