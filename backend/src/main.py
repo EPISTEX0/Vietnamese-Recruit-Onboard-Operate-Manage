@@ -43,6 +43,7 @@ from src.modules.identity.api.admin_router import admin_router  # noqa: E402
 from src.modules.identity.api.error_handler import (  # noqa: E402
     register_auth_error_handlers,
 )
+from src.modules.identity.api.hr_ai_config_router import hr_ai_config_router  # noqa: E402
 from src.modules.identity.api.router import router as auth_router  # noqa: E402
 from src.modules.identity.container import get_settings  # noqa: E402
 from src.modules.knowledge_base.api.router import router as kb_router  # noqa: E402
@@ -171,6 +172,7 @@ app.add_middleware(
 # Register module routers.
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(hr_ai_config_router)
 app.include_router(employee_router)
 app.include_router(gmail_router)
 app.include_router(outbound_email_router)

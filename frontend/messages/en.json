@@ -937,7 +937,11 @@
       "saved": "Saved. The new configuration takes effect immediately and the source is now the database."
     },
     "aiConfig": "AI Configuration",
-    "aiConfigDesc": "AI provider, data policy, and the system's AI features",
+    "aiConfigDesc": "AI provider: credentials and technical configuration",
+    "aiConfigHrDesc": "Data policy, automation level, and your organization's AI features",
+    "providerStatusTitle": "AI Provider Status",
+    "providerStatusDesc": "AI provider connected by System Admin",
+    "contactSystemAdminForAI": "AI is not connected yet. Contact System Admin to set up an AI provider.",
     "aiTools": "Assistant Tools",
     "systemHealth": "System Health",
     "auditLog": "Activity Log",

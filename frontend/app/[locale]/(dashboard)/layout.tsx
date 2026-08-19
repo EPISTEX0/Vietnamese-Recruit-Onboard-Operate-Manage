@@ -4,7 +4,7 @@ import React from 'react';
 import {
   LayoutDashboard, Inbox, UserCheck, Briefcase, Calendar,
   CheckSquare, Users, Clock, FileText, FileSpreadsheet,
-  Mail, FileSearch, BarChart3, BookOpen
+  Mail, FileSearch, BarChart3, BookOpen, Bot
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import AppShell from '@/components/app-shell';
@@ -15,8 +15,11 @@ import type { UserRole } from '@/lib/auth/roles';
 
 /**
  * Every surface in this route group is HR business (ADR-0009). System setup
- * lives in the `(system-admin)` group at /settings and is not reachable from
- * here — a system admin has no HR role and would only collect 403s.
+ * (provider credentials) lives in the `(system-admin)` group at /settings/ai
+ * and is not reachable from here — a system admin has no HR role and would
+ * only collect 403s. `/settings/ai-config` below is a different route (its
+ * own group), owned by HR: data-policy consent, AI Automation/Assistant
+ * toggles, and the policy preset (#420) — never credentials.
  */
 const ALLOW: readonly UserRole[] = ['hr'];
 
@@ -56,6 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       items: [
         { href: '/knowledge-base', label: t('system.knowledgeBase'), icon: BookOpen },
         { href: '/gmail', label: t('system.gmail'), icon: Mail },
+        { href: '/settings/ai-config', label: t('settings.aiConfig'), icon: Bot },
       ],
     },
   ];

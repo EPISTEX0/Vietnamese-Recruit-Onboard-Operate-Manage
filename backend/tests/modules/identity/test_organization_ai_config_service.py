@@ -543,6 +543,53 @@ async def test_get_view_flags_decrypt_failure_distinct_from_no_key(
 
 
 # ---------------------------------------------------------------------------
+# is_provider_connected — the narrow signal behind HR's provider-status route
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_is_provider_connected_false_when_not_configured(
+    service: OrganizationAIConfigService,
+) -> None:
+    assert await service.is_provider_connected() is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_is_provider_connected_true_when_credential_usable(
+    service: OrganizationAIConfigService,
+) -> None:
+    user = User(id=uuid4(), email="hr@example.com", name="HR")
+    respx.post("https://api.example.test/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    await service.update(
+        AIConfigurationCandidate("openai", "https://api.example.test/v1", "gpt-4o", "sk-key"),
+        user,
+    )
+
+    assert await service.is_provider_connected() is True
+
+
+@pytest.mark.asyncio
+async def test_is_provider_connected_false_when_credential_broken(
+    service: OrganizationAIConfigService,
+) -> None:
+    """A present-but-undecryptable key is "not connected", not "connected"."""
+    service.repository.config = OrganizationAIConfiguration(
+        id=uuid4(),
+        organization_singleton_key="default",
+        provider="openai",
+        base_url="https://api.example.test/v1",
+        model="gpt-4o",
+        api_key_enc="not-valid-ciphertext-at-all",
+        credential_source=CredentialSource.ORG_API_KEY.value,
+    )
+
+    assert await service.is_provider_connected() is False
+
+
+# ---------------------------------------------------------------------------
 # Enable rejection tests (safe enable)
 # ---------------------------------------------------------------------------
 
@@ -601,6 +648,40 @@ async def test_enable_rejected_when_health_check_fails(
     )
 
     with pytest.raises(OrganizationAIConfigTestError, match="health check failed"):
+        await service.enable_automation(user)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_enable_checks_consent_before_provider_health(
+    service: OrganizationAIConfigService,
+) -> None:
+    """Missing consent is reported even when the provider is also unreachable.
+
+    HR owns consent but cannot see or fix the provider (#420): if the
+    provider's health check ran first, a broken provider would mask HR's own
+    missing consent behind an error about a system it cannot act on. Consent
+    must be checked -- and therefore fail -- before the health check ever
+    runs.
+    """
+    user = User(id=uuid4(), email="hr@example.com", name="HR")
+    respx.post("https://api.example.test/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    await service.update(
+        AIConfigurationCandidate("openai", "https://api.example.test/v1", "gpt-4o", "sk-key"),
+        user,
+    )
+    # Consent is deliberately never accepted. The provider is also broken, so
+    # a health-check-first ordering would raise OrganizationAIConfigTestError
+    # instead of the consent error this test asserts.
+    respx.post("https://api.example.test/v1/chat/completions").mock(
+        return_value=httpx.Response(500, json={"error": "down"})
+    )
+
+    with pytest.raises(
+        OrganizationAIConfigValidationError, match="data policy has not been accepted"
+    ):
         await service.enable_automation(user)
 
 

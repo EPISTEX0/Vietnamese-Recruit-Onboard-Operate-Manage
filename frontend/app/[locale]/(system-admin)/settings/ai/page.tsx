@@ -1,23 +1,21 @@
 'use client';
 
 /**
- * AI configuration — provider credentials, data policy, automation level, and
- * the two AI feature switches.
- *
- * The only console section built from several blocks, so it keeps the two-level
- * structure: `PageHeader` names the section, and each block keeps its own
- * header strip. The six single-card sections drop theirs instead.
+ * AI provider credentials — base_url, model, and API key. Data policy
+ * consent, automation level, and the AI feature switches moved to HR's own
+ * `(dashboard)/settings/ai` (#420): sending recruitment data to an external
+ * provider is HR's business decision, not System Admin's. This page keeps
+ * only what System Admin still owns — *how* the provider is wired, not
+ * *whether* it may be used.
  */
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations, useFormatter } from 'next-intl';
-import {
-  Bot, Loader2, Check, AlertCircle, Cpu, FlaskConical, Zap, ShieldAlert, Sparkles,
-} from 'lucide-react';
+import { Bot, Loader2, Check, AlertCircle, Cpu, FlaskConical } from 'lucide-react';
 import { motion } from 'motion/react';
 import * as admin from '@/lib/api/admin';
-import type { AICapabilityState, OrganizationAIConfiguration } from '@/lib/api/admin';
+import type { OrganizationAIConfiguration } from '@/lib/api/admin';
 import { PageHeader } from '@/components/shared-ui';
 import { ErrorBox } from '../_components/console-ui';
 import { apiErrorText } from '../_components/api-error-text';
@@ -44,11 +42,6 @@ function AIConfigSections() {
     queryFn: admin.getOrganizationAIConfiguration,
     staleTime: 30_000,
   });
-  const { data: policy } = useQuery({
-    queryKey: ['ai-data-policy'],
-    queryFn: admin.getDataPolicy,
-    enabled: !!cfg && !cfg.data_policy_accepted,
-  });
   const [form, setForm] = useState({ provider: '', base_url: '', model: '', api_key: '' });
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
@@ -71,49 +64,6 @@ function AIConfigSections() {
     onError: (e) => setMsg({ kind: 'error', text: apiErrorText(e) }),
   });
 
-  const acceptPolicyMut = useMutation({
-        mutationFn: async () => {
-          await admin.acceptDataPolicy();
-          await admin.acceptAutomationConsent();
-          await admin.acceptAssistantConsent();
-        },
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: ['ai-config'] });
-          qc.invalidateQueries({ queryKey: ['ai-data-policy'] });
-          setMsg({ kind: 'success', text: t('policyAccepted') });
-        },
-        onError: (e) => setMsg({ kind: 'error', text: apiErrorText(e) }),
-      });
-
-  const presetMut = useMutation({
-    mutationFn: (preset: 'conservative' | 'balanced' | 'high_recall') => admin.setAIPolicyPreset(preset),
-    onMutate: (preset) => {
-      // Optimistic update — apply immediately so UI responds on first click
-      qc.setQueryData<OrganizationAIConfiguration>(['ai-config'], (old) =>
-        old ? { ...old, ai_policy_preset: preset } : old
-      );
-    },
-    onSuccess: (data) => {
-      // Use returned data directly — no refetch needed, instant update
-      qc.setQueryData<OrganizationAIConfiguration>(['ai-config'], data);
-    },
-    onError: (e) => {
-      // Revert on error — invalidate to restore true server state
-      qc.invalidateQueries({ queryKey: ['ai-config'] });
-      setMsg({ kind: 'error', text: apiErrorText(e) });
-    },
-  });
-  const toggleAutomation = useMutation({
-    mutationFn: (enable: boolean) => (enable ? admin.enableAutomation() : admin.disableAutomation()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-config'] }),
-    onError: (e) => setMsg({ kind: 'error', text: apiErrorText(e) }),
-  });
-  const toggleAssistant = useMutation({
-    mutationFn: (enable: boolean) => (enable ? admin.enableAssistant() : admin.disableAssistant()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-config'] }),
-    onError: (e) => setMsg({ kind: 'error', text: apiErrorText(e) }),
-  });
-
   if (isLoading) return (
     <div className="flex items-center justify-center py-20">
       <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
@@ -131,42 +81,6 @@ function AIConfigSections() {
     : cfg.api_key_decrypt_failed
     ? { label: t('connectionUnavailable'), text: 'text-amber-600', bg: 'bg-amber-50', dot: 'bg-amber-500' }
     : { label: t('connected'), text: 'text-emerald-600', bg: 'bg-emerald-50', dot: 'bg-emerald-500' };
-
-  const PRESETS = [
-    {
-      value: 'conservative' as const,
-      title: t('presetConservative'),
-      icon: '🛡️',
-      desc: t('presetConservativeDesc'),
-      useCases: [
-        t('conservativeUse1'),
-        t('conservativeUse2'),
-        t('conservativeUse3'),
-      ],
-    },
-    {
-      value: 'balanced' as const,
-      title: t('presetBalanced'),
-      icon: '⚖️',
-      desc: t('presetBalancedDesc'),
-      useCases: [
-        t('balancedUse1'),
-        t('balancedUse2'),
-        t('balancedUse3'),
-      ],
-    },
-    {
-      value: 'high_recall' as const,
-      title: t('presetHighRecall'),
-      icon: '🔍',
-      desc: t('presetHighRecallDesc'),
-      useCases: [
-        t('highRecallUse1'),
-        t('highRecallUse2'),
-        t('highRecallUse3'),
-      ],
-    },
-  ];
 
   return (
     <div className="space-y-5">
@@ -294,169 +208,6 @@ function AIConfigSections() {
               </div>
         </div>
       </section>
-
-      {/* ── Section 2: Data policy (only if not accepted) ── */}
-      {!cfg.data_policy_accepted && (
-        <section className="bg-amber-50/50 rounded-2xl border border-amber-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-amber-100 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
-              <ShieldAlert className="w-4 h-4 text-amber-600" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-amber-800">{t('dataPolicy')}</h2>
-              <p className="text-[12px] text-amber-600">{t('dataPolicyRequired')}</p>
-            </div>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="flex gap-3 p-4 bg-white rounded-xl border border-amber-100">
-              <span className="text-xl shrink-0">⚠️</span>
-              <div className="text-sm text-amber-800">
-                <p className="font-semibold mb-1">{t('policyNotice')}</p>
-                <p className="text-amber-700">{t('policyDescription')}</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[12px] font-medium text-slate-700">{t('dataSent')}</p>
-              {policy?.items?.map((item: { category: string; purpose: string }, i: number) => (
-                <div key={i} className="flex items-start gap-2.5 p-3 bg-white rounded-xl border border-slate-100">
-                  <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-mono text-slate-500 shrink-0 mt-0.5">{i + 1}</div>
-                  <div>
-                    <p className="text-[13px] font-medium text-slate-800">{item.category}</p>
-                    <p className="text-[12px] text-slate-500">{item.purpose}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => acceptPolicyMut.mutate()} disabled={acceptPolicyMut.isPending}
-              className="w-full h-11 text-sm font-semibold rounded-xl bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-all shadow-sm shadow-amber-200">
-              {acceptPolicyMut.isPending ? (
-                <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {t('processing')}</span>
-              ) : t('acceptAndActivate')}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* ── Section 3: Automation level ── */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">{t('automationLevel')}</h2>
-            <p className="text-[12px] text-slate-500">{t('automationLevelDesc')}</p>
-          </div>
-        </div>
-        <div className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {PRESETS.map((p) => {
-              const active = cfg.ai_policy_preset === p.value;
-              const isPending = presetMut.isPending && presetMut.variables === p.value;
-              return (
-                <button key={p.value} onClick={() => presetMut.mutate(p.value)} disabled={presetMut.isPending}
-                  className={`relative text-left p-4 rounded-xl border-2 transition-all ${
-                    active
-                      ? 'border-indigo-500 bg-indigo-50 shadow-sm shadow-indigo-100'
-                      : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
-                  } ${presetMut.isPending ? 'opacity-70' : ''}`}>
-                  {isPending && (
-                    <div className="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center z-10">
-                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                    </div>
-                  )}
-                  {active && !isPending && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  <div className="text-2xl mb-2">{p.icon}</div>
-                  <h3 className={`text-sm font-bold mb-1 ${active ? 'text-indigo-700' : 'text-slate-900'}`}>
-                    {p.title}
-                    {active && <span className="ml-1.5 text-[10px] font-medium bg-indigo-600 text-white px-1.5 py-0.5 rounded-full">{t('inUse')}</span>}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 leading-relaxed mb-2">{p.desc}</p>
-                  <ul className="space-y-1">
-                    {p.useCases.map((uc, i) => (
-                      <li key={i} className="text-[10px] text-slate-400 flex items-start gap-1">
-                        <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
-                        <span>{uc}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Section 4: AI features ── */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">{t('aiFeatures')}</h2>
-            <p className="text-[12px] text-slate-500">{t('aiFeaturesDesc')}</p>
-          </div>
-        </div>
-        <div className="divide-y divide-slate-50">
-          <ToggleFeature icon="📧" title={t('featureEmailClassify')}
-            desc={t('featureEmailClassifyDesc')}
-            enabled={cfg.automation_enabled} state={stateLabel(t, cfg.automation_state)}
-            loading={toggleAutomation.isPending} onToggle={() => toggleAutomation.mutate(!cfg.automation_enabled)} />
-          <ToggleFeature icon="💬" title={t('featureAssistant')}
-            desc={t('featureAssistantDesc')}
-            enabled={cfg.assistant_enabled} state={stateLabel(t, cfg.assistant_state)}
-            loading={toggleAssistant.isPending} onToggle={() => toggleAssistant.mutate(!cfg.assistant_enabled)} />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function stateLabel(t: (key: string) => string, s: AICapabilityState) {
-      switch (s) {
-        case 'disabled': return { text: t('disabled'), color: 'bg-slate-100 text-slate-500' };
-        case 'not_configured': return { text: t('notConfigured'), color: 'bg-slate-100 text-slate-400' };
-        case 'ready': return { text: t('ready'), color: 'bg-blue-100 text-blue-700' };
-        case 'unavailable': return { text: t('unavailable'), color: 'bg-amber-100 text-amber-700' };
-        default: {
-          // Exhaustive at compile time: adding a member to AICapabilityState
-          // without a case here is a tsc error. At runtime, degrade rather
-          // than throw — this union is hand-copied from the Python enum with
-          // nothing guarding drift, and this is the admin page you come to
-          // *fix* a broken config from: a pill with an odd label beats a
-          // blank page (this route segment has no error.tsx).
-          const unhandled: never = s;
-          return { text: unhandled, color: 'bg-slate-100 text-slate-500' };
-        }
-      }
-    }
-
-function ToggleFeature({ icon, title, desc, enabled, state, loading, onToggle }: {
-  icon: string; title: string; desc: string; enabled: boolean;
-  state: { text: string; color: string }; loading: boolean; onToggle: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
-      <span className="text-xl shrink-0">{icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${state.color}`}>{state.text}</span>
-        </div>
-        <p className="text-[12px] text-slate-500 leading-relaxed">{desc}</p>
-      </div>
-      <button onClick={onToggle} disabled={loading}
-        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-all ${
-          loading ? 'opacity-50' : ''} ${enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-        {loading && <Loader2 className="absolute inset-0 m-auto w-4 h-4 animate-spin text-white z-10" />}
-        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-all ${
-          enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-      </button>
     </div>
   );
 }

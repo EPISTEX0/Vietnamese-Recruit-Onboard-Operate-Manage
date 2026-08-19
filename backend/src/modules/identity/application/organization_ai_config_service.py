@@ -287,6 +287,18 @@ class OrganizationAIConfigService:
             return AICapabilityState.UNAVAILABLE.value
         return AICapabilityState.READY.value
 
+    async def is_provider_connected(self) -> bool:
+        """Return whether AI has a usable provider credential right now.
+
+        Narrower than ``get_view()``: answers only "is a provider connected",
+        without exposing provider name, base_url, model, or credential
+        details. Meant for callers (HR) who may not see those.
+        """
+        config = await self.repository.get()
+        if config is None:
+            return False
+        return await self._check_credential_usable(config)
+
     # ------------------------------------------------------------------
     # View
     # ------------------------------------------------------------------
@@ -478,6 +490,25 @@ class OrganizationAIConfigService:
             raise OrganizationAIConfigValidationError(
                 "Cannot enable AI capabilities: no provider configuration exists"
             )
+        # The shared data policy and the capability's own consent are both
+        # required, and are checked before anything about the provider: the
+        # caller who accepts consent (HR) cannot see or fix a provider
+        # credential/health-check failure, so their own scope must fail
+        # first, not last.
+        if not config.data_policy_accepted:
+            raise OrganizationAIConfigValidationError(
+                f"Cannot enable {capability_name}: data policy has not been accepted. "
+                "Please review and accept the data policy first."
+            )
+        consent_field = (
+            "ai_automation_consent"
+            if capability_name == "AI Automation"
+            else "ai_assistant_consent"
+        )
+        if not getattr(config, consent_field):
+            raise OrganizationAIConfigValidationError(
+                f"Cannot enable {capability_name}: {capability_name} consent has not been accepted."
+            )
         # Must have a usable credential
         try:
             await self._resolve_api_key(config)
@@ -493,21 +524,6 @@ class OrganizationAIConfigService:
             raise OrganizationAIConfigTestError(
                 f"Cannot enable {capability_name}: provider health check failed — {exc}"
             ) from exc
-        # The shared data policy and the capability's own consent are both required.
-        if not config.data_policy_accepted:
-            raise OrganizationAIConfigValidationError(
-                f"Cannot enable {capability_name}: data policy has not been accepted. "
-                "Please review and accept the data policy first."
-            )
-        consent_field = (
-            "ai_automation_consent"
-            if capability_name == "AI Automation"
-            else "ai_assistant_consent"
-        )
-        if not getattr(config, consent_field):
-            raise OrganizationAIConfigValidationError(
-                f"Cannot enable {capability_name}: {capability_name} consent has not been accepted."
-            )
 
     def _build_toggle_audit(
         self, capability: str, enabled: bool, config: OrganizationAIConfiguration

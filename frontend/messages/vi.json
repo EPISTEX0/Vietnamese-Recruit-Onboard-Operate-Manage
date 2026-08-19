@@ -937,7 +937,11 @@
       "saved": "Đã lưu. Cấu hình mới có hiệu lực ngay và nguồn chuyển sang cơ sở dữ liệu."
     },
     "aiConfig": "Cấu hình AI",
-    "aiConfigDesc": "Nhà cung cấp AI, chính sách dữ liệu và các tính năng AI của hệ thống",
+    "aiConfigDesc": "Nhà cung cấp AI: thông tin xác thực và cấu hình kỹ thuật",
+    "aiConfigHrDesc": "Chính sách dữ liệu, mức độ tự động và các tính năng AI của tổ chức",
+    "providerStatusTitle": "Trạng thái nhà cung cấp AI",
+    "providerStatusDesc": "Nhà cung cấp AI do Quản trị hệ thống kết nối",
+    "contactSystemAdminForAI": "AI chưa được kết nối. Vui lòng liên hệ Quản trị hệ thống để thiết lập nhà cung cấp AI.",
     "aiTools": "Công cụ Assistant",
     "systemHealth": "Tình trạng hệ thống",
     "auditLog": "Nhật ký hoạt động",
