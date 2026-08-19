@@ -184,7 +184,10 @@ def _ai_case(handler: Any, method: str, *body: Any, **kwargs: Any) -> _Case:
 async def _create_staff_account(t: _Timeline) -> object:
     auth_service = AsyncMock()
     auth_service.create_staff_account = AsyncMock(
-        return_value=(_user(role=UserRole.HR, email="hr@example.com"), "temp-password")
+        return_value=(
+            _user(role=UserRole.HR, email="hr@example.com"),
+            "http://localhost:3000/reset-password?token=abc123",
+        )
     )
     return await create_staff_account(
         StaffAccountCreateRequest(email="hr@example.com", name="HR", role=UserRole.HR),

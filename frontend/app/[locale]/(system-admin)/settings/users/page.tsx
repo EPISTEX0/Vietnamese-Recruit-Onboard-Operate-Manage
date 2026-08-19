@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations, useFormatter } from 'next-intl';
-import { Users, Loader2, Plus, Check, X, AlertCircle } from 'lucide-react';
+import { Users, Loader2, Plus, Check, X, AlertCircle, Copy } from 'lucide-react';
 import * as admin from '@/lib/api/admin';
 import type { AdminUser } from '@/lib/api/admin';
 import { useSession } from '@/lib/auth/session';
@@ -99,7 +99,8 @@ export default function UsersRolesPage() {
  *
  * First-run setup mints one System Admin and every other account-creation
  * route sits behind HR, so this form is the only way a fresh deployment gets
- * its first HR account. The temporary password is shown once and never again.
+ * its first HR account. The invite link is shown once and never again — the
+ * server never hands back a password in any form.
  */
 function CreateStaffAccount() {
   const qc = useQueryClient();
@@ -111,6 +112,7 @@ function CreateStaffAccount() {
   });
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<admin.StaffAccountCreateResponse | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const parsed = staffAccountCreateSchema.safeParse(form);
 
@@ -121,6 +123,7 @@ function CreateStaffAccount() {
       setCreated(res);
       setForm({ email: '', name: '', role: 'hr' });
       setError(null);
+      setCopied(false);
     },
     onError: (e) => setError(apiErrorText(e)),
   });
@@ -160,10 +163,20 @@ function CreateStaffAccount() {
           <p className="text-[13px] font-medium text-emerald-700 flex items-center gap-1.5">
             <Check className="w-4 h-4" /> {t('staffAccountCreated', { email: created.user.email })}
           </p>
-          <p className="text-[12px] text-slate-600">
-            {t('temporaryPassword')}: <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{created.temporary_password}</code>
-          </p>
-          <p className="text-[11px] text-amber-600">{t('temporaryPasswordNotice')}</p>
+          <div className="flex items-center gap-1.5">
+            <code className="flex-1 min-w-0 truncate text-[11px] font-mono bg-slate-100 px-1.5 py-1 rounded">{created.invite_link}</code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(created.invite_link)
+                  .then(() => setCopied(true))
+                  .catch(() => setError(t('copyLinkFailed')));
+              }}
+              className="inline-flex items-center gap-1 h-7 px-2.5 text-[11px] font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all shrink-0"
+            >
+              <Copy className="w-3.5 h-3.5" /> {copied ? t('linkCopied') : t('copyLink')}
+            </button>
+          </div>
+          <p className="text-[11px] text-amber-600">{t('inviteLinkNotice')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
