@@ -63,8 +63,6 @@ from src.modules.identity.domain.entities import (
     AuditLog,
     User,
     UserRole,
-    WhitelistEntry,
-    WhitelistEntryType,
 )
 from src.modules.payslip.domain.entities import Payslip, PayslipStatus
 
@@ -88,7 +86,6 @@ async def _make_user(db_session: AsyncSession, role: UserRole = UserRole.HR) -> 
     user = User(
         email=f"enum-roundtrip-{suffix}@example.com",
         name="Enum Round-trip User",
-        google_sub=f"google-sub-{suffix}",
         role=role,
     )
     db_session.add(user)
@@ -237,26 +234,6 @@ class TestEnumColumnsLoadBackAsEnums:
 
         assert isinstance(loaded.status, PayslipStatus)
         assert loaded.status is member
-
-    @pytest.mark.integration
-    @pytest.mark.parametrize("member", list(WhitelistEntryType))
-    async def test_whitelist_entry_type(
-        self, session: AsyncSession, member: WhitelistEntryType
-    ) -> None:
-        """``whitelist_entries.entry_type`` round-trips."""
-        user = await _make_user(session)
-        row = WhitelistEntry(
-            value=f"enum-roundtrip-{uuid4().hex[:12]}@example.com",
-            entry_type=member,
-            added_by_user_id=user.id,
-        )
-        session.add(row)
-        await session.flush()
-
-        loaded = await _reload(session, WhitelistEntry, row.id)
-
-        assert isinstance(loaded.entry_type, WhitelistEntryType)
-        assert loaded.entry_type is member
 
     @pytest.mark.integration
     @pytest.mark.parametrize("member", list(AuditActionType))
@@ -479,7 +456,6 @@ class TestEnumColumnDdlIsUnchanged:
             (EmployeeRequest, "leave_type", "TEXT", None),
             (AttendanceRecord, "source", "VARCHAR", 20),
             (Payslip, "status", "VARCHAR", 10),
-            (WhitelistEntry, "entry_type", "VARCHAR", 20),
             (AuditLog, "action_type", "VARCHAR", 50),
             (AssistantChatSession, "assistant_type", "VARCHAR", 10),
             (AssistantFeedbackEvent, "feedback_type", "VARCHAR", 4),

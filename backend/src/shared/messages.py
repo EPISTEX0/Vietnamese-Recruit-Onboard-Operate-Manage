@@ -136,23 +136,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "vi": "Không thể thay đổi quyền Super Admin",
         "en": "Cannot change Super Admin role",
     },
-    # Whitelist
-    "WHITELIST_INVALID_FORMAT": {
-        "vi": "Định dạng whitelist không hợp lệ",
-        "en": "Invalid whitelist format",
-    },
-    "WHITELIST_DUPLICATE": {
-        "vi": "Giá trị đã tồn tại trong whitelist",
-        "en": "Value already exists in whitelist",
-    },
-    "WHITELIST_NOT_FOUND": {
-        "vi": "Không tìm thấy mục whitelist",
-        "en": "Whitelist entry not found",
-    },
-    "WHITELIST_READONLY": {
-        "vi": "Không thể xóa mục whitelist chỉ đọc từ tệp cấu hình",
-        "en": "Cannot delete a read-only whitelist entry from config file",
-    },
     "ORG_AI_PROVIDER_NOT_CONFIGURED": {
         "vi": "Chưa cấu hình AI Provider cho Organization. Vui lòng vào Cấu hình AI & Hệ thống để thiết lập.",  # noqa: E501
         "en": "AI Provider not configured for Organization. Go to AI & System Settings to set up.",
@@ -1025,10 +1008,6 @@ class MessageCodes:
     USER_NOT_FOUND = "USER_NOT_FOUND"
     LAST_ADMIN_ERROR = "LAST_ADMIN_ERROR"
     SUPER_ADMIN_PROTECTED = "SUPER_ADMIN_PROTECTED"
-    WHITELIST_INVALID_FORMAT = "WHITELIST_INVALID_FORMAT"
-    WHITELIST_DUPLICATE = "WHITELIST_DUPLICATE"
-    WHITELIST_NOT_FOUND = "WHITELIST_NOT_FOUND"
-    WHITELIST_READONLY = "WHITELIST_READONLY"
     ORG_AI_PROVIDER_NOT_CONFIGURED = "ORG_AI_PROVIDER_NOT_CONFIGURED"
     # Employee
     EMPLOYEE_ERROR = "EMPLOYEE_ERROR"

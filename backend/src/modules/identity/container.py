@@ -18,13 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.modules.identity.application.audit_service import AuditService
 from src.modules.identity.application.auth_service import AuthService
-from src.modules.identity.application.domain_gate_service import DomainGateService
 from src.modules.identity.application.oauth_config_manager import OAuthConfigManager
 from src.modules.identity.application.oauth_service import OAuthService
 from src.modules.identity.application.password_reset_service import PasswordResetService
 from src.modules.identity.application.role_service import RoleService
 from src.modules.identity.application.token_service import TokenService
-from src.modules.identity.application.whitelist_manager import WhitelistManager
 from src.modules.identity.domain.entities import User
 from src.modules.identity.domain.exceptions import InvalidTokenError
 from src.modules.identity.infrastructure.audit_log_repository import AuditLogRepository
@@ -39,7 +37,6 @@ from src.modules.identity.infrastructure.password_reset_token_repository import 
 from src.modules.identity.infrastructure.rate_limiter import RateLimiter
 from src.modules.identity.infrastructure.refresh_token_repository import RefreshTokenRepository
 from src.modules.identity.infrastructure.user_repository import UserRepository
-from src.modules.identity.infrastructure.whitelist_repository import WhitelistRepository
 from src.modules.recruitment.infrastructure.org_settings_repository import (
     OrganizationSettingsRepository,
 )
@@ -131,28 +128,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-async def get_domain_gate_service(
-    session: AsyncSession = Depends(get_db_session),
-) -> DomainGateService:
-    """Provide a DomainGateService instance.
-
-    Reads the Organization's allowed_domains from the database and
-    checks whether a given email domain is permitted.
-
-    Args:
-        session: The async database session from DI.
-
-    Returns:
-        A DomainGateService bound to the current session.
-    """
-    from src.modules.recruitment.infrastructure.org_settings_repository import (
-        OrganizationSettingsRepository,
-    )
-
-    repo = OrganizationSettingsRepository(session)
-    return DomainGateService(org_settings_repository=repo)
 
 
 async def get_user_repository(
@@ -344,20 +319,6 @@ async def get_current_user(
 # ---------------------------------------------------------------------------
 
 
-async def get_whitelist_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> WhitelistRepository:
-    """Provide a WhitelistRepository instance.
-
-    Args:
-        session: The async database session from DI.
-
-    Returns:
-        A WhitelistRepository bound to the current session.
-    """
-    return WhitelistRepository(session)
-
-
 async def get_oauth_config_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> OAuthConfigRepository:
@@ -399,20 +360,6 @@ async def get_role_service(
     """
     settings = get_settings()
     return RoleService(session=session, super_admin_email=settings.super_admin_email)
-
-
-async def get_whitelist_manager(
-    whitelist_repo: WhitelistRepository = Depends(get_whitelist_repository),
-) -> WhitelistManager:
-    """Provide a WhitelistManager instance.
-
-    Args:
-        whitelist_repo: The whitelist repository from DI.
-
-    Returns:
-        A WhitelistManager managing the database-backed whitelist.
-    """
-    return WhitelistManager(repo=whitelist_repo)
 
 
 async def get_oauth_config_manager(

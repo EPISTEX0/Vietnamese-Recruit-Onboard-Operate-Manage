@@ -47,7 +47,6 @@ def _make_user(
         email=email,
         name=name,
         avatar_url=None,
-        google_sub=f"google-sub-{uuid4().hex[:8]}",
         created_at=datetime.now(UTC),
         last_login=datetime.now(UTC),
         is_active=True,

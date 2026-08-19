@@ -6,8 +6,8 @@
  * The roles mirror the BE enum (`src/modules/identity/domain/entities.py`):
  *
  * - `system_admin` — owns `/api/system-admin/*`: OAuth client credentials,
- *   LLM API key, whitelist, allowed domains, audit log, user management,
- *   runtime health. No HR business surface.
+ *   LLM API key, allowed domains, audit log, user management, runtime
+ *   health. No HR business surface.
  * - `hr` — owns every business surface: employees, onboarding, knowledge base,
  *   documents, recruitment, Gmail, HR assistant, payslips, employee requests,
  *   attendance, and the organization Google connection. No system setup.

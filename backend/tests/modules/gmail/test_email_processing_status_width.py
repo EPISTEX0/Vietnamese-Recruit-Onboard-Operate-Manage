@@ -131,7 +131,6 @@ async def _make_user(db_session: AsyncSession) -> User:
     user = User(
         email=f"status-width-{suffix}@example.com",
         name="Status Width User",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
     db_session.add(user)

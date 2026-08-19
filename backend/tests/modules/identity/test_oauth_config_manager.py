@@ -33,7 +33,6 @@ def _make_admin() -> User:
         id=uuid4(),
         email="admin@example.com",
         name="Admin User",
-        google_sub="google-sub-123",
         role=UserRole.SYSTEM_ADMIN,
     )
     return user

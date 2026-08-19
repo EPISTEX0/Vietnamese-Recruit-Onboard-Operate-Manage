@@ -1,15 +1,15 @@
 /**
  * @vitest-environment jsdom
  *
- * The four console list routes must tell "empty" and "broken" apart.
+ * The three console list routes must tell "empty" and "broken" apart.
  *
- * These are the surfaces where the two states carry opposite meanings. Three of
- * them — Người dùng & Vai trò, Danh sách truy cập, Tên miền email — describe who
- * may reach the deployment. Drawing "Danh sách trống" over a failed
- * `GET /whitelist` tells the admin nobody holds access, when the truth is the
- * system could not say who does; the natural next move is to grant access that
- * already exists, or to conclude the allowlist was wiped. #305 exists for that
- * single sentence.
+ * These are the surfaces where the two states carry opposite meanings. Two of
+ * them — Người dùng & Vai trò, Tên miền Workspace được phép nối — describe who
+ * may reach the deployment or connect the shared Google account. Drawing
+ * "Danh sách trống" over a failed `GET /users` tells the admin nobody holds
+ * access, when the truth is the system could not say who does; the natural
+ * next move is to grant access that already exists, or to conclude the
+ * allowlist was wiped. #305 exists for that single sentence.
  *
  * Written as renders rather than as assertions about a helper: the defect being
  * fixed is not a wrong branch, it is a *missing* one. A unit test over some
@@ -40,7 +40,6 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 const { default: UsersRolesPage } = await import('./users/page');
-const { default: AccessWhitelistPage } = await import('./whitelist/page');
 const { default: EmailDomainsPage } = await import('./domains/page');
 const { default: AuditLogPage } = await import('./audit/page');
 
@@ -88,26 +87,6 @@ const SURFACES: Surface[] = [
     // …" suffix, and an exact matcher would never fire on it — leaving the
     // stale-data case below silently inert on this surface.
     staleMarker: 'Quản trị viên cũ',
-  },
-  {
-    name: 'whitelist',
-    Page: AccessWhitelistPage,
-    queryKey: ['whitelist'],
-    emptyPayload: { items: [], total: 0 },
-    populatedPayload: {
-      items: [{
-        id: 'w1',
-        value: 'ai-da-duoc-cap@vroom.test',
-        entry_type: 'email',
-        added_by_email: 'admin@vroom.test',
-        created_at: '2026-01-02T03:04:05Z',
-        source: 'database',
-        is_readonly: false,
-      }],
-      total: 1,
-    },
-    emptyText: t.emptyWhitelist,
-    staleMarker: 'ai-da-duoc-cap@vroom.test',
   },
   {
     name: 'domains',

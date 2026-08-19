@@ -433,7 +433,6 @@ async def _seed_actor_grant_employee_candidate(
     user = User(
         email=f"hr-{suffix}@example.com",
         name="HR Admin",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
     interviewer = Employee(

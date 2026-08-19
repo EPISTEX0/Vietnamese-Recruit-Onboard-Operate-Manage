@@ -280,16 +280,10 @@ class TestAdminSchemasCompat:
         from src.modules.identity.api.schemas import (
             OAuthConfigResponse,
             OAuthConfigUpdateRequest,
-            WhitelistEntryCreatedResponse,
-            WhitelistEntrySchema,
-            WhitelistListResponse,
         )
 
         assert OAuthConfigResponse is not None
         assert OAuthConfigUpdateRequest is not None
-        assert WhitelistEntryCreatedResponse is not None
-        assert WhitelistEntrySchema is not None
-        assert WhitelistListResponse is not None
 
     def test_google_connection_routes_exist(self, client):
         assert client.get("/api/auth/organization-google-connection/authorize-url").status_code in {

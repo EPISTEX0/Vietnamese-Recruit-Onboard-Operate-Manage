@@ -144,7 +144,6 @@ async def seeded(session: AsyncSession) -> AsyncIterator[Seeded]:
     user = User(
         email=f"reclassify-{suffix}@example.com",
         name="Reclassify HR",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
     email = EmailMessage(

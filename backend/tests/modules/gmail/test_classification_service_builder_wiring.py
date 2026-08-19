@@ -136,7 +136,6 @@ async def seeded(session: AsyncSession) -> AsyncIterator[Seeded]:
     user = User(
         email=f"builder-wiring-{suffix}@example.com",
         name="Builder Wiring HR",
-        google_sub=f"google-sub-{suffix}",
         role=UserRole.HR,
     )
     config = OrganizationAIConfiguration(

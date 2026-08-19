@@ -77,8 +77,8 @@ def test_migrates_only_unresolved_legacy_cv_email_once_with_audit_history(
         connection.execute(
             text(
                 """
-                INSERT INTO users (id, email, name, google_sub)
-                VALUES (:id, 'hr@example.com', 'HR', 'legacy-cv-migration')
+                INSERT INTO users (id, email, name)
+                VALUES (:id, 'hr@example.com', 'HR')
                 """
             ),
             {"id": user_id},

@@ -313,7 +313,6 @@ def _build_world(
     actor = User(
         email=actor_email,
         name="HR Admin",
-        google_sub=f"sub-{actor_email}",
         role=UserRole.HR,
     )
     audit_repo = FakeAuditRepo(fail_on)

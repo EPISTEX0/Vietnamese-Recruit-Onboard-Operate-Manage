@@ -253,13 +253,11 @@ async def _run_non_admin_rejection(
     role=st.sampled_from(_NON_ADMIN_ROLES),
     email=_emails(),
     name=_non_empty_text(255),
-    google_sub=_non_empty_text(64),
 )
 def test_non_admin_actor_cannot_change_onboarding_state(
     role: UserRole,
     email: str,
     name: str,
-    google_sub: str,
 ) -> None:
     """A non-admin actor on an existing pending task is rejected with no change.
 
@@ -268,7 +266,7 @@ def test_non_admin_actor_cannot_change_onboarding_state(
     # Sanity: the generated role is genuinely not admin.
     assert role != UserRole.HR
 
-    actor = User(email=email, name=name, google_sub=google_sub, role=role)
+    actor = User(email=email, name=name, role=role)
 
     (
         task,

@@ -59,10 +59,10 @@ class GoogleAuthError(AuthError):
 
 
 class AccessDeniedError(AuthError):
-    """Email is not in the whitelist.
+    """The account cannot sign in even though the credentials are valid.
 
-    Raised when a user authenticates successfully with Google but
-    their email address is not present in the access whitelist.
+    Raised for reasons like a deactivated account or a staff email that
+    already has an Employee account of its own.
     """
 
     status_code = 403

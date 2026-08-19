@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Index, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
@@ -61,7 +61,6 @@ class User(SQLModel, table=True):
     employee_id: UUID | None = Field(default=None, foreign_key="employees.id")
     password_hash: str = Field(default="", max_length=255, nullable=False)
     must_change_password: bool = Field(default=False, nullable=False)
-    google_sub: str | None = Field(default=None, max_length=255, unique=True, index=True)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -79,46 +78,6 @@ class User(SQLModel, table=True):
             default=UserRole.USER,
             index=True,
         ),
-    )
-
-
-class WhitelistEntryType(str, Enum):
-    """Enumeration of whitelist entry types."""
-
-    EXACT_EMAIL = "exact_email"
-    DOMAIN_PATTERN = "domain_pattern"
-
-
-class WhitelistEntry(SQLModel, table=True):
-    """Represents a whitelist entry for login access control.
-
-    Entries can be either exact email addresses or domain patterns
-    (e.g., @example.com) that allow all emails from that domain.
-    """
-
-    __tablename__ = "whitelist_entries"
-    __table_args__ = (
-        # Declared here, not as ``index=True`` on the field: 011 named the index
-        # after the concept ("type") while the column is ``entry_type``, so the
-        # generated name would be ``ix_whitelist_entries_entry_type`` and
-        # autogenerate would drop the real index to build a renamed twin.
-        Index("ix_whitelist_entries_type", "entry_type"),
-        # Uniqueness on ``value`` lives in a named constraint on the database,
-        # next to a *non-unique* index of the same name the field would generate.
-        # ``unique=True`` on the field collapses the two into one unique index,
-        # so autogenerate proposes dropping both real objects. Keep them apart.
-        UniqueConstraint("value", name="uq_whitelist_value"),
-    )
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    value: str = Field(max_length=255, nullable=False, index=True)
-    entry_type: WhitelistEntryType = Field(
-        sa_column=Column(EnumAsString(WhitelistEntryType, 20), nullable=False),
-    )
-    added_by_user_id: UUID = Field(foreign_key="users.id", nullable=False)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
 
@@ -321,6 +280,9 @@ class OrganizationAIConfiguration(SQLModel, table=True):
 class AuditActionType(str, Enum):
     """Enumeration of admin audit action types."""
 
+    # Historical only (#418 removed the whitelist feature and its call sites).
+    # ``audit_logs`` is append-only, so these members stay to decode any
+    # pre-#418 row a deployment may already hold; nothing writes them anymore.
     WHITELIST_ADD = "whitelist_add"
     WHITELIST_REMOVE = "whitelist_remove"
     OAUTH_UPDATE = "oauth_update"

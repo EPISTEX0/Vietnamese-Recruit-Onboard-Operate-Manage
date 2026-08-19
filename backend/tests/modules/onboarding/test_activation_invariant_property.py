@@ -204,7 +204,6 @@ def _admin_actor() -> User:
     return User(
         email="hr-admin@example.com",
         name="HR Admin",
-        google_sub="google-sub-hr-admin",
         role=UserRole.HR,
     )
 
