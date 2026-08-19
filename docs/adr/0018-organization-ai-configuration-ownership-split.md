@@ -1,4 +1,4 @@
-# 18. Cấu hình AI cấp Organization: credential ở System Admin, consent và công tắc ở HR
+# Cấu hình AI cấp Organization: credential ở System Admin, consent và công tắc ở HR
 
 status: accepted
 
