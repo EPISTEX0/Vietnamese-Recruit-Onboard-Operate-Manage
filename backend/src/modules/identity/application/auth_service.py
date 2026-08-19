@@ -237,12 +237,15 @@ class AuthService:
         account-creation route sits behind ``require_hr``, so without this the
         deployment can never produce its first HR account.
 
-        The account's password hash is a random value nobody is ever shown;
-        it is unreachable except through the invite link below, which the
-        recipient redeems through the same ``PasswordResetToken`` flow as
-        forgot-password (single-use, hashed at rest). Combined with
-        ``must_change_password=True``, the account cannot be used until the
-        recipient sets a password of their own.
+        The account's password hash is a fresh random value nobody is ever
+        shown, and the invite token is a fresh high-entropy value hashed at
+        rest -- together these are what actually keeps the account safe
+        until the recipient redeems the link through the same
+        ``PasswordResetToken`` flow as forgot-password (single-use,
+        expiring). ``must_change_password=True`` is set on the row too, but
+        it is a client-side redirect hint only: ``AuthService.login`` never
+        reads it, so it does not gate login and must not be relied on for
+        that.
 
         Args:
             email: The new account's email address.

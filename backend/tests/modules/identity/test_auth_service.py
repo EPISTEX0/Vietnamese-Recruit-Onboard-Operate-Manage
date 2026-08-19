@@ -1,5 +1,6 @@
 """Tests for local Identity authentication."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -7,6 +8,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from src.modules.identity.application import auth_service as auth_service_module
 from src.modules.identity.application.auth_service import (
     AccountAlreadyExistsError,
     AuthService,
@@ -202,3 +204,78 @@ async def test_create_staff_account_requires_token_repository() -> None:
 
     with pytest.raises(RuntimeError):
         await service.create_staff_account(email="hr@example.com", name="HR One", role=UserRole.HR)
+
+
+_TOKEN_RE = re.compile(r"token=([A-Za-z0-9_\-]+)")
+
+
+def _extract_token(invite_link: str) -> str:
+    match = _TOKEN_RE.search(invite_link)
+    assert match is not None
+    return match.group(1)
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_issues_a_high_entropy_token_that_differs_per_call() -> None:
+    """Guards #421: the invite token is the only thing standing between a
+    stranger and the new account until the recipient redeems it -- a fixed
+    or short token would be guessable no matter how well the redeem endpoint
+    enforces single-use and expiry.
+    """
+    service, _token_repo = _make_staff_account_service()
+
+    _user1, link1 = await service.create_staff_account(
+        email="hr-one@example.com", name="HR One", role=UserRole.HR
+    )
+    _user2, link2 = await service.create_staff_account(
+        email="hr-two@example.com", name="HR Two", role=UserRole.HR
+    )
+
+    token1, token2 = _extract_token(link1), _extract_token(link2)
+    assert token1 != token2
+    assert len(token1) >= 32
+    assert len(token2) >= 32
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_hashes_a_freshly_generated_random_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Guards #421: the account's password hash must come from a fresh
+    random value on every call, not a fixed placeholder. That hash is the
+    only thing gating the account before the recipient redeems the invite
+    link -- ``must_change_password`` is a client-side redirect hint
+    (``router.py`` reads it to route to the change-password page), not a
+    server-side login gate: ``login`` never reads it.
+    """
+    seen_plaintexts: list[str] = []
+    real_hash_password = auth_service_module.hash_password
+
+    def _spy_hash_password(password: str) -> str:
+        seen_plaintexts.append(password)
+        return real_hash_password(password)
+
+    monkeypatch.setattr(auth_service_module, "hash_password", _spy_hash_password)
+    service, _token_repo = _make_staff_account_service()
+
+    await service.create_staff_account(email="hr-one@example.com", name="HR One", role=UserRole.HR)
+    await service.create_staff_account(email="hr-two@example.com", name="HR Two", role=UserRole.HR)
+
+    assert len(seen_plaintexts) == 2
+    assert seen_plaintexts[0] != seen_plaintexts[1]
+    assert all(len(p) >= 10 for p in seen_plaintexts)
+
+
+@pytest.mark.asyncio
+async def test_create_staff_account_creates_user_with_must_change_password_true() -> None:
+    """Guards #421: ``must_change_password=True`` is what tells the frontend
+    to route a session issued against this account into the change-password
+    flow. It carries no weight in ``login`` itself, so nothing else in this
+    module would notice if it silently flipped to False.
+    """
+    service, _token_repo = _make_staff_account_service()
+
+    await service.create_staff_account(email="hr-one@example.com", name="HR One", role=UserRole.HR)
+
+    kwargs = service._user_repository.create_local_account.await_args.kwargs
+    assert kwargs["must_change_password"] is True
